@@ -21,13 +21,14 @@ namespace UnityCli.Protocol
     public sealed class FileBackupTransactionOptions
     {
         public Func<string>? BackupIdFactory { get; set; }
+        public string? BackupRoot { get; set; }
         public Action<string>? WarningSink { get; set; }
         public Action? Refresh { get; set; }
     }
 
     public static class FileBackupTransaction
     {
-        private const string BackupToken = ".bridge-bak.";
+        private const string BackupDirectoryName = "com.yhc509.unity-cli-bridge";
 
         private enum BackupMode
         {
@@ -47,9 +48,40 @@ namespace UnityCli.Protocol
 
         public static string BuildBackupPath(string path, string backupId)
         {
-            string directory = Path.GetDirectoryName(path) ?? string.Empty;
-            string fileName = Path.GetFileName(path);
-            return Path.Combine(directory, "." + fileName + BackupToken + backupId);
+            return BuildBackupPath(path, backupId, backupRoot: null);
+        }
+
+        public static string BuildBackupPath(string path, string backupId, string? backupRoot)
+        {
+            return Path.Combine(BuildBackupDirectory(path, backupRoot), BuildBackupFileName(path, backupId));
+        }
+
+        public static string BuildBackupDirectory(string path, string? backupRoot = null)
+        {
+            if (!string.IsNullOrWhiteSpace(backupRoot))
+            {
+                return Path.GetFullPath(backupRoot);
+            }
+
+            string fullPath = Path.GetFullPath(path);
+            string? projectRoot = TryResolveProjectRoot(fullPath);
+            if (!string.IsNullOrWhiteSpace(projectRoot))
+            {
+                return BuildBackupDirectoryForProjectRoot(projectRoot);
+            }
+
+            string fallbackRoot = Path.GetDirectoryName(fullPath) ?? Directory.GetCurrentDirectory();
+            return BuildBackupDirectoryForProjectRoot(fallbackRoot);
+        }
+
+        public static string BuildBackupDirectoryForProjectRoot(string projectRoot)
+        {
+            if (string.IsNullOrWhiteSpace(projectRoot))
+            {
+                throw new ArgumentException("프로젝트 root가 비어 있습니다.", nameof(projectRoot));
+            }
+
+            return Path.Combine(Path.GetFullPath(projectRoot), "Library", BackupDirectoryName, "backups");
         }
 
         private static T Run<T>(string path, string commandName, Func<T> action, BackupMode mode, FileBackupTransactionOptions? options)
@@ -66,7 +98,7 @@ namespace UnityCli.Protocol
 
             options ??= new FileBackupTransactionOptions();
             string backupId = CreateBackupId(options);
-            BackupEntry[] entries = BuildEntries(path, backupId);
+            BackupEntry[] entries = BuildEntries(path, backupId, options.BackupRoot);
             var backedUpEntries = new List<BackupEntry>(entries.Length);
 
             try
@@ -90,7 +122,23 @@ namespace UnityCli.Protocol
             }
             catch (Exception exception)
             {
-                CleanupBackups(backedUpEntries, options);
+                if (mode == BackupMode.Move && backedUpEntries.Count > 0)
+                {
+                    try
+                    {
+                        RestoreEntries(backedUpEntries, mode);
+                    }
+                    catch (Exception restoreException)
+                    {
+                        options.Refresh?.Invoke();
+                        throw CreateRestoreFailedException(path, commandName, backedUpEntries, exception, restoreException);
+                    }
+                }
+                else
+                {
+                    CleanupBackups(backedUpEntries, options);
+                }
+
                 options.Refresh?.Invoke();
                 throw CreateBackupFailedException(path, commandName, entries, exception);
             }
@@ -135,28 +183,42 @@ namespace UnityCli.Protocol
             return Guid.NewGuid().ToString("N").Substring(0, 8);
         }
 
-        private static BackupEntry[] BuildEntries(string path, string backupId)
+        private static BackupEntry[] BuildEntries(string path, string backupId, string? backupRoot)
         {
             return new[]
             {
-                BuildEntry(path, backupId),
-                BuildEntry(path + ".meta", backupId),
+                BuildEntry(path, backupId, backupRoot),
+                BuildEntry(path + ".meta", backupId, backupRoot),
             };
         }
 
-        private static BackupEntry BuildEntry(string path, string backupId)
+        private static BackupEntry BuildEntry(string path, string backupId, string? backupRoot)
         {
             bool isDirectory = Directory.Exists(path);
             bool wasPresent = isDirectory || File.Exists(path);
-            return new BackupEntry(path, BuildBackupPath(path, backupId), wasPresent, isDirectory);
+            DateTime? originalLastWriteTimeUtc = null;
+            if (wasPresent)
+            {
+                originalLastWriteTimeUtc = isDirectory
+                    ? Directory.GetLastWriteTimeUtc(path)
+                    : File.GetLastWriteTimeUtc(path);
+            }
+
+            return new BackupEntry(path, BuildBackupPath(path, backupId, backupRoot), wasPresent, isDirectory, originalLastWriteTimeUtc);
         }
 
         private static void CreateBackup(BackupEntry entry, BackupMode mode, FileBackupTransactionOptions options)
         {
-            if (PathExists(entry.BackupPath) || PathExists(entry.BackupPath + ".meta"))
+            string? backupDirectory = Path.GetDirectoryName(entry.BackupPath);
+            if (!string.IsNullOrWhiteSpace(backupDirectory))
+            {
+                Directory.CreateDirectory(backupDirectory);
+            }
+
+            if (PathExists(entry.BackupPath))
             {
                 options.WarningSink?.Invoke("stale bridge backup을 덮어씁니다: " + entry.BackupPath);
-                DeleteBackupArtifacts(entry.BackupPath);
+                DeletePath(entry.BackupPath);
             }
 
             if (mode == BackupMode.Move)
@@ -171,13 +233,11 @@ namespace UnityCli.Protocol
             {
                 File.Copy(entry.OriginalPath, entry.BackupPath, overwrite: true);
             }
-
-            TryMarkHidden(entry.BackupPath);
         }
 
-        private static void RestoreEntries(BackupEntry[] entries, BackupMode mode)
+        private static void RestoreEntries(IReadOnlyList<BackupEntry> entries, BackupMode mode)
         {
-            for (int index = 0; index < entries.Length; index++)
+            for (int index = 0; index < entries.Count; index++)
             {
                 BackupEntry entry = entries[index];
                 if (PathExists(entry.OriginalPath))
@@ -202,6 +262,8 @@ namespace UnityCli.Protocol
                 {
                     File.Copy(entry.BackupPath, entry.OriginalPath, overwrite: true);
                 }
+
+                RestoreLastWriteTime(entry);
             }
         }
 
@@ -212,26 +274,15 @@ namespace UnityCli.Protocol
                 BackupEntry entry = backedUpEntries[index];
                 try
                 {
-                    DeleteBackupArtifacts(entry.BackupPath);
+                    if (PathExists(entry.BackupPath))
+                    {
+                        DeletePath(entry.BackupPath);
+                    }
                 }
                 catch (Exception exception)
                 {
                     options.WarningSink?.Invoke("bridge backup cleanup에 실패했습니다: " + entry.BackupPath + " (" + exception.Message + ")");
                 }
-            }
-        }
-
-        private static void DeleteBackupArtifacts(string backupPath)
-        {
-            if (PathExists(backupPath))
-            {
-                DeletePath(backupPath);
-            }
-
-            string generatedMetaPath = backupPath + ".meta";
-            if (PathExists(generatedMetaPath))
-            {
-                DeletePath(generatedMetaPath);
             }
         }
 
@@ -297,14 +348,12 @@ namespace UnityCli.Protocol
         {
             if (File.Exists(path))
             {
-                TryClearReadonly(path);
                 File.Delete(path);
                 return;
             }
 
             if (Directory.Exists(path))
             {
-                ClearReadonlyRecursive(path);
                 Directory.Delete(path, recursive: true);
             }
         }
@@ -344,57 +393,104 @@ namespace UnityCli.Protocol
             }
         }
 
-        private static void TryMarkHidden(string path)
+        private static void RestoreLastWriteTime(BackupEntry entry)
         {
-            try
+            if (!entry.OriginalLastWriteTimeUtc.HasValue || !PathExists(entry.OriginalPath))
             {
-                FileAttributes attributes = File.GetAttributes(path);
-                File.SetAttributes(path, attributes | FileAttributes.Hidden);
+                return;
             }
-            catch
+
+            if (entry.IsDirectory)
             {
-                // A leading dot is the portable hidden marker; FileAttributes.Hidden is best effort.
+                Directory.SetLastWriteTimeUtc(entry.OriginalPath, entry.OriginalLastWriteTimeUtc.Value);
+            }
+            else
+            {
+                File.SetLastWriteTimeUtc(entry.OriginalPath, entry.OriginalLastWriteTimeUtc.Value);
             }
         }
 
-        private static void ClearReadonlyRecursive(string directoryPath)
+        private static string BuildBackupFileName(string path, string backupId)
         {
-            foreach (string filePath in Directory.GetFiles(directoryPath, "*", SearchOption.AllDirectories))
-            {
-                TryClearReadonly(filePath);
-            }
+            string nameSource = BuildBackupNameSource(path);
+            string sanitized = SanitizeBackupFileName(nameSource);
+            return sanitized + "__" + backupId;
         }
 
-        private static void TryClearReadonly(string filePath)
+        private static string BuildBackupNameSource(string path)
         {
-            try
+            string fullPath = Path.GetFullPath(path);
+            string normalizedFullPath = NormalizeSeparators(fullPath);
+            string? projectRoot = TryResolveProjectRoot(fullPath);
+            if (!string.IsNullOrWhiteSpace(projectRoot))
             {
-                FileAttributes attributes = File.GetAttributes(filePath);
-                if ((attributes & FileAttributes.ReadOnly) != 0)
+                string normalizedProjectRoot = NormalizeSeparators(projectRoot).TrimEnd('/');
+                if (normalizedFullPath.Length > normalizedProjectRoot.Length
+                    && normalizedFullPath.StartsWith(normalizedProjectRoot + "/", StringComparison.Ordinal))
                 {
-                    File.SetAttributes(filePath, attributes & ~FileAttributes.ReadOnly);
+                    return normalizedFullPath.Substring(normalizedProjectRoot.Length + 1);
                 }
             }
-            catch
+
+            return Path.GetFileName(fullPath);
+        }
+
+        private static string SanitizeBackupFileName(string value)
+        {
+            string normalized = NormalizeSeparators(value).Replace("/", "__");
+            var chars = normalized.ToCharArray();
+            for (int index = 0; index < chars.Length; index++)
             {
-                // Cleanup and restore paths should still surface the original filesystem failure.
+                char c = chars[index];
+                if (c == '\\' || c == ':' || Array.IndexOf(Path.GetInvalidFileNameChars(), c) >= 0)
+                {
+                    chars[index] = '_';
+                }
             }
+
+            return new string(chars);
+        }
+
+        private static string? TryResolveProjectRoot(string path)
+        {
+            string normalized = NormalizeSeparators(Path.GetFullPath(path)).TrimEnd('/');
+            const string assetsSegment = "/Assets/";
+            int assetsIndex = normalized.LastIndexOf(assetsSegment, StringComparison.Ordinal);
+            if (assetsIndex >= 0)
+            {
+                return normalized.Substring(0, assetsIndex);
+            }
+
+            const string assetsSuffix = "/Assets";
+            if (normalized.EndsWith(assetsSuffix, StringComparison.Ordinal))
+            {
+                return normalized.Substring(0, normalized.Length - assetsSuffix.Length);
+            }
+
+            return null;
+        }
+
+        private static string NormalizeSeparators(string path)
+        {
+            return path.Replace(Path.DirectorySeparatorChar, '/').Replace(Path.AltDirectorySeparatorChar, '/');
         }
 
         private readonly struct BackupEntry
         {
-            public BackupEntry(string originalPath, string backupPath, bool wasPresent, bool isDirectory)
+            public BackupEntry(string originalPath, string backupPath, bool wasPresent, bool isDirectory, DateTime? originalLastWriteTimeUtc)
             {
                 OriginalPath = originalPath;
                 BackupPath = backupPath;
                 WasPresent = wasPresent;
                 IsDirectory = isDirectory;
+                OriginalLastWriteTimeUtc = originalLastWriteTimeUtc;
             }
 
             public string OriginalPath { get; }
             public string BackupPath { get; }
             public bool WasPresent { get; }
             public bool IsDirectory { get; }
+            public DateTime? OriginalLastWriteTimeUtc { get; }
         }
     }
 }
