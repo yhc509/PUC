@@ -28,7 +28,7 @@
 - On macOS, hashes are computed from the real path instead of a symlink path.
 - When no running Editor with an active bridge is reachable, commands fail instead of trying any editor-off fallback.
 - Destructive operations and overwrite behavior require `--force`.
-- Patch and overwrite mutations use same-folder hidden `.bridge-bak` backups for asset files and `.meta` files so rollback stays on the same volume.
+- Patch and overwrite mutations use `Library/com.yhc509.unity-cli-bridge/backups/` backups for asset files and `.meta` files so rollback stays outside `Assets/` while remaining on the project volume.
 - `scene patch` refuses already-loaded dirty target scenes because disk backups cannot preserve in-memory edits.
 - Scene editing is split into `scene open`, `scene inspect`, and `scene patch`, and scene node paths use `/Root[0]/Child[0]` with `/` as the virtual scene root.
 - Prefab editing is split into `prefab create`, `prefab inspect`, and `prefab patch`, and field patching is based on `SerializedProperty.propertyPath`.

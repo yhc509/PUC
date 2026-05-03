@@ -3,13 +3,17 @@
 ## [Unreleased]
 
 ### Security
-- Added same-folder hidden `.bridge-bak` backup/restore transactions for scene/prefab patch and asset overwrite flows, including `.meta` preservation and critical restore-failure reporting.
+- Added `Library/com.yhc509.unity-cli-bridge/backups/` backup/restore transactions for scene/prefab patch and asset overwrite flows, including `.meta` preservation and critical restore-failure reporting; backups stay outside `Assets/` and normal Unity git tracking.
 
 ### Added
 - `BACKUP_FAILED`, `BACKUP_RESTORE_FAILED`, and `SCENE_DIRTY` protocol error constants for transactional mutation failures and dirty scene refusal.
 
 ### Changed
 - `scene patch` now refuses already-loaded dirty target scenes even with `--force`; callers must save or discard in-memory scene changes before patching.
+- Backup files are written under the project `Library/` folder instead of next to assets, avoiding AssetDatabase scanning and accidental git exposure.
+
+### Notes
+- Prefab Edit Mode dirty-state checks remain a follow-up item for a later PR.
 
 ## [0.1.8] - 2026-04-30
 

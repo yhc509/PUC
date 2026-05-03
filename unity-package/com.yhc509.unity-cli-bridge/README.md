@@ -62,7 +62,7 @@ The CLI executable and Codex skill are not included in the UPM package payload. 
 - `custom` is live-only and invokes project-defined static methods marked with `[PucCommand("name")]`.
 - if the target scene is already loaded, `scene inspect` expects it to be clean and `scene patch` refuses unsaved target-scene changes even with `--force`.
 - `scene open` requires `--force` if the currently loaded scenes have unsaved changes that should be discarded.
-- Scene/prefab patch and asset overwrite flows create same-folder hidden `.bridge-bak` backups for the asset body and `.meta` before mutating files.
+- Scene/prefab patch and asset overwrite flows create backups for the asset body and `.meta` under `Library/com.yhc509.unity-cli-bridge/backups/`, keeping rollback files outside `Assets/` and normal git tracking.
 - If backup restore itself fails, the bridge returns `BACKUP_RESTORE_FAILED` with backup paths for manual recovery.
 - `prefab patch` values are applied through `SerializedProperty.propertyPath`.
 - `prefab inspect --with-values` is meant to be used as the source of truth when authoring patch specs.
