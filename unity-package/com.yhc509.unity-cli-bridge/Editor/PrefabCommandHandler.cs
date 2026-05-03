@@ -73,10 +73,8 @@ namespace UnityCliBridge.Bridge.Editor
                 throw new CommandFailureException(ProtocolConstants.ErrorPrefabForceRequired, "prefab 덮어쓰기에는 --force가 필요합니다.");
             }
 
-            Func<string> action = () => CreatePrefab(path, spec, isOverwritten);
-            return isOverwritten
-                ? AssetBackupTransaction.RunWithMovedBackup(path, "prefab-create", action)
-                : action();
+            // Non-overwrite creates still use the transaction so failed saves remove partial body/.meta artifacts.
+            return AssetBackupTransaction.RunWithMovedBackup(path, "prefab-create", () => CreatePrefab(path, spec, isOverwritten));
         }
 
         private static string CreatePrefab(string path, PrefabCreateSpec spec, bool isOverwritten)
