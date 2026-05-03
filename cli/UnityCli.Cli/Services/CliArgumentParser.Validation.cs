@@ -462,7 +462,15 @@ public static partial class CliArgumentParser
 
     private static bool ScenePatchContainsDestructiveOperation(ParsedCommand parsed)
     {
-        string specJson = parsed.ResolveSceneSpecJson();
+        string specJson;
+        try
+        {
+            specJson = parsed.ResolveSceneSpecJson();
+        }
+        catch (CliUsageException)
+        {
+            return false;
+        }
 
         try
         {
@@ -499,7 +507,15 @@ public static partial class CliArgumentParser
 
     private static bool PrefabPatchContainsDestructiveOperation(ParsedCommand parsed)
     {
-        string specJson = parsed.ResolvePrefabSpecJson();
+        string specJson;
+        try
+        {
+            specJson = parsed.ResolvePrefabSpecJson();
+        }
+        catch (CliUsageException)
+        {
+            return false;
+        }
 
         try
         {
