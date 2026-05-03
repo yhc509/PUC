@@ -228,7 +228,7 @@ docs/                          Generated CLI reference, specs
 
 ## Safety Rules
 
-- **Destructive or dangerous ops require `--force`:** `asset delete`, overwrites, `execute`, `package remove`, scene `delete-gameobject` / `remove-component`, prefab `remove-node` / `remove-component`, and prefab `remove-component` shortcut commands
+- **Destructive or dangerous ops require `--force`:** `asset delete`, `execute`, `package remove`, `scene remove-component`, `prefab remove-component` (always); `asset move` / `asset rename` / `asset create` when overwriting an existing path; destructive operations inside `scene patch` (`delete-gameobject`, `remove-component`) and `prefab patch` (`remove-node`, `remove-component`).
 - **Raw force payloads are explicit:** `raw --force` only injects `force=true` when the payload omits `force` or already sets it to `true`; conflicting payload values fail fast.
 - **Patch and overwrite rollback:** Scene/prefab patch and asset overwrite flows create backups for the asset body and `.meta` under `Library/com.yhc509.unity-cli-bridge/backups/`, keeping rollback files outside `Assets/` and normal git tracking.
 - **Dirty scene patch refusal:** `scene patch` refuses a target scene that is already loaded with unsaved changes, even with `--force`; save or discard the scene first.
