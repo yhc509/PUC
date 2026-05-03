@@ -95,13 +95,14 @@ namespace UnityCliBridge.Bridge.Editor
                 throw new CommandFailureException(ProtocolConstants.ErrorSceneForceRequired, "`delete-gameobject` 또는 `remove-component`를 쓰려면 --force가 필요합니다.");
             }
 
+            LoadedSceneSnapshot loadedSceneSnapshot = CaptureLoadedSceneSnapshot(path);
             try
             {
                 return AssetBackupTransaction.RunWithBackup(path, "scene-patch", () => PatchScene(path, spec));
             }
             catch (Exception exception) when (ShouldReloadSceneAfterPatchFailure(exception))
             {
-                ReloadSceneAfterFailedPatch(path);
+                ReloadSceneAfterFailedPatch(path, loadedSceneSnapshot);
                 throw;
             }
         }
@@ -320,16 +321,66 @@ namespace UnityCliBridge.Bridge.Editor
             return true;
         }
 
-        private static void ReloadSceneAfterFailedPatch(string path)
+        private static LoadedSceneSnapshot CaptureLoadedSceneSnapshot(string targetPath)
+        {
+            Scene activeScene = EditorSceneManager.GetActiveScene();
+            bool targetWasActive = string.Equals(activeScene.path, targetPath, StringComparison.Ordinal);
+            bool targetWasLoaded = false;
+
+            for (int index = 0; index < SceneManager.sceneCount; index++)
+            {
+                Scene scene = SceneManager.GetSceneAt(index);
+                if (scene.IsValid()
+                    && scene.isLoaded
+                    && string.Equals(scene.path, targetPath, StringComparison.Ordinal))
+                {
+                    targetWasLoaded = true;
+                    break;
+                }
+            }
+
+            return new LoadedSceneSnapshot(targetWasLoaded, targetWasActive);
+        }
+
+        private static void ReloadSceneAfterFailedPatch(string path, LoadedSceneSnapshot snapshot)
         {
             try
             {
-                EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+                Scene scene = SceneManager.GetSceneByPath(path);
+                if (scene.IsValid() && scene.isLoaded && !EditorSceneManager.CloseScene(scene, removeScene: true))
+                {
+                    Debug.LogWarning("scene patch 실패 후 target scene reload를 위해 scene을 닫지 못했습니다: " + path);
+                    return;
+                }
+
+                Scene reloadedScene = EditorSceneManager.OpenScene(path, OpenSceneMode.Additive);
+                if (!reloadedScene.IsValid() || !reloadedScene.isLoaded)
+                {
+                    Debug.LogWarning("scene patch 실패 후 target scene reload에 실패했습니다: " + path);
+                    return;
+                }
+
+                if (snapshot.TargetWasLoaded && snapshot.TargetWasActive)
+                {
+                    SceneManager.SetActiveScene(reloadedScene);
+                }
             }
             catch (Exception reloadException)
             {
                 Debug.LogWarning("scene patch 실패 후 dirty 폐기를 위한 reload에 실패했습니다: " + path + " (" + reloadException.Message + ")");
             }
+        }
+
+        private readonly struct LoadedSceneSnapshot
+        {
+            public LoadedSceneSnapshot(bool targetWasLoaded, bool targetWasActive)
+            {
+                TargetWasLoaded = targetWasLoaded;
+                TargetWasActive = targetWasActive;
+            }
+
+            public bool TargetWasLoaded { get; }
+            public bool TargetWasActive { get; }
         }
 
         private static T DeserializeSpec<T>(string? specJson, string commandName) where T : class
