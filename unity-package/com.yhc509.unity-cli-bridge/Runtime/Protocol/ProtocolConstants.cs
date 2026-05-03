@@ -21,6 +21,9 @@ namespace UnityCli.Protocol
         public const string ErrorPrefabForceRequired = "PREFAB_FORCE_REQUIRED";
         public const string ErrorPackageForceRequired = "PACKAGE_FORCE_REQUIRED";
         public const string ErrorSceneForceRequired = "SCENE_FORCE_REQUIRED";
+        public const string ErrorBackupFailed = "BACKUP_FAILED";
+        public const string ErrorBackupRestoreFailed = "BACKUP_RESTORE_FAILED";
+        public const string ErrorSceneDirty = "SCENE_DIRTY";
         public const string StatusSuccess = "success";
         public const string StatusError = "error";
         public const string TransportLive = "live";
