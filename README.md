@@ -183,6 +183,8 @@ unity-cli package remove --name ... --force
 unity-cli package search --query "input"
 ```
 
+Package Manager commands use a 360-second CLI live timeout so the bridge can return its 300-second `PACKAGE_TIMEOUT` response. They are single-flight inside the Editor; a second package command returns `PACKAGE_BUSY` until the active request completes.
+
 ### Play Mode QA
 
 ```bash
@@ -231,6 +233,7 @@ docs/                          Generated CLI reference, specs
 - **Patch and overwrite rollback:** Scene/prefab patch and asset overwrite flows create backups for the asset body and `.meta` under `Library/com.yhc509.unity-cli-bridge/backups/`, keeping rollback files outside `Assets/` and normal git tracking.
 - **Dirty scene patch refusal:** `scene patch` refuses a target scene that is already loaded with unsaved changes, even with `--force`; save or discard the scene first.
 - **Asset paths:** Write operations are `Assets/...` only. Reads allow `Packages/...` too.
+- **Package Manager requests:** `package list`, `package add`, `package remove`, and `package search` use a longer live timeout and return `PACKAGE_BUSY` if another package command is already running.
 - **Scene paths:** `/Root[0]/Child[0]` format with sibling indices. `/` is the virtual scene root.
 - **Inspect before patch:** Always `scene inspect --with-values` or `prefab inspect --with-values` before writing patch specs.
 - **Friendly component keys:** Common Rigidbody, Collider, Renderer, Light, and Camera patch keys are resolved to Unity `SerializedProperty.propertyPath` values.
