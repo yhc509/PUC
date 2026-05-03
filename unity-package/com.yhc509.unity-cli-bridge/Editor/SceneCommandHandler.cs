@@ -91,7 +91,7 @@ namespace UnityCliBridge.Bridge.Editor
             NormalizeOperationNames(spec.Operations);
             if (HasDestructiveOperation(spec) && !args.force)
             {
-                throw new CommandFailureException("SCENE_FORCE_REQUIRED", "`delete-gameobject` 또는 `remove-component`를 쓰려면 --force가 필요합니다.");
+                throw new CommandFailureException(ProtocolConstants.ErrorSceneForceRequired, "`delete-gameobject` 또는 `remove-component`를 쓰려면 --force가 필요합니다.");
             }
 
             return WithLoadedScene(path, "scene-patch", delegate(Scene scene)

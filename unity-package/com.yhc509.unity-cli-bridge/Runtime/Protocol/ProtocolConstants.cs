@@ -16,6 +16,11 @@ namespace UnityCli.Protocol
         public const int DefaultAssetFindLimit = 50;
         public const int RegistryHeartbeatSeconds = 2;
         public const string BusyErrorCode = "BUSY";
+        public const string ErrorAssetForceRequired = "ASSET_FORCE_REQUIRED";
+        public const string ErrorExecuteForceRequired = "EXECUTE_FORCE_REQUIRED";
+        public const string ErrorPrefabForceRequired = "PREFAB_FORCE_REQUIRED";
+        public const string ErrorPackageForceRequired = "PACKAGE_FORCE_REQUIRED";
+        public const string ErrorSceneForceRequired = "SCENE_FORCE_REQUIRED";
         public const string StatusSuccess = "success";
         public const string StatusError = "error";
         public const string TransportLive = "live";

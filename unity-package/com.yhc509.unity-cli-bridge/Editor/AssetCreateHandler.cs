@@ -16,6 +16,10 @@ namespace UnityCliBridge.Bridge.Editor
             string createType = descriptor.typeId;
             string path = ResolveOutputPath(descriptor.defaultExtension, args.path);
             AssetCommandSupport.EnsureParentFolderExists(path);
+            if (!args.force && AssetCommandSupport.AssetExists(path))
+            {
+                throw new CommandFailureException(ProtocolConstants.ErrorAssetForceRequired, "asset 덮어쓰기 또는 삭제에는 --force가 필요합니다.");
+            }
 
             var request = new AssetCreateRequest(args, createType, path);
             bool isOverwritten = AssetCommandSupport.DeleteIfTargetExists(path, args.force, "asset-create");

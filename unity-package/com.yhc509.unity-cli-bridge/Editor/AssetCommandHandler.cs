@@ -217,7 +217,7 @@ namespace UnityCliBridge.Bridge.Editor
             AssetCommandSupport.EnsureParentFolderExists(to);
             if (!args.force && AssetCommandSupport.AssetExists(to))
             {
-                throw new CommandFailureException("ASSET_FORCE_REQUIRED", "Destructive operation requires --force.");
+                throw new CommandFailureException(ProtocolConstants.ErrorAssetForceRequired, "asset 덮어쓰기 또는 삭제에는 --force가 필요합니다.");
             }
 
             bool isOverwritten = AssetCommandSupport.DeleteIfTargetExists(to, args.force, "asset-move");
@@ -264,7 +264,7 @@ namespace UnityCliBridge.Bridge.Editor
 
             if (!args.force && AssetCommandSupport.AssetExists(destination))
             {
-                throw new CommandFailureException("ASSET_FORCE_REQUIRED", "Destructive operation requires --force.");
+                throw new CommandFailureException(ProtocolConstants.ErrorAssetForceRequired, "asset 덮어쓰기 또는 삭제에는 --force가 필요합니다.");
             }
 
             bool isOverwritten = AssetCommandSupport.DeleteIfTargetExists(destination, args.force, "asset-rename");
@@ -288,7 +288,7 @@ namespace UnityCliBridge.Bridge.Editor
             AssetPathArgs args = ProtocolJson.Deserialize<AssetPathArgs>(argumentsJson) ?? new AssetPathArgs();
             if (!args.force)
             {
-                throw new CommandFailureException("ASSET_FORCE_REQUIRED", "Destructive operation requires --force.");
+                throw new CommandFailureException(ProtocolConstants.ErrorAssetForceRequired, "asset 덮어쓰기 또는 삭제에는 --force가 필요합니다.");
             }
 
             string path = AssetCommandSupport.RequireExistingAssetPath(args.path, "asset-delete");

@@ -54,7 +54,7 @@ public static class PucExecuteWrapper
             ExecuteCodeArgs args = ProtocolJson.Deserialize<ExecuteCodeArgs>(argumentsJson) ?? new ExecuteCodeArgs();
             if (!args.force)
             {
-                throw new CommandFailureException("EXECUTE_FORCE_REQUIRED", "Code execution requires --force.");
+                throw new CommandFailureException(ProtocolConstants.ErrorExecuteForceRequired, "코드 실행에는 --force가 필요합니다.");
             }
 
             if (string.IsNullOrWhiteSpace(args.code))
