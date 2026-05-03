@@ -426,6 +426,12 @@ namespace UnityCliBridge.Bridge.Editor
                     continue;
                 }
 
+                if (_packageCommandHandler.CanHandle(pending.Command.command) && _packageCommandHandler.IsDeferred(pending.Command.command, pending.Command.argumentsJson))
+                {
+                    StartDeferredPackageRequest(pending);
+                    continue;
+                }
+
                 ResponseEnvelope response = HandleCommand(pending.Command);
                 pending.Completion.TrySetResult(response);
             }
@@ -446,6 +452,50 @@ namespace UnityCliBridge.Bridge.Editor
                 }
 
                 _qaCommandHandler.StartDeferred(command.command, command.argumentsJson, pending.Completion, _projectHash);
+            }
+            catch (CommandFailureException exception)
+            {
+                stopwatch.Stop();
+                pending.Completion.TrySetResult(ResponseEnvelope.Failure(
+                    command.requestId,
+                    _projectHash,
+                    exception.ErrorCode,
+                    exception.Message,
+                    exception.IsRetryable,
+                    stopwatch.ElapsedMilliseconds,
+                    ProtocolConstants.TransportLive,
+                    exception.Details));
+            }
+            catch (Exception exception)
+            {
+                stopwatch.Stop();
+                pending.Completion.TrySetResult(ResponseEnvelope.Failure(
+                    command.requestId,
+                    _projectHash,
+                    "COMMAND_FAILED",
+                    exception.Message,
+                    false,
+                    stopwatch.ElapsedMilliseconds,
+                    ProtocolConstants.TransportLive,
+                    exception.ToString()));
+            }
+        }
+
+        private void StartDeferredPackageRequest(PendingRequest pending)
+        {
+            CommandEnvelope command = pending.Command;
+            var stopwatch = Stopwatch.StartNew();
+
+            try
+            {
+                if (IsBusyEditorCommand(command.command))
+                {
+                    stopwatch.Stop();
+                    pending.Completion.TrySetResult(BuildBusyResponse(command, stopwatch.ElapsedMilliseconds));
+                    return;
+                }
+
+                _packageCommandHandler.StartDeferred(command.command, command.argumentsJson, pending.Completion, _projectHash);
             }
             catch (CommandFailureException exception)
             {

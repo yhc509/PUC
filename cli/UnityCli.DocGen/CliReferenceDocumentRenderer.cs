@@ -145,6 +145,8 @@ public static class CliReferenceDocumentRenderer
         builder.AppendLine("- Use `prefab inspect --with-values` before writing a prefab patch spec.");
         builder.AppendLine("- Scene/prefab component value patches accept friendly keys for common Rigidbody, Collider, Renderer, Light, and Camera properties; inspect remains the source of truth for unsupported fields.");
         builder.AppendLine("- `asset create --type prefab` only creates an empty prefab root. Use `prefab create` for structured prefab authoring.");
+        builder.AppendLine("- `package list`, `package add`, `package remove`, and `package search` use a 360-second CLI live timeout so the bridge can return its 300-second Package Manager timeout response.");
+        builder.AppendLine("- Package Manager requests are single-flight; concurrent package commands return `PACKAGE_BUSY` and should be retried after the active package request completes.");
         builder.AppendLine();
     }
 

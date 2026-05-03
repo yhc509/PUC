@@ -81,9 +81,21 @@ public static partial class CliArgumentParser
 
         parsed.OutputMode = outputMode;
         parsed.ProjectOverride = projectOverride;
+        ApplyCatalogDefaults(parsed);
 
         ParseCommandOptions(parsed, tokens);
         return parsed;
+    }
+
+    private static void ApplyCatalogDefaults(ParsedCommand parsed)
+    {
+        if (parsed.Kind == CommandKind.Help)
+        {
+            return;
+        }
+
+        CliCommandDescriptor descriptor = GetCatalogDescriptor(parsed.Kind);
+        parsed.TimeoutMs = descriptor.DefaultLiveTimeoutMs ?? ProtocolConstants.DefaultLiveTimeoutMs;
     }
 
     public static string BuildHelpText()

@@ -26,5 +26,15 @@ namespace UnityCli.Protocol
         {
             return CliCommandCatalog.IsProtocolCommandInGroup(command, CliCommandGroup.PrefabWorkflows);
         }
+
+        public static bool IsPackageCommand(string command)
+        {
+            return CliCommandCatalog.IsProtocolCommandInGroup(command, CliCommandGroup.PackageManagement);
+        }
+
+        public static bool IsDeferredPackageCommand(string command)
+        {
+            return IsPackageCommand(command);
+        }
     }
 }

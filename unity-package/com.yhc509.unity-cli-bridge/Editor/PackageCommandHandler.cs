@@ -1,8 +1,11 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Threading.Tasks;
 using UnityCli.Protocol;
+using UnityEditor;
 using UnityEditor.PackageManager;
 using UnityEditor.PackageManager.Requests;
 
@@ -10,53 +13,160 @@ namespace UnityCliBridge.Bridge.Editor
 {
     internal sealed class PackageCommandHandler
     {
+        internal const int PackageRequestTimeoutSeconds = ProtocolConstants.DefaultPackageRequestTimeoutSeconds;
+        private static readonly object _activeLock = new object();
+        private static bool _hasActiveRequest;
+
         public bool CanHandle(string command)
         {
-            return string.Equals(command, ProtocolConstants.CommandPackageList, StringComparison.Ordinal)
-                || string.Equals(command, ProtocolConstants.CommandPackageAdd, StringComparison.Ordinal)
-                || string.Equals(command, ProtocolConstants.CommandPackageRemove, StringComparison.Ordinal)
-                || string.Equals(command, ProtocolConstants.CommandPackageSearch, StringComparison.Ordinal);
+            return ProtocolHelpers.IsPackageCommand(command);
         }
 
         public string Handle(string command, string argumentsJson)
         {
-            if (string.Equals(command, ProtocolConstants.CommandPackageList, StringComparison.Ordinal))
+            if (IsDeferred(command, argumentsJson))
             {
-                return HandleList();
-            }
-
-            if (string.Equals(command, ProtocolConstants.CommandPackageAdd, StringComparison.Ordinal))
-            {
-                return HandleAdd(argumentsJson);
-            }
-
-            if (string.Equals(command, ProtocolConstants.CommandPackageRemove, StringComparison.Ordinal))
-            {
-                return HandleRemove(argumentsJson);
-            }
-
-            if (string.Equals(command, ProtocolConstants.CommandPackageSearch, StringComparison.Ordinal))
-            {
-                return HandleSearch(argumentsJson);
+                throw new InvalidOperationException("Deferred package command must be started through StartDeferred: " + command);
             }
 
             throw new InvalidOperationException("지원하지 않는 package 명령입니다: " + command);
         }
 
-        private string HandleList()
+        // argumentsJson is retained for interface compatibility with BridgeHost command dispatch.
+        public bool IsDeferred(string command, string? argumentsJson = null)
         {
-            ListRequest request = Client.List(true);
-            WaitForRequest(request);
+            return ProtocolHelpers.IsDeferredPackageCommand(command);
+        }
 
-            if (request.Status == StatusCode.Failure)
+        public void StartDeferred(
+            string command,
+            string argumentsJson,
+            TaskCompletionSource<ResponseEnvelope> completion,
+            string projectHash)
+        {
+            if (completion.Task.IsCompleted)
             {
-                throw new CommandFailureException(
-                    "PACKAGE_LIST_FAILED",
-                    request.Error?.message ?? "패키지 목록 조회에 실패했습니다.",
-                    false,
-                    request.Error?.errorCode.ToString());
+                return;
             }
 
+            string requestId = GetRequestId(completion);
+            var stopwatch = Stopwatch.StartNew();
+            if (!TryBeginActiveRequest())
+            {
+                stopwatch.Stop();
+                completion.TrySetResult(ResponseEnvelope.Failure(
+                    requestId,
+                    projectHash,
+                    ProtocolConstants.ErrorPackageBusy,
+                    ProtocolConstants.PackageBusyMessage,
+                    true,
+                    stopwatch.ElapsedMilliseconds,
+                    ProtocolConstants.TransportLive,
+                    null));
+                return;
+            }
+
+            try
+            {
+                if (string.Equals(command, ProtocolConstants.CommandPackageList, StringComparison.Ordinal))
+                {
+                    ListRequest request = Client.List(true);
+                    StartPollingRequest(
+                        request,
+                        CreateListPayloadJson,
+                        "PACKAGE_LIST_FAILED",
+                        "패키지 목록 조회에 실패했습니다.",
+                        completion,
+                        projectHash,
+                        requestId,
+                        stopwatch);
+                    return;
+                }
+
+                if (string.Equals(command, ProtocolConstants.CommandPackageAdd, StringComparison.Ordinal))
+                {
+                    PackageAddArgs args = ProtocolJson.Deserialize<PackageAddArgs>(argumentsJson) ?? new PackageAddArgs();
+                    if (string.IsNullOrWhiteSpace(args.name))
+                    {
+                        throw new CommandFailureException("INVALID_ARGS", "패키지 이름이 필요합니다.", false, null);
+                    }
+
+                    string identifier = !string.IsNullOrWhiteSpace(args.version)
+                        ? $"{args.name}@{args.version}"
+                        : args.name;
+
+                    AddRequest request = Client.Add(identifier);
+                    StartPollingRequest(
+                        request,
+                        CreateAddPayloadJson,
+                        "PACKAGE_ADD_FAILED",
+                        $"패키지 추가에 실패했습니다: {identifier}",
+                        completion,
+                        projectHash,
+                        requestId,
+                        stopwatch);
+                    return;
+                }
+
+                if (string.Equals(command, ProtocolConstants.CommandPackageRemove, StringComparison.Ordinal))
+                {
+                    PackageRemoveArgs args = ProtocolJson.Deserialize<PackageRemoveArgs>(argumentsJson) ?? new PackageRemoveArgs();
+                    if (!args.force)
+                    {
+                        throw new CommandFailureException(ProtocolConstants.ErrorPackageForceRequired, "패키지 제거에는 --force가 필요합니다.");
+                    }
+
+                    if (string.IsNullOrWhiteSpace(args.name))
+                    {
+                        throw new CommandFailureException("INVALID_ARGS", "패키지 이름이 필요합니다.", false, null);
+                    }
+
+                    RemoveRequest request = Client.Remove(args.name);
+                    StartPollingRequest(
+                        request,
+                        _ => CreateRemovePayloadJson(args.name),
+                        "PACKAGE_REMOVE_FAILED",
+                        $"패키지 제거에 실패했습니다: {args.name}",
+                        completion,
+                        projectHash,
+                        requestId,
+                        stopwatch);
+                    return;
+                }
+
+                if (string.Equals(command, ProtocolConstants.CommandPackageSearch, StringComparison.Ordinal))
+                {
+                    PackageSearchArgs args = ProtocolJson.Deserialize<PackageSearchArgs>(argumentsJson) ?? new PackageSearchArgs();
+                    if (string.IsNullOrWhiteSpace(args.query))
+                    {
+                        throw new CommandFailureException("INVALID_ARGS", "검색 키워드가 필요합니다.", false, null);
+                    }
+
+                    string query = args.query.Trim();
+                    SearchRequest request = Client.SearchAll();
+                    StartPollingRequest(
+                        request,
+                        completedRequest => CreateSearchPayloadJson(completedRequest, query),
+                        "PACKAGE_SEARCH_FAILED",
+                        $"패키지 검색에 실패했습니다: {query}",
+                        completion,
+                        projectHash,
+                        requestId,
+                        stopwatch);
+                    return;
+                }
+
+                throw new InvalidOperationException("지원하지 않는 package 명령입니다: " + command);
+            }
+            catch
+            {
+                EndActiveRequest();
+                throw;
+            }
+        }
+
+        private static string CreateListPayloadJson(ListRequest request)
+        {
             var records = new List<PackageRecord>();
             foreach (var package in request.Result)
             {
@@ -75,30 +185,8 @@ namespace UnityCliBridge.Bridge.Editor
             });
         }
 
-        private string HandleAdd(string argumentsJson)
+        private static string CreateAddPayloadJson(AddRequest request)
         {
-            PackageAddArgs args = ProtocolJson.Deserialize<PackageAddArgs>(argumentsJson) ?? new PackageAddArgs();
-            if (string.IsNullOrWhiteSpace(args.name))
-            {
-                throw new CommandFailureException("INVALID_ARGS", "패키지 이름이 필요합니다.", false, null);
-            }
-
-            string identifier = !string.IsNullOrWhiteSpace(args.version)
-                ? $"{args.name}@{args.version}"
-                : args.name;
-
-            AddRequest request = Client.Add(identifier);
-            WaitForRequest(request);
-
-            if (request.Status == StatusCode.Failure)
-            {
-                throw new CommandFailureException(
-                    "PACKAGE_ADD_FAILED",
-                    request.Error?.message ?? $"패키지 추가에 실패했습니다: {identifier}",
-                    false,
-                    request.Error?.errorCode.ToString());
-            }
-
             return ProtocolJson.Serialize(new PackageMutationPayload
             {
                 name = request.Result.name,
@@ -107,59 +195,17 @@ namespace UnityCliBridge.Bridge.Editor
             });
         }
 
-        private string HandleRemove(string argumentsJson)
+        private static string CreateRemovePayloadJson(string packageName)
         {
-            PackageRemoveArgs args = ProtocolJson.Deserialize<PackageRemoveArgs>(argumentsJson) ?? new PackageRemoveArgs();
-            if (!args.force)
-            {
-                throw new CommandFailureException(ProtocolConstants.ErrorPackageForceRequired, "패키지 제거에는 --force가 필요합니다.");
-            }
-
-            if (string.IsNullOrWhiteSpace(args.name))
-            {
-                throw new CommandFailureException("INVALID_ARGS", "패키지 이름이 필요합니다.", false, null);
-            }
-
-            RemoveRequest request = Client.Remove(args.name);
-            WaitForRequest(request);
-
-            if (request.Status == StatusCode.Failure)
-            {
-                throw new CommandFailureException(
-                    "PACKAGE_REMOVE_FAILED",
-                    request.Error?.message ?? $"패키지 제거에 실패했습니다: {args.name}",
-                    false,
-                    request.Error?.errorCode.ToString());
-            }
-
             return ProtocolJson.Serialize(new PackageMutationPayload
             {
-                name = args.name,
+                name = packageName,
                 removed = true,
             });
         }
 
-        private string HandleSearch(string argumentsJson)
+        private static string CreateSearchPayloadJson(SearchRequest request, string query)
         {
-            PackageSearchArgs args = ProtocolJson.Deserialize<PackageSearchArgs>(argumentsJson) ?? new PackageSearchArgs();
-            if (string.IsNullOrWhiteSpace(args.query))
-            {
-                throw new CommandFailureException("INVALID_ARGS", "검색 키워드가 필요합니다.", false, null);
-            }
-
-            SearchRequest request = Client.SearchAll();
-            WaitForRequest(request);
-
-            if (request.Status == StatusCode.Failure)
-            {
-                throw new CommandFailureException(
-                    "PACKAGE_SEARCH_FAILED",
-                    request.Error?.message ?? $"패키지 검색에 실패했습니다: {args.query}",
-                    false,
-                    request.Error?.errorCode.ToString());
-            }
-
-            string query = args.query.Trim();
             var records = new List<PackageRecord>();
             foreach (var package in request.Result)
             {
@@ -185,12 +231,240 @@ namespace UnityCliBridge.Bridge.Editor
             });
         }
 
-        private static void WaitForRequest(Request request)
+        private static void StartPollingRequest<TRequest>(
+            TRequest request,
+            Func<TRequest, string> createPayloadJson,
+            string failureCode,
+            string fallbackFailureMessage,
+            TaskCompletionSource<ResponseEnvelope> completion,
+            string projectHash,
+            string requestId,
+            Stopwatch stopwatch)
+            where TRequest : Request
         {
-            while (!request.IsCompleted)
+            bool isFinished = false;
+
+            void StopPolling()
             {
-                System.Threading.Thread.Sleep(10);
+                if (isFinished)
+                {
+                    return;
+                }
+
+                isFinished = true;
+                EditorApplication.update -= Poll;
+                stopwatch.Stop();
             }
+
+            void FinishPolling()
+            {
+                StopPolling();
+                EndActiveRequest();
+            }
+
+            void FinishPollingAfterTimeout()
+            {
+                StopPolling();
+                StartBackgroundActiveRequestTracker(request);
+            }
+
+            void Poll()
+            {
+                if (completion.Task.IsCompleted)
+                {
+                    FinishPolling();
+                    return;
+                }
+
+                try
+                {
+                    if (request.IsCompleted)
+                    {
+                        if (request.Status == StatusCode.Failure)
+                        {
+                            completion.TrySetResult(ResponseEnvelope.Failure(
+                                requestId,
+                                projectHash,
+                                failureCode,
+                                request.Error?.message ?? fallbackFailureMessage,
+                                false,
+                                stopwatch.ElapsedMilliseconds,
+                                ProtocolConstants.TransportLive,
+                                request.Error?.errorCode.ToString()));
+                            FinishPolling();
+                            return;
+                        }
+
+                        completion.TrySetResult(ResponseEnvelope.Success(
+                            requestId,
+                            projectHash,
+                            createPayloadJson(request),
+                            stopwatch.ElapsedMilliseconds,
+                            ProtocolConstants.TransportLive));
+                        FinishPolling();
+                        return;
+                    }
+
+                    if (ProtocolConstants.IsPackageRequestTimedOut(stopwatch.Elapsed, PackageRequestTimeoutSeconds))
+                    {
+                        completion.TrySetResult(ResponseEnvelope.Failure(
+                            requestId,
+                            projectHash,
+                            ProtocolConstants.ErrorPackageTimeout,
+                            ProtocolConstants.BuildPackageRequestTimeoutMessage(PackageRequestTimeoutSeconds),
+                            false,
+                            stopwatch.ElapsedMilliseconds,
+                            ProtocolConstants.TransportLive,
+                            null));
+                        FinishPollingAfterTimeout();
+                    }
+                }
+                catch (Exception exception)
+                {
+                    completion.TrySetResult(CreateFailureResponse(requestId, projectHash, exception, stopwatch.ElapsedMilliseconds));
+                    FinishPolling();
+                }
+            }
+
+            EditorApplication.update += Poll;
+            Poll();
+        }
+
+        private static void StartBackgroundActiveRequestTracker(Request request)
+        {
+            ActiveRequestCompletionTracker? tracker = null;
+
+            void BackgroundPoll()
+            {
+                tracker!.Poll();
+            }
+
+            tracker = new ActiveRequestCompletionTracker(
+                () => request.IsCompleted,
+                () => EditorApplication.update -= BackgroundPoll,
+                EndActiveRequest);
+
+            EditorApplication.update += BackgroundPoll;
+            BackgroundPoll();
+        }
+
+        internal sealed class ActiveRequestCompletionTracker
+        {
+            private readonly Func<bool> _isCompleted;
+            private readonly Action _stopTracking;
+            private readonly Action _endActiveRequest;
+            private bool _isEnded;
+
+            internal ActiveRequestCompletionTracker(
+                Func<bool> isCompleted,
+                Action stopTracking,
+                Action endActiveRequest)
+            {
+                _isCompleted = isCompleted;
+                _stopTracking = stopTracking;
+                _endActiveRequest = endActiveRequest;
+            }
+
+            internal void Poll()
+            {
+                if (_isEnded || !_isCompleted())
+                {
+                    return;
+                }
+
+                _isEnded = true;
+                _stopTracking();
+                _endActiveRequest();
+            }
+        }
+
+        internal static bool TryBeginActiveRequestForTesting()
+        {
+            return TryBeginActiveRequest();
+        }
+
+        internal static void EndActiveRequestForTesting()
+        {
+            EndActiveRequest();
+        }
+
+        internal static void ResetActiveRequestForTesting()
+        {
+            lock (_activeLock)
+            {
+                _hasActiveRequest = false;
+            }
+        }
+
+        internal static bool HasActiveRequestForTesting()
+        {
+            lock (_activeLock)
+            {
+                return _hasActiveRequest;
+            }
+        }
+
+        private static bool TryBeginActiveRequest()
+        {
+            lock (_activeLock)
+            {
+                if (_hasActiveRequest)
+                {
+                    return false;
+                }
+
+                _hasActiveRequest = true;
+                return true;
+            }
+        }
+
+        private static void EndActiveRequest()
+        {
+            lock (_activeLock)
+            {
+                _hasActiveRequest = false;
+            }
+        }
+
+        private static string GetRequestId(TaskCompletionSource<ResponseEnvelope> completion)
+        {
+            string? requestId = completion.Task.AsyncState as string;
+            if (string.IsNullOrWhiteSpace(requestId))
+            {
+                throw new InvalidOperationException("Deferred package request ID is missing.");
+            }
+
+            return requestId;
+        }
+
+        private static ResponseEnvelope CreateFailureResponse(
+            string requestId,
+            string projectHash,
+            Exception exception,
+            long durationMs)
+        {
+            if (exception is CommandFailureException failure)
+            {
+                return ResponseEnvelope.Failure(
+                    requestId,
+                    projectHash,
+                    failure.ErrorCode,
+                    failure.Message,
+                    failure.IsRetryable,
+                    durationMs,
+                    ProtocolConstants.TransportLive,
+                    failure.Details);
+            }
+
+            return ResponseEnvelope.Failure(
+                requestId,
+                projectHash,
+                "COMMAND_FAILED",
+                exception.Message,
+                false,
+                durationMs,
+                ProtocolConstants.TransportLive,
+                exception.ToString());
         }
     }
 }
