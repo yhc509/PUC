@@ -156,7 +156,10 @@ namespace UnityCli.Protocol
 
             try
             {
-                stream = new FileStream(lockPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                // FileShare.Delete lets us rename the file aside on Windows while still
+                // holding the stream; live acquire callers request FileShare.None, which
+                // is incompatible with our share so they remain blocked.
+                stream = new FileStream(lockPath, FileMode.Open, FileAccess.ReadWrite, FileShare.Delete);
             }
             catch (FileNotFoundException)
             {
