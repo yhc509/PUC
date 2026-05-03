@@ -32,63 +32,24 @@ dotnet run --project cli/UnityCli.DocGen -- --write
 
 ## Architecture
 
-```
-UnityCliBridge.sln          Solution root for CLI, protocol, DocGen, and tests
+The repo is a single solution (`UnityCliBridge.sln`) split across four projects: the CLI executable, a shared protocol library, a doc-gen tool, and xUnit tests. The directory tree follows standard .NET / UPM conventions — use `ls` / `find` for an exhaustive file list. The notes below cover the non-obvious entry points and how the pieces fit together.
 
-cli/UnityCli.Cli/           CLI executable (.NET 9, osx-arm64 + win-x64)
-  ├── CliApp.cs              Entry point; handles local status/instances/doctor flows and routes Unity work to IPC
-  ├── Services/
-  │   ├── CliArgumentParser  Switch-based parser → ParsedCommand
-  │   ├── CliCommandCatalog  CLI-side command metadata
-  │   ├── LocalIpcClient     Live IPC to running Editor
-  │   ├── UnityProjectLocator Project-root resolution and lookup
-  │   └── InstanceRegistryStore  Per-project instance tracking
-  └── Models/ParsedCommand   CommandKind variants + envelope builder
+**CLI (`cli/UnityCli.Cli/`)** — `.NET 9`, published self-contained for `osx-arm64` and `win-x64`. `CliApp.RunAsync` is the dispatcher: local-only flows (`status`, `instances`, `doctor`) are answered without IPC; everything else goes through `Services/CliArgumentParser` → `Models/ParsedCommand` → `Services/LocalIpcClient` to the running Editor. `Services/InstanceRegistryStore` reads `InstanceRegistryFile` (see Protocol below) to find the right Editor for a given project root.
 
-cli/UnityCli.Protocol/       Shared protocol project compiling linked files from unity-package/com.yhc509.unity-cli-bridge/Runtime/Protocol/
+**Shared protocol (`cli/UnityCli.Protocol/` ↔ `unity-package/.../Runtime/Protocol/`)** — The `.csproj` uses `<Compile Include>` links to compile the same `.cs` files from the Unity package. **A change to any protocol file is a change to both sides; keep them buildable for both `.NET 9` and Unity's runtime.** Hot spots:
+- `CliCommandCatalog.cs` is the single source of truth for command metadata, including `ForceRule` (None / OnOverwrite / OnDestructiveOp / Always) — every force-gating decision must trace back here.
+- `FileBackupTransaction.cs` is `.NET`-testable and powers all backup/restore flows.
+- `InstanceRegistryFile.cs` owns the atomic registry-lock protocol (atomic `FileMode.CreateNew`, PID + UTC timestamp content, stale-reclaim via open-then-rename-then-delete) used by both `BridgeHost` and the CLI's `InstanceRegistryStore`.
 
-unity-package/com.yhc509.unity-cli-bridge/
-  ├── Editor/
-  │   ├── BridgeHost.cs       Bridge bootstrap, registry registration, IPC listener, handler orchestration
-  │   ├── AssetCommandHandler.cs  Asset CRUD operations and asset metadata
-  │   ├── AssetBackupTransaction.cs  Same-folder backup/restore transactions for Editor asset mutations
-  │   ├── BuiltInAssetCreateProviders.cs  Basic built-in asset create providers
-  │   ├── BuiltInAssetCreateProviders.Advanced.cs  Complex/dependency-aware asset providers (partial class)
-  │   ├── ComponentOperations.cs  Component list/add/remove shared logic and friendly key resolution
-  │   ├── SceneCommandHandler.cs  scene open/inspect/patch and component command entry points
-  │   ├── SceneCommandHandler.Patching.cs  Scene patch operation application (partial class)
-  │   ├── SceneInspector.cs  Scene graph traversal, node-path resolution, inspect payload building
-  │   ├── SceneSpecModels.cs  Scene DTO/spec models
-  │   ├── InspectorUtility.cs  Core inspector helpers (layer resolution, vector merge, transform and node-state application)
-  │   ├── InspectorJsonWriterUtility.cs  JSON writing helpers for inspect payloads
-  │   ├── InspectorPathParserUtility.cs  Scene/prefab path parsing and node-name validation
-  │   ├── InspectorMutationReaderUtility.cs  JSON mutation/patch data reading and analysis
-  │   ├── InspectorDefaultPruningUtility.cs  Default value pruning for inspect output
-  │   ├── PrefabCommandHandler.cs  prefab create/inspect/patch and component command entry points
-  │   ├── PrefabCommandHandler.Patching.cs  Prefab patch operation application (partial class)
-  │   ├── PrefabInspector.cs  Prefab inspection, node-path resolution, inspect payload building
-  │   ├── PrefabSpecModels.cs  Prefab DTO/spec models
-  │   ├── SerializedValueApplier.cs  Applies values via SerializedProperty.propertyPath with friendly key fallback
-  │   ├── SerializedValueApplier.ComplexTypes.cs  AnimationCurve, Gradient, ManagedReference, Hash128 serialization (partial class)
-  │   ├── TypeDiscoveryUtility.cs  Shared component/type scanning utility
-  │   ├── BridgeJsonSettings.cs  Shared JSON serializer settings
-  │   ├── CliInstallerWindow.cs  EditorWindow for one-click CLI install/update
-  │   ├── CliInstallerState.cs   CLI version detection, path resolution, EditorPrefs
-  │   └── CliDownloader.cs       GitHub Releases download + archive extraction
-  └── Runtime/Protocol/       Shared models (C# 11, nullable enabled)
-      ├── CliCommandCatalog.cs  Master command descriptor catalog
-      ├── CommandModels.cs      Request/response envelopes
-      ├── ProtocolConstants.cs  Registry paths, timeouts, command names
-      ├── ProtocolHelpers.cs    Command grouping helpers
-      ├── ProtocolJson.cs       Shared JSON serialization helpers
-      ├── FileBackupTransaction.cs  Shared file backup/restore transaction core
-      ├── Registry*.cs          Registry persistence/path models
-      └── TransportModels.cs    IPC transport payloads
+**Bridge runtime (`unity-package/com.yhc509.unity-cli-bridge/Editor/`)** — Hosted in the Unity Editor.
+- `BridgeHost.cs` is the bootstrap and dispatcher: it registers the project in the instance registry, starts the IPC listener (Named Pipe on Windows / Unix socket on macOS+Linux), and routes commands to one of the `*CommandHandler` classes (`Asset`, `AssetCreate`, `Scene`, `Prefab`, `Material`, `Package`, `Qa`, `Screenshot`, `ExecuteCode`, `Custom`).
+- Scene/prefab patch logic is deliberately split across `SceneCommandHandler.Patching.cs` and `PrefabCommandHandler.Patching.cs` (partial classes) so the entry-point file stays small and the op-application code lives next to its inspector.
+- `SerializedValueApplier.cs` (+ `.ComplexTypes.cs` partial) is the most fragile layer — it translates JSON values into `SerializedProperty.propertyPath` mutations with friendly-key fallback. Run `*-inspect --with-values` before patching to verify paths.
+- `AssetBackupTransaction.cs` wraps `FileBackupTransaction` with an `AssetDatabase.Refresh` discipline (always in `finally`) and is the rollback core for scene patch / prefab patch / asset overwrite. Backups land in `Library/com.yhc509.unity-cli-bridge/backups/` to stay outside `Assets/` and `AssetDatabase` scanning.
+- `PackageCommandHandler.cs` polls Unity Package Manager from `EditorApplication.update` (deferred dispatch) with a single-flight guard and a 300 s `PACKAGE_TIMEOUT` — never re-introduce blocking polls here.
+- `CliInstallerWindow.cs` / `CliInstallerState.cs` / `CliDownloader.cs` / `SkillInstaller.cs` form the `Window > Unity CLI Manager` flow that fetches the matching CLI binary from GitHub Releases and installs the AI-agent skill.
 
-tests/UnityCli.Cli.Tests/    xUnit tests
-```
-
-**Protocol sharing:** `cli/UnityCli.Protocol/` compiles the same `.cs` files from `unity-package/com.yhc509.unity-cli-bridge/Runtime/Protocol/` via `<Compile Include>` links in the `.csproj`. Changes to protocol files affect both the CLI and the Unity package.
+Tests live in `tests/UnityCli.Cli.Tests/` (xUnit, `.NET`-testable surface only). Editor-mode tests for in-Editor handlers live in the package's `Tests~/` folder.
 
 ## Key Conventions
 
