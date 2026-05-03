@@ -154,7 +154,7 @@ public static partial class CliArgumentParser
                 throw new CliUsageException("`asset rename`에는 `--path`와 `--name`이 모두 필요합니다.");
             case CommandKind.AssetDelete when string.IsNullOrWhiteSpace(parsed.AssetPath):
                 throw new CliUsageException("`asset delete`에는 `--path`가 필요합니다.");
-            case CommandKind.AssetDelete when !parsed.Force:
+            case CommandKind.AssetDelete when ForceRequiredByCatalog(parsed, "asset delete"):
                 throw new CliUsageException("`asset delete`는 `--force`가 필요합니다.");
             case CommandKind.AssetCreate when string.IsNullOrWhiteSpace(parsed.AssetCreateType) || string.IsNullOrWhiteSpace(parsed.AssetPath):
                 throw new CliUsageException("`asset create`에는 `--type`과 `--path`가 필요합니다.");
@@ -188,7 +188,7 @@ public static partial class CliArgumentParser
                 throw new CliUsageException("`prefab remove-component`에는 `--node`가 필요합니다.");
             case CommandKind.PrefabRemoveComponent when string.IsNullOrWhiteSpace(parsed.SceneComponentType):
                 throw new CliUsageException("`prefab remove-component`에는 `--type`이 필요합니다.");
-            case CommandKind.PrefabRemoveComponent when !parsed.Force:
+            case CommandKind.PrefabRemoveComponent when ForceRequiredByCatalog(parsed, "prefab remove-component"):
                 throw new CliUsageException("`prefab remove-component`에는 `--force`가 필요합니다.");
             case CommandKind.PrefabListComponents when string.IsNullOrWhiteSpace(parsed.PrefabPath):
                 throw new CliUsageException("`prefab list-components`에는 `--path`가 필요합니다.");
@@ -198,6 +198,8 @@ public static partial class CliArgumentParser
                 throw new CliUsageException("`prefab create`에는 `--spec-file` 또는 `--spec-json` 중 하나만 필요합니다.");
             case CommandKind.PrefabPatch when HasInvalidPrefabSpecSource(parsed):
                 throw new CliUsageException("`prefab patch`에는 `--spec-file` 또는 `--spec-json` 중 하나만 필요합니다.");
+            case CommandKind.PrefabPatch when ForceRequiredByCatalog(parsed, "prefab patch") && PrefabPatchContainsDestructiveOperation(parsed):
+                throw new CliUsageException("`prefab patch`에서 destructive operation을 쓰려면 `--force`가 필요합니다.");
         }
     }
 
@@ -213,7 +215,7 @@ public static partial class CliArgumentParser
                 throw new CliUsageException("`scene patch`에는 `--path`가 필요합니다.");
             case CommandKind.ScenePatch when HasInvalidSceneSpecSource(parsed):
                 throw new CliUsageException("`scene patch`에는 `--spec-file` 또는 `--spec-json` 중 하나만 필요합니다.");
-            case CommandKind.ScenePatch when !parsed.Force && ScenePatchContainsDestructiveOperation(parsed):
+            case CommandKind.ScenePatch when ForceRequiredByCatalog(parsed, "scene patch") && ScenePatchContainsDestructiveOperation(parsed):
                 throw new CliUsageException("`scene patch`에서 `delete-gameobject` 또는 `remove-component`를 쓰려면 `--force`가 필요합니다.");
             case CommandKind.SceneAddObject when string.IsNullOrWhiteSpace(parsed.ScenePath):
                 throw new CliUsageException("`scene add-object`에는 `--path`가 필요합니다.");
@@ -238,7 +240,7 @@ public static partial class CliArgumentParser
                 throw new CliUsageException("`scene remove-component`에는 `--node`가 필요합니다.");
             case CommandKind.SceneRemoveComponent when string.IsNullOrWhiteSpace(parsed.SceneComponentType):
                 throw new CliUsageException("`scene remove-component`에는 `--type`이 필요합니다.");
-            case CommandKind.SceneRemoveComponent when !parsed.Force:
+            case CommandKind.SceneRemoveComponent when ForceRequiredByCatalog(parsed, "scene remove-component"):
                 throw new CliUsageException("`scene remove-component`는 `--force`가 필요합니다.");
             case CommandKind.SceneListComponents when string.IsNullOrWhiteSpace(parsed.SceneTarget):
                 throw new CliUsageException("`scene list-components`에는 `--node`가 필요합니다.");
@@ -298,7 +300,7 @@ public static partial class CliArgumentParser
                 throw new CliUsageException("`package add`에는 `--name`이 필요합니다.");
             case CommandKind.PackageRemove when string.IsNullOrWhiteSpace(parsed.PackageName):
                 throw new CliUsageException("`package remove`에는 `--name`이 필요합니다.");
-            case CommandKind.PackageRemove when !parsed.Force:
+            case CommandKind.PackageRemove when ForceRequiredByCatalog(parsed, "package remove"):
                 throw new CliUsageException("`package remove`는 `--force`가 필요합니다.");
             case CommandKind.PackageSearch when string.IsNullOrWhiteSpace(parsed.PackageQuery):
                 throw new CliUsageException("`package search`에는 `--query`가 필요합니다.");
@@ -432,10 +434,16 @@ public static partial class CliArgumentParser
             throw new CliUsageException("`execute`에는 `--code` 또는 `--file` 중 하나만 필요합니다.");
         }
 
-        if (!parsed.Force)
+        if (ForceRequiredByCatalog(parsed, "execute"))
         {
             throw new CliUsageException("`execute`는 `--force`가 필요합니다.");
         }
+    }
+
+    private static bool ForceRequiredByCatalog(ParsedCommand parsed, string commandPath)
+    {
+        CliCommandDescriptor? descriptor = CliCommandCatalog.FindByCommand(commandPath);
+        return !parsed.Force && descriptor?.RequiresForce == true;
     }
 
     private static bool HasInvalidPrefabSpecSource(ParsedCommand parsed)
@@ -476,6 +484,45 @@ public static partial class CliArgumentParser
                 string? op = opElement.GetString();
                 if (string.Equals(op, "delete-gameobject", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(op, "remove-component", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        return false;
+    }
+
+    private static bool PrefabPatchContainsDestructiveOperation(ParsedCommand parsed)
+    {
+        string specJson = parsed.ResolvePrefabSpecJson();
+
+        try
+        {
+            using var document = JsonDocument.Parse(specJson);
+            if (!document.RootElement.TryGetProperty("operations", out JsonElement operations)
+                || operations.ValueKind != JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            foreach (JsonElement operation in operations.EnumerateArray())
+            {
+                if (!operation.TryGetProperty("op", out JsonElement opElement)
+                    || opElement.ValueKind != JsonValueKind.String)
+                {
+                    continue;
+                }
+
+                string? op = opElement.GetString();
+                if (string.Equals(op, "remove-node", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(op, "remove-component", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(op, "delete-gameobject", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(op, "remove-gameobject", StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
                 }

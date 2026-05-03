@@ -29,7 +29,8 @@ namespace UnityCli.Protocol
             bool canUseLocal,
             bool canUseLive,
             bool isAllowedWhileBusy,
-            string[]? notes = null)
+            string[]? notes = null,
+            bool requiresForce = false)
         {
             Command = command;
             Synopsis = synopsis;
@@ -40,6 +41,7 @@ namespace UnityCli.Protocol
             CanUseLive = canUseLive;
             IsAllowedWhileBusy = isAllowedWhileBusy;
             Notes = notes ?? Array.Empty<string>();
+            RequiresForce = requiresForce;
         }
 
         public string Command { get; }
@@ -56,6 +58,7 @@ namespace UnityCli.Protocol
 
         public bool CanUseLive { get; }
         public bool IsAllowedWhileBusy { get; }
+        public bool RequiresForce { get; }
 
         public string[] Notes { get; }
     }
@@ -169,7 +172,8 @@ namespace UnityCli.Protocol
                     "wrapper 예약 prefix `__puc_internal_*` 변수는 사용자 코드에서 선언하지 마세요.",
                     "--args 값에는 secret/credential을 넣지 마세요. CodeDOM 컴파일 중 OS temp에 .cs 파일이 잠시 생성될 수 있습니다.",
                     "C# 5.0 이하 문법만 지원합니다 (CodeDOM 제한).",
-                }),
+                },
+                requiresForce: true),
             new CliCommandDescriptor(
                 "custom",
                 "custom <command-name> [--json <args>]",
@@ -234,7 +238,8 @@ namespace UnityCli.Protocol
                 canUseLocal: false,
                 canUseLive: true,
                 isAllowedWhileBusy: false,
-                notes: new[] { "Overwriting an existing target requires --force." }),
+                notes: new[] { "Overwriting an existing target requires --force." },
+                requiresForce: true),
             new CliCommandDescriptor(
                 "asset rename",
                 "asset rename --path <Assets/...> --name <newName> [--force]",
@@ -244,7 +249,8 @@ namespace UnityCli.Protocol
                 canUseLocal: false,
                 canUseLive: true,
                 isAllowedWhileBusy: false,
-                notes: new[] { "Overwriting an existing target requires --force." }),
+                notes: new[] { "Overwriting an existing target requires --force." },
+                requiresForce: true),
             new CliCommandDescriptor(
                 "asset delete",
                 "asset delete --path <Assets/...> --force",
@@ -254,7 +260,8 @@ namespace UnityCli.Protocol
                 canUseLocal: false,
                 canUseLive: true,
                 isAllowedWhileBusy: false,
-                notes: new[] { "Deletion is always gated by --force." }),
+                notes: new[] { "Deletion is always gated by --force." },
+                requiresForce: true),
             new CliCommandDescriptor(
                 "asset create",
                 "asset create --type <kind> --path <Assets/...> [--data-json <json>] [options]",
@@ -293,7 +300,8 @@ namespace UnityCli.Protocol
                 canUseLocal: false,
                 canUseLive: true,
                 isAllowedWhileBusy: false,
-                notes: new[] { "Detailed scene patch rules live in docs/scene-spec.md." }),
+                notes: new[] { "Detailed scene patch rules live in docs/scene-spec.md." },
+                requiresForce: true),
             new CliCommandDescriptor(
                 "scene add-object",
                 "scene add-object --path <Assets/...> [--parent <scenePath>] --name <name> [--primitive <Cube|Sphere|Capsule|Cylinder|Plane|Quad>] [--position x,y,z] [--components \"Type1,Type2\"]",
@@ -333,7 +341,8 @@ namespace UnityCli.Protocol
                 canUseLocal: false,
                 canUseLive: true,
                 isAllowedWhileBusy: false,
-                notes: new[] { "Always requires --force.", "Internally delegates to scene patch." }),
+                notes: new[] { "Always requires --force.", "Internally delegates to scene patch." },
+                requiresForce: true),
             new CliCommandDescriptor(
                 "scene assign-material",
                 "scene assign-material --node <scenePath> --material <Assets/...>",
@@ -376,14 +385,15 @@ namespace UnityCli.Protocol
                 notes: new[] { "Use this instead of asset create --type prefab for structured prefab authoring.", "Detailed prefab patch rules live in docs/prefab-spec.md." }),
             new CliCommandDescriptor(
                 "prefab patch",
-                "prefab patch --path <Assets/...> (--spec-file <file.json> | --spec-json <json>)",
-                "Applies a deterministic patch spec to an existing prefab.",
+                "prefab patch --path <Assets/...> (--spec-file <file.json> | --spec-json <json>) [--force]",
+                "Applies a deterministic patch spec to an existing prefab; destructive operations require --force.",
                 CliCommandGroup.PrefabWorkflows,
                 ProtocolConstants.CommandPrefabPatch,
                 canUseLocal: false,
                 canUseLive: true,
                 isAllowedWhileBusy: false,
-                notes: new[] { "Detailed prefab patch rules live in docs/prefab-spec.md." }),
+                notes: new[] { "Detailed prefab patch rules live in docs/prefab-spec.md." },
+                requiresForce: true),
             new CliCommandDescriptor(
                 "prefab add-component",
                 "prefab add-component --path <Assets/...> --node <nodePath> --type <ComponentType> [--values <json>]",
@@ -403,7 +413,8 @@ namespace UnityCli.Protocol
                 canUseLocal: false,
                 canUseLive: true,
                 isAllowedWhileBusy: false,
-                notes: new[] { "Always requires --force.", "Internally delegates to prefab patch." }),
+                notes: new[] { "Always requires --force.", "Internally delegates to prefab patch." },
+                requiresForce: true),
             new CliCommandDescriptor(
                 "prefab list-components",
                 "prefab list-components --path <Assets/...> --node <nodePath>",
@@ -442,7 +453,8 @@ namespace UnityCli.Protocol
                 canUseLocal: false,
                 canUseLive: true,
                 isAllowedWhileBusy: false,
-                notes: new[] { "Removal is always gated by --force.", "패키지 작업 중 Editor가 일시 정지될 수 있습니다." }),
+                notes: new[] { "Removal is always gated by --force.", "패키지 작업 중 Editor가 일시 정지될 수 있습니다." },
+                requiresForce: true),
             new CliCommandDescriptor(
                 "package search",
                 "package search --query <text>",
@@ -554,14 +566,14 @@ namespace UnityCli.Protocol
                 isAllowedWhileBusy: false),
             new CliCommandDescriptor(
                 "raw",
-                "raw --json '{\"command\":\"status\",\"arguments\":{}}'",
+                "raw [--force] --json '{\"command\":\"status\",\"arguments\":{}}'",
                 "Sends a raw live protocol envelope for low-level debugging.",
                 CliCommandGroup.Diagnostics,
                 protocolCommand: null,
                 canUseLocal: false,
                 canUseLive: true,
                 isAllowedWhileBusy: false,
-                notes: new[] { "This bypasses typed CLI validation." }),
+                notes: new[] { "This bypasses typed CLI validation.", "Use --force to inject `force: true` into raw arguments for destructive commands." }),
         };
 
         private static readonly string[] _supportedProtocolCommands = BuildSupportedProtocolCommands();
