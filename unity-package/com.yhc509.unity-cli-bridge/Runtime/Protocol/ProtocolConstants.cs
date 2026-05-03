@@ -15,6 +15,7 @@ namespace UnityCli.Protocol
         public const int DefaultConsoleLimit = 50;
         public const int DefaultAssetFindLimit = 50;
         public const int DefaultPackageRequestTimeoutSeconds = 300;
+        public const int DefaultPackageLiveTimeoutMs = 360_000;
         public const int RegistryHeartbeatSeconds = 2;
         public const string BusyErrorCode = "BUSY";
         public const string ErrorAssetForceRequired = "ASSET_FORCE_REQUIRED";

@@ -38,7 +38,8 @@ namespace UnityCli.Protocol
             bool canUseLive,
             bool isAllowedWhileBusy,
             string[]? notes = null,
-            ForceRule forceRule = ForceRule.None)
+            ForceRule forceRule = ForceRule.None,
+            int? defaultLiveTimeoutMs = null)
         {
             Command = command;
             Synopsis = synopsis;
@@ -50,6 +51,7 @@ namespace UnityCli.Protocol
             IsAllowedWhileBusy = isAllowedWhileBusy;
             Notes = notes ?? Array.Empty<string>();
             ForceRule = forceRule;
+            DefaultLiveTimeoutMs = defaultLiveTimeoutMs;
         }
 
         public string Command { get; }
@@ -67,6 +69,7 @@ namespace UnityCli.Protocol
         public bool CanUseLive { get; }
         public bool IsAllowedWhileBusy { get; }
         public ForceRule ForceRule { get; }
+        public int? DefaultLiveTimeoutMs { get; }
 
         [Obsolete("Use ForceRule instead.")]
         public bool RequiresForce => ForceRule != ForceRule.None;
@@ -445,7 +448,8 @@ namespace UnityCli.Protocol
                 ProtocolConstants.CommandPackageList,
                 canUseLocal: false,
                 canUseLive: true,
-                isAllowedWhileBusy: true),
+                isAllowedWhileBusy: true,
+                defaultLiveTimeoutMs: ProtocolConstants.DefaultPackageLiveTimeoutMs),
             new CliCommandDescriptor(
                 "package add",
                 "package add --name <package> [--version <version>]",
@@ -455,7 +459,8 @@ namespace UnityCli.Protocol
                 canUseLocal: false,
                 canUseLive: true,
                 isAllowedWhileBusy: false,
-                notes: new[] { "패키지 작업 중 Editor가 일시 정지될 수 있습니다." }),
+                notes: new[] { "패키지 작업 중 Editor가 일시 정지될 수 있습니다." },
+                defaultLiveTimeoutMs: ProtocolConstants.DefaultPackageLiveTimeoutMs),
             new CliCommandDescriptor(
                 "package remove",
                 "package remove --name <package> --force",
@@ -466,7 +471,8 @@ namespace UnityCli.Protocol
                 canUseLive: true,
                 isAllowedWhileBusy: false,
                 notes: new[] { "Removal is always gated by --force.", "패키지 작업 중 Editor가 일시 정지될 수 있습니다." },
-                forceRule: ForceRule.Always),
+                forceRule: ForceRule.Always,
+                defaultLiveTimeoutMs: ProtocolConstants.DefaultPackageLiveTimeoutMs),
             new CliCommandDescriptor(
                 "package search",
                 "package search --query <text>",
@@ -475,7 +481,8 @@ namespace UnityCli.Protocol
                 ProtocolConstants.CommandPackageSearch,
                 canUseLocal: false,
                 canUseLive: true,
-                isAllowedWhileBusy: true),
+                isAllowedWhileBusy: true,
+                defaultLiveTimeoutMs: ProtocolConstants.DefaultPackageLiveTimeoutMs),
             new CliCommandDescriptor(
                 "material info",
                 "material info --path <Assets/...mat> [--omit-defaults]",
