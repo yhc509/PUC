@@ -1,5 +1,7 @@
 #nullable enable
 using System;
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -11,8 +13,9 @@ namespace UnityCli.Protocol
 {
     public static class InstanceRegistryFile
     {
-        private const int MaxRetryCount = 6;
-        private const int RetryDelayMs = 25;
+        private const int MaxRetryCount = 10;
+        private const int RetryDelayMs = 30;
+        private const int StaleLockSeconds = 30;
 
         public static InstanceRegistry Load(string filePath)
         {
@@ -53,34 +56,7 @@ namespace UnityCli.Protocol
             }
 
             string fullPath = EnsureDirectory(filePath);
-            string lockPath = fullPath + ".lock";
-            IOException? lastException = null;
-
-            for (int attempt = 0; attempt < MaxRetryCount; attempt++)
-            {
-                try
-                {
-                    using (new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
-                    {
-                        WriteAtomically(fullPath, NormalizeRegistry(registry));
-                        return;
-                    }
-                }
-                catch (IOException exception)
-                {
-                    lastException = exception;
-                    Thread.Sleep((attempt + 1) * RetryDelayMs);
-                }
-                finally
-                {
-                    TryDeleteFile(lockPath);
-                }
-            }
-
-            if (lastException != null)
-            {
-                throw lastException;
-            }
+            WithExclusiveLock(fullPath, () => WriteAtomically(fullPath, NormalizeRegistry(registry)));
         }
 
         public static void Update(string filePath, Func<InstanceRegistry, InstanceRegistry> update)
@@ -91,35 +67,135 @@ namespace UnityCli.Protocol
             }
 
             string fullPath = EnsureDirectory(filePath);
+            WithExclusiveLock(fullPath, () =>
+            {
+                InstanceRegistry current = LoadUnlocked(fullPath);
+                InstanceRegistry next = NormalizeRegistry(update(current));
+                WriteAtomically(fullPath, next);
+            });
+        }
+
+        private static void WithExclusiveLock(string fullPath, Action action)
+        {
             string lockPath = fullPath + ".lock";
             IOException? lastException = null;
 
             for (int attempt = 0; attempt < MaxRetryCount; attempt++)
             {
-                try
+                FileStream? lockStream;
+                bool acquired = TryAcquireLock(lockPath, out lockStream);
+
+                if (acquired && lockStream != null)
                 {
-                    using (new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+                    try
                     {
-                        InstanceRegistry current = LoadUnlocked(fullPath);
-                        InstanceRegistry next = NormalizeRegistry(update(current));
-                        WriteAtomically(fullPath, next);
+                        action();
                         return;
                     }
+                    catch (IOException exception)
+                    {
+                        lastException = exception;
+                    }
+                    finally
+                    {
+                        ReleaseLock(lockStream, lockPath);
+                    }
                 }
-                catch (IOException exception)
+                else
                 {
-                    lastException = exception;
-                    Thread.Sleep((attempt + 1) * RetryDelayMs);
+                    lastException = new IOException("Failed to acquire registry lock: " + lockPath);
+                    if (IsStaleLock(lockPath))
+                    {
+                        TryDeleteFile(lockPath);
+                    }
                 }
-                finally
-                {
-                    TryDeleteFile(lockPath);
-                }
+
+                Thread.Sleep((attempt + 1) * RetryDelayMs);
             }
 
             if (lastException != null)
             {
                 throw lastException;
+            }
+        }
+
+        private static bool TryAcquireLock(string lockPath, out FileStream? lockStream)
+        {
+            FileStream? stream = null;
+            bool acquired = false;
+
+            try
+            {
+                stream = new FileStream(lockPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None);
+                acquired = true;
+                // Unity Mono runtime lacks Environment.ProcessId (.NET 5+ only); Process.GetCurrentProcess().Id stays portable.
+                int processId = Process.GetCurrentProcess().Id;
+                string content = processId.ToString(CultureInfo.InvariantCulture)
+                    + Environment.NewLine
+                    + DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture)
+                    + Environment.NewLine;
+                byte[] bytes = Encoding.UTF8.GetBytes(content);
+                stream.Write(bytes, 0, bytes.Length);
+                stream.Flush();
+                lockStream = stream;
+                return true;
+            }
+            catch (IOException)
+            {
+                if (acquired && stream != null)
+                {
+                    ReleaseLock(stream, lockPath);
+                }
+
+                lockStream = null;
+                return false;
+            }
+        }
+
+        private static bool IsStaleLock(string lockPath)
+        {
+            DateTime lastWriteTimeUtc;
+
+            try
+            {
+                lastWriteTimeUtc = File.GetLastWriteTimeUtc(lockPath);
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+
+            if (DateTime.UtcNow - lastWriteTimeUtc < TimeSpan.FromSeconds(StaleLockSeconds))
+            {
+                return false;
+            }
+
+            try
+            {
+                string[] lines = File.ReadAllLines(lockPath);
+                if (lines.Length == 0 || !int.TryParse(lines[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out int processId))
+                {
+                    return true;
+                }
+
+                using Process process = Process.GetProcessById(processId);
+                return process.HasExited;
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        private static void ReleaseLock(FileStream lockStream, string lockPath)
+        {
+            try
+            {
+                lockStream.Dispose();
+            }
+            finally
+            {
+                TryDeleteFile(lockPath);
             }
         }
 
