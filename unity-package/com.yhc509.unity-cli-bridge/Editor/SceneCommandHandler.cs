@@ -344,6 +344,12 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static void ReloadSceneAfterFailedPatch(string path, LoadedSceneSnapshot snapshot)
         {
+            if (!ScenePatchRecoveryPolicy.ShouldReloadAfterFailedPatch(snapshot.TargetWasLoaded))
+            {
+                // WithLoadedScene's finally already unloads the temp scene; reopening here would surprise the user with an extra loaded scene.
+                return;
+            }
+
             try
             {
                 Scene scene = SceneManager.GetSceneByPath(path);
