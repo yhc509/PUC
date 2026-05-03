@@ -22,7 +22,19 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             var request = new AssetCreateRequest(args, createType, path);
-            bool isOverwritten = AssetCommandSupport.DeleteIfTargetExists(path, args.force, "asset-create");
+            bool isOverwritten = AssetCommandSupport.AssetExists(path);
+            // Non-overwrite creates still use the transaction so failed saves remove partial body/.meta artifacts.
+            return AssetBackupTransaction.RunWithMovedBackup(path, "asset-create", () => CreateAsset(provider, request, descriptor, isOverwritten));
+        }
+
+        private static string CreateAsset(
+            IAssetCreateProvider provider,
+            AssetCreateRequest request,
+            AssetCreateTypeDescriptor descriptor,
+            bool isOverwritten)
+        {
+            string path = request.AssetPath;
+            string createType = request.TypeId;
             AssetCreateArtifact artifact = provider.Create(request);
             ApplyDataPatchIfNeeded(descriptor, artifact, request);
             artifact.SaveAction();

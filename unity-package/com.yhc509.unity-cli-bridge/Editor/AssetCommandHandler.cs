@@ -220,8 +220,13 @@ namespace UnityCliBridge.Bridge.Editor
                 throw new CommandFailureException(ProtocolConstants.ErrorAssetForceRequired, "asset 덮어쓰기 또는 삭제에는 --force가 필요합니다.");
             }
 
-            bool isOverwritten = AssetCommandSupport.DeleteIfTargetExists(to, args.force, "asset-move");
+            bool isOverwritten = AssetCommandSupport.AssetExists(to);
+            return AssetBackupTransaction.RunWithBackup(from, "asset-move", () =>
+                AssetBackupTransaction.RunWithMovedBackup(to, "asset-move", () => MoveAsset(from, to, isOverwritten)));
+        }
 
+        private static string MoveAsset(string from, string to, bool isOverwritten)
+        {
             string error = AssetDatabase.MoveAsset(from, to);
             if (!string.IsNullOrWhiteSpace(error))
             {
@@ -267,7 +272,13 @@ namespace UnityCliBridge.Bridge.Editor
                 throw new CommandFailureException(ProtocolConstants.ErrorAssetForceRequired, "asset 덮어쓰기 또는 삭제에는 --force가 필요합니다.");
             }
 
-            bool isOverwritten = AssetCommandSupport.DeleteIfTargetExists(destination, args.force, "asset-rename");
+            bool isOverwritten = AssetCommandSupport.AssetExists(destination);
+            return AssetBackupTransaction.RunWithBackup(path, "asset-rename", () =>
+                AssetBackupTransaction.RunWithMovedBackup(destination, "asset-rename", () => RenameAsset(path, destination, isOverwritten)));
+        }
+
+        private static string RenameAsset(string path, string destination, bool isOverwritten)
+        {
             string error = AssetDatabase.MoveAsset(path, destination);
             if (!string.IsNullOrWhiteSpace(error))
             {

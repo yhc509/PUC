@@ -80,6 +80,7 @@ namespace UnityCliBridge.Bridge.Editor
         {
             ScenePatchArgs args = ProtocolJson.Deserialize<ScenePatchArgs>(argumentsJson) ?? new ScenePatchArgs();
             string path = RequireExistingScenePath(args.path, "scene-patch");
+            EnsureScenePatchTargetClean(path);
 
             ScenePatchSpec spec = DeserializeSpec<ScenePatchSpec>(args.specJson, "scene-patch");
             ValidateVersion(spec.Version, "scene-patch");
@@ -94,6 +95,20 @@ namespace UnityCliBridge.Bridge.Editor
                 throw new CommandFailureException(ProtocolConstants.ErrorSceneForceRequired, "`delete-gameobject` 또는 `remove-component`를 쓰려면 --force가 필요합니다.");
             }
 
+            LoadedSceneSnapshot loadedSceneSnapshot = CaptureLoadedSceneSnapshot(path);
+            try
+            {
+                return AssetBackupTransaction.RunWithBackup(path, "scene-patch", () => PatchScene(path, spec));
+            }
+            catch (Exception exception) when (ShouldReloadSceneAfterPatchFailure(exception))
+            {
+                ReloadSceneAfterFailedPatch(path, loadedSceneSnapshot);
+                throw;
+            }
+        }
+
+        private static string PatchScene(string path, ScenePatchSpec spec)
+        {
             return WithLoadedScene(path, "scene-patch", delegate(Scene scene)
             {
                 ScenePatchApplyResult patchResult = ApplyPatchOperations(scene, spec.Operations);
@@ -233,7 +248,7 @@ namespace UnityCliBridge.Bridge.Editor
                 if (scene.isDirty)
                 {
                     throw new CommandFailureException(
-                        "SCENE_DIRTY",
+                        ProtocolConstants.ErrorSceneDirty,
                         commandName + " 대상 scene에 저장되지 않은 변경이 있습니다. 먼저 저장하거나 변경을 버리세요: " + path);
                 }
             }
@@ -269,7 +284,7 @@ namespace UnityCliBridge.Bridge.Editor
                     {
                         string sceneName = string.IsNullOrWhiteSpace(scene.path) ? scene.name : scene.path;
                         throw new CommandFailureException(
-                            "SCENE_DIRTY",
+                            ProtocolConstants.ErrorSceneDirty,
                             "저장되지 않은 scene 변경이 있습니다. 버리고 열려면 --force를 사용하세요: " + sceneName);
                     }
                 }
@@ -280,6 +295,98 @@ namespace UnityCliBridge.Bridge.Editor
                 // Reset to a fresh scene first so `scene open --force` discards dirty state deterministically.
                 EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             }
+        }
+
+        private static void EnsureScenePatchTargetClean(string path)
+        {
+            Scene scene = SceneManager.GetSceneByPath(path);
+            if (scene.IsValid() && scene.isLoaded && scene.isDirty)
+            {
+                throw new CommandFailureException(
+                    ProtocolConstants.ErrorSceneDirty,
+                    path + " scene에 저장하지 않은 변경이 있어 patch를 진행할 수 없습니다. 먼저 저장하거나 폐기한 뒤 다시 시도하세요.");
+            }
+        }
+
+        private static bool ShouldReloadSceneAfterPatchFailure(Exception exception)
+        {
+            if (exception is CommandFailureException failure
+                && (failure.ErrorCode == ProtocolConstants.ErrorBackupFailed
+                    || failure.ErrorCode == ProtocolConstants.ErrorBackupRestoreFailed
+                    || failure.ErrorCode == ProtocolConstants.ErrorSceneDirty))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static LoadedSceneSnapshot CaptureLoadedSceneSnapshot(string targetPath)
+        {
+            Scene activeScene = EditorSceneManager.GetActiveScene();
+            bool targetWasActive = string.Equals(activeScene.path, targetPath, StringComparison.Ordinal);
+            bool targetWasLoaded = false;
+
+            for (int index = 0; index < SceneManager.sceneCount; index++)
+            {
+                Scene scene = SceneManager.GetSceneAt(index);
+                if (scene.IsValid()
+                    && scene.isLoaded
+                    && string.Equals(scene.path, targetPath, StringComparison.Ordinal))
+                {
+                    targetWasLoaded = true;
+                    break;
+                }
+            }
+
+            return new LoadedSceneSnapshot(targetWasLoaded, targetWasActive);
+        }
+
+        private static void ReloadSceneAfterFailedPatch(string path, LoadedSceneSnapshot snapshot)
+        {
+            if (!ScenePatchRecoveryPolicy.ShouldReloadAfterFailedPatch(snapshot.TargetWasLoaded))
+            {
+                // WithLoadedScene's finally already unloads the temp scene; reopening here would surprise the user with an extra loaded scene.
+                return;
+            }
+
+            try
+            {
+                Scene scene = SceneManager.GetSceneByPath(path);
+                if (scene.IsValid() && scene.isLoaded && !EditorSceneManager.CloseScene(scene, removeScene: true))
+                {
+                    Debug.LogWarning("scene patch 실패 후 target scene reload를 위해 scene을 닫지 못했습니다: " + path);
+                    return;
+                }
+
+                Scene reloadedScene = EditorSceneManager.OpenScene(path, OpenSceneMode.Additive);
+                if (!reloadedScene.IsValid() || !reloadedScene.isLoaded)
+                {
+                    Debug.LogWarning("scene patch 실패 후 target scene reload에 실패했습니다: " + path);
+                    return;
+                }
+
+                if (snapshot.TargetWasLoaded && snapshot.TargetWasActive)
+                {
+                    SceneManager.SetActiveScene(reloadedScene);
+                }
+            }
+            catch (Exception reloadException)
+            {
+                Debug.LogWarning("scene patch 실패 후 dirty 폐기를 위한 reload에 실패했습니다: " + path + " (" + reloadException.Message + ")");
+            }
+        }
+
+        private readonly struct LoadedSceneSnapshot
+        {
+            public LoadedSceneSnapshot(bool targetWasLoaded, bool targetWasActive)
+            {
+                TargetWasLoaded = targetWasLoaded;
+                TargetWasActive = targetWasActive;
+            }
+
+            public bool TargetWasLoaded { get; }
+            public bool TargetWasActive { get; }
         }
 
         private static T DeserializeSpec<T>(string? specJson, string commandName) where T : class

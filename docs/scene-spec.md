@@ -78,7 +78,8 @@ Rules:
 
 - `version` is currently `1`
 - `delete-gameobject` and `remove-component` require `--force`
-- if the target scene is already loaded in the Editor, it must be clean before `scene inspect` or `scene patch`
+- if the target scene is already loaded in the Editor, `scene inspect` expects it to be clean and `scene patch` refuses unsaved target-scene changes even with `--force`
+- `scene patch` writes through a `Library/com.yhc509.unity-cli-bridge/backups/` backup for the `.unity` file and `.meta`
 - `modify-gameobject` uses `values` with `name`, `active`, `tag`, `layer`, and `transform`
 - `add-gameobject` can include nested `children`, initial `components`, and an optional `primitive` of `Cube`, `Sphere`, `Capsule`, `Cylinder`, `Plane`, or `Quad`
 - `modify-component` uses writable serialized field names from inspect output
