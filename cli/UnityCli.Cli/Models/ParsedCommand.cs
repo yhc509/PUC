@@ -280,6 +280,7 @@ public sealed class ParsedCommand
             CommandKind.PackageRemove => new PackageRemoveArgs
             {
                 name = PackageName ?? string.Empty,
+                force = Force,
             },
             CommandKind.PackageSearch => new PackageSearchArgs
             {

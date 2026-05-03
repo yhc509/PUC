@@ -144,6 +144,7 @@ namespace UnityCli.Protocol
     public sealed class PackageRemoveArgs
     {
         public string name = string.Empty;
+        public bool force;
     }
 
     [Serializable]
