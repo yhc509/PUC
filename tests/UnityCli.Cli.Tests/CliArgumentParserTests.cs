@@ -1568,12 +1568,41 @@ public sealed class CliArgumentParserTests
         Assert.Equal("{\"size\": 1000}", parsed.CustomArgsJson);
     }
 
-    [Fact]
-    public void Parse_PackageList_UsesLiveTimeout()
+    public static TheoryData<string[], CommandKind> PackageCommandsWithLongDefaultTimeout()
     {
-        var parsed = CliArgumentParser.Parse(["package", "list"]);
+        var commands = new TheoryData<string[], CommandKind>();
+        commands.Add(["package", "list"], CommandKind.PackageList);
+        commands.Add(["package", "add", "--name", "com.unity.textmeshpro"], CommandKind.PackageAdd);
+        commands.Add(["package", "remove", "--name", "com.unity.textmeshpro", "--force"], CommandKind.PackageRemove);
+        commands.Add(["package", "search", "--query", "physics"], CommandKind.PackageSearch);
+        return commands;
+    }
+
+    [Theory]
+    [MemberData(nameof(PackageCommandsWithLongDefaultTimeout))]
+    public void Parse_PackageCommands_UsePackageLiveTimeout(string[] args, CommandKind expectedKind)
+    {
+        var parsed = CliArgumentParser.Parse(args);
+
+        Assert.Equal(expectedKind, parsed.Kind);
+        Assert.Equal(ProtocolConstants.DefaultPackageLiveTimeoutMs, parsed.TimeoutMs);
+    }
+
+    [Fact]
+    public void Parse_PackageCommand_TimeoutMsOverrideWins()
+    {
+        var parsed = CliArgumentParser.Parse(["package", "list", "--timeout-ms", "42"]);
 
         Assert.Equal(CommandKind.PackageList, parsed.Kind);
+        Assert.Equal(42, parsed.TimeoutMs);
+    }
+
+    [Fact]
+    public void Parse_NonPackageCommand_KeepsDefaultLiveTimeout()
+    {
+        var parsed = CliArgumentParser.Parse(["asset", "find", "--name", "Player"]);
+
+        Assert.Equal(CommandKind.AssetFind, parsed.Kind);
         Assert.Equal(ProtocolConstants.DefaultLiveTimeoutMs, parsed.TimeoutMs);
     }
 
