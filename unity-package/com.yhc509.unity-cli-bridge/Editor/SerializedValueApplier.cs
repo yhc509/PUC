@@ -746,6 +746,11 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static JObject ReadObject(JToken token, string propertyPath)
         {
+            if (token == null || token.Type == JTokenType.Null)
+            {
+                throw new CommandFailureException("PREFAB_FIELD_INVALID", "object 값이 필요합니다: " + propertyPath);
+            }
+
             if (token.Type == JTokenType.Object)
             {
                 return (JObject)token;

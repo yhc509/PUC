@@ -121,10 +121,26 @@ namespace UnityCliBridge.Bridge.Editor
                 return;
             }
 
-            _isInitialized = true;
-            foreach (IAssetCreateProvider provider in BuiltInAssetCreateProviders.CreateAll())
+            bool succeeded = false;
+            try
             {
-                RegisterInternal(provider);
+                foreach (IAssetCreateProvider provider in BuiltInAssetCreateProviders.CreateAll())
+                {
+                    RegisterInternal(provider);
+                }
+
+                succeeded = true;
+            }
+            finally
+            {
+                if (succeeded)
+                {
+                    _isInitialized = true;
+                }
+                else
+                {
+                    _providers.Clear();
+                }
             }
         }
 

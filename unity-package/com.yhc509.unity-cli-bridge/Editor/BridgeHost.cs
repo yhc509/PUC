@@ -324,7 +324,26 @@ namespace UnityCliBridge.Bridge.Editor
                     return;
                 }
 
-                CommandEnvelope? command = ProtocolJson.Deserialize<CommandEnvelope>(line);
+                CommandEnvelope? command;
+                try
+                {
+                    command = ProtocolJson.Deserialize<CommandEnvelope>(line);
+                }
+                catch (Exception deserializeException)
+                {
+                    var error = ResponseEnvelope.Failure(
+                        Guid.NewGuid().ToString("N"),
+                        _projectHash,
+                        "INVALID_COMMAND",
+                        "command payload를 해석하지 못했습니다: " + deserializeException.Message,
+                        false,
+                        0,
+                        ProtocolConstants.TransportLive,
+                        line);
+                    await WriteResponseAsync(writer, error);
+                    return;
+                }
+
                 if (command == null || string.IsNullOrWhiteSpace(command.command))
                 {
                     string requestId = command != null && !string.IsNullOrWhiteSpace(command.requestId)

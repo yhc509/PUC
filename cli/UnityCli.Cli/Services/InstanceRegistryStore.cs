@@ -251,15 +251,20 @@ public sealed class InstanceRegistryStore
         return registry;
     }
 
-    private static bool IsStale(InstanceRecord record)
+    internal static bool IsStale(InstanceRecord record)
     {
+        bool timestampStale;
         if (!DateTimeOffset.TryParse(record.lastSeenUtc, out var lastSeen))
         {
-            return false;
+            timestampStale = true;
+        }
+        else
+        {
+            var maxAgeSeconds = ProtocolConstants.RegistryHeartbeatSeconds * 3;
+            timestampStale = (DateTimeOffset.UtcNow - lastSeen).TotalSeconds > maxAgeSeconds;
         }
 
-        var maxAgeSeconds = ProtocolConstants.RegistryHeartbeatSeconds * 3;
-        if ((DateTimeOffset.UtcNow - lastSeen).TotalSeconds <= maxAgeSeconds)
+        if (!timestampStale)
         {
             return false;
         }
@@ -269,12 +274,7 @@ public sealed class InstanceRegistryStore
             return false;
         }
 
-        if (OperatingSystem.IsWindows())
-        {
-            return true;
-        }
-
-        return string.IsNullOrWhiteSpace(record.pipeName) || !File.Exists(record.pipeName);
+        return true;
     }
 
     private static bool IsProcessAlive(int processId)

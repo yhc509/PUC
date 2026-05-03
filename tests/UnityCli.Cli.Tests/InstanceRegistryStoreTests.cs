@@ -237,4 +237,52 @@ public sealed class InstanceRegistryStoreTests
         Assert.Equal("ProjectA", registry.instances[0].projectName);
         Assert.Equal(registry.instances[0].projectHash, registry.activeProjectHash);
     }
+
+    [Fact]
+    public void IsStale_WithUnparseableLastSeenAndNoProcess_ReturnsTrue()
+    {
+        var record = new InstanceRecord
+        {
+            lastSeenUtc = "garbage",
+            editorProcessId = 0,
+        };
+
+        Assert.True(InstanceRegistryStore.IsStale(record));
+    }
+
+    [Fact]
+    public void IsStale_WithUnparseableLastSeenAndLiveProcess_ReturnsFalse()
+    {
+        var record = new InstanceRecord
+        {
+            lastSeenUtc = "garbage",
+            editorProcessId = System.Diagnostics.Process.GetCurrentProcess().Id,
+        };
+
+        Assert.False(InstanceRegistryStore.IsStale(record));
+    }
+
+    [Fact]
+    public void IsStale_WithOldLastSeenAndNoProcess_ReturnsTrue()
+    {
+        var record = new InstanceRecord
+        {
+            lastSeenUtc = DateTimeOffset.UtcNow.AddHours(-1).ToString("O"),
+            editorProcessId = 0,
+        };
+
+        Assert.True(InstanceRegistryStore.IsStale(record));
+    }
+
+    [Fact]
+    public void IsStale_WithRecentLastSeenAndNoProcess_ReturnsFalse()
+    {
+        var record = new InstanceRecord
+        {
+            lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+            editorProcessId = 0,
+        };
+
+        Assert.False(InstanceRegistryStore.IsStale(record));
+    }
 }

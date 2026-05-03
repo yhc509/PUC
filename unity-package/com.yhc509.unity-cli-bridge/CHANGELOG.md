@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+- Asset create provider registry no longer gets stuck in a partial-init state when a built-in provider registration throws.
+- Bridge now returns a structured `INVALID_COMMAND` response when an IPC payload fails JSON deserialization, instead of dropping the connection.
+- CLI instance registry treats records with unparseable `lastSeenUtc` as stale, subject to live-PID confirmation, instead of keeping them alive forever.
+- `scene patch` / `prefab patch` `Bounds` mutations with missing `center` or `size` now return a clear `PREFAB_FIELD_INVALID` error instead of crashing with a null reference exception.
+
 ## [0.1.9] - 2026-05-03
 
 ### Security
