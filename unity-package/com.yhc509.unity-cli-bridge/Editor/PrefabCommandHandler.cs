@@ -115,6 +115,11 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             NormalizeOperationNames(spec.Operations);
+            if (HasDestructiveOperation(spec) && !args.force)
+            {
+                throw new CommandFailureException("PREFAB_FORCE_REQUIRED", "Destructive prefab patch operation requires --force.");
+            }
+
             GameObject root = PrefabUtility.LoadPrefabContents(path);
             PrefabPatchApplyResult patchResult;
             try
