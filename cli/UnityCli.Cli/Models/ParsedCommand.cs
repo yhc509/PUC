@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using UnityCli.Protocol;
 
 namespace UnityCli.Cli.Models;
@@ -177,9 +178,7 @@ public sealed class ParsedCommand
                 {
                     requestId = Guid.NewGuid().ToString("N"),
                     command = commandElement.GetString() ?? string.Empty,
-                    argumentsJson = root.TryGetProperty("arguments", out var argumentsElement)
-                        ? argumentsElement.GetRawText()
-                        : "{}",
+                    argumentsJson = BuildRawArgumentsJson(root),
                 };
 
                 return rawRequest;
@@ -281,6 +280,7 @@ public sealed class ParsedCommand
             CommandKind.PackageRemove => new PackageRemoveArgs
             {
                 name = PackageName ?? string.Empty,
+                force = Force,
             },
             CommandKind.PackageSearch => new PackageSearchArgs
             {
@@ -290,6 +290,7 @@ public sealed class ParsedCommand
             {
                 code = ResolveExecuteCode(),
                 argumentsJson = ExecuteCodeArgsJson,
+                force = Force,
             },
             CommandKind.Custom => new CustomCommandArgs
             {
@@ -379,6 +380,7 @@ public sealed class ParsedCommand
             CommandKind.AssetDelete => new AssetPathArgs
             {
                 path = AssetPath ?? string.Empty,
+                force = Force,
             },
             CommandKind.AssetCreate => new AssetCreateArgs
             {
@@ -447,16 +449,19 @@ public sealed class ParsedCommand
             CommandKind.PrefabPatch => new PrefabPatchArgs
             {
                 path = PrefabPath ?? string.Empty,
+                force = Force,
                 specJson = ResolvePrefabSpecJson(),
             },
             CommandKind.PrefabAddComponent => new PrefabPatchArgs
             {
                 path = PrefabPath ?? string.Empty,
+                force = Force,
                 specJson = BuildAddComponentSpec(),
             },
             CommandKind.PrefabRemoveComponent => new PrefabPatchArgs
             {
                 path = PrefabPath ?? string.Empty,
+                force = Force,
                 specJson = BuildRemoveComponentSpec(),
             },
             CommandKind.PrefabListComponents => new
@@ -468,6 +473,47 @@ public sealed class ParsedCommand
         };
 
         return JsonSerializer.Serialize(payload, ProtocolJson.Default);
+    }
+
+    private string BuildRawArgumentsJson(JsonElement root)
+    {
+        if (!root.TryGetProperty("arguments", out JsonElement argumentsElement))
+        {
+            return Force ? "{\"force\":true}" : "{}";
+        }
+
+        if (!Force)
+        {
+            return argumentsElement.GetRawText();
+        }
+
+        JsonObject arguments;
+        if (argumentsElement.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            arguments = new JsonObject();
+        }
+        else
+        {
+            arguments = JsonNode.Parse(argumentsElement.GetRawText()) as JsonObject
+                ?? throw new CliUsageException("raw `--force`를 쓰려면 `arguments`가 JSON object여야 합니다.");
+        }
+
+        // Raw force is explicit: the flag may fill a missing value, but not contradict payload intent.
+        if (arguments.TryGetPropertyValue("force", out JsonNode? forceNode))
+        {
+            if (forceNode is JsonValue forceValue
+                && forceValue.TryGetValue<bool>(out bool payloadForce)
+                && payloadForce)
+            {
+                arguments["force"] = true;
+                return arguments.ToJsonString(ProtocolJson.Default);
+            }
+
+            throw new CliUsageException("force flag conflicts with raw payload");
+        }
+
+        arguments["force"] = true;
+        return arguments.ToJsonString(ProtocolJson.Default);
     }
 
     private string? ResolveScreenshotView()
@@ -567,7 +613,7 @@ public sealed class ParsedCommand
             : "`x,y` 형식의 절대 화면 픽셀 좌표";
     }
 
-    private string ResolvePrefabSpecJson()
+    public string ResolvePrefabSpecJson()
     {
         return ResolveSpecJson(PrefabSpecJson, PrefabSpecFile, "prefab");
     }

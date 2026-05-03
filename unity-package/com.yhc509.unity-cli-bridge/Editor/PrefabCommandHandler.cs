@@ -115,6 +115,11 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             NormalizeOperationNames(spec.Operations);
+            if (HasDestructiveOperation(spec) && !args.force)
+            {
+                throw new CommandFailureException(ProtocolConstants.ErrorPrefabForceRequired, "`remove-node` 또는 `remove-component`를 쓰려면 --force가 필요합니다.");
+            }
+
             GameObject root = PrefabUtility.LoadPrefabContents(path);
             PrefabPatchApplyResult patchResult;
             try

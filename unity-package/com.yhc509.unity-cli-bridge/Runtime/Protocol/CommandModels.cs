@@ -95,6 +95,7 @@ namespace UnityCli.Protocol
     {
         public string code = string.Empty;
         public string? argumentsJson;
+        public bool force;
     }
 
     [Serializable]
@@ -143,6 +144,7 @@ namespace UnityCli.Protocol
     public sealed class PackageRemoveArgs
     {
         public string name = string.Empty;
+        public bool force;
     }
 
     [Serializable]
@@ -249,6 +251,7 @@ namespace UnityCli.Protocol
     public sealed class AssetPathArgs
     {
         public string path = string.Empty;
+        public bool force;
     }
 
     [Serializable]
@@ -351,6 +354,7 @@ namespace UnityCli.Protocol
     public sealed class PrefabPatchArgs
     {
         public string path = string.Empty;
+        public bool force;
         public string specJson = string.Empty;
     }
 

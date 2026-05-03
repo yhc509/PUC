@@ -46,13 +46,14 @@ description: "Unity Editor 외부 제어 1차 진입점. 씬/프리팹/에셋/�
 ## Operating Rules
 
 - 모든 asset 경로는 `Assets/...` 형식으로 다룬다. 조회 전용(`asset find`, `asset info`)은 `Packages/...`도 허용된다.
-- 파괴 연산과 덮어쓰기는 `--force`가 있을 때만 허용된다고 가정한다.
+- 파괴 연산과 덮어쓰기는 `--force`가 있을 때만 허용된다고 가정한다. 특히 asset delete/overwrite, scene `delete-gameobject`/`remove-component`, prefab `remove-node`/`remove-component`, `package remove`는 force-gated다.
+- `execute`/`execute-code`는 임의 C# 실행이므로 항상 `--force`가 필요하다.
 - `execute --code 'Debug.Log(__pucArgsJson);' --args '{"k":"v"}' --force`로 넘긴 JSON은 사용자 코드에서 `__pucArgsJson` 문자열 변수로 읽는다.
 - `execute --args` 사용자 코드에서는 wrapper 예약 prefix인 `__puc_internal_*` 변수를 선언하지 않는다.
 - `execute --args` 값에는 secret/credential을 넣지 않는다. CodeDOM 컴파일 중 OS temp에 `.cs` 파일이 잠시 생성될 수 있다.
 - **LLM이 소비하는 명령에는 `--output compact`를 기본으로 붙인다.** envelope 메타를 제거하여 토큰을 절약한다.
 - `scene patch` 전에는 가능하면 `scene inspect --with-values`를 먼저 실행해서 GameObject path와 field 이름을 확인한다.
-- `prefab patch` 전에는 가능하면 `prefab inspect --with-values`를 먼저 실행해서 path와 field 이름을 확인한다.
+- `prefab patch` 전에는 가능하면 `prefab inspect --with-values`를 먼저 실행해서 path와 field 이름을 확인한다. `remove-node`나 `remove-component` 같은 destructive op가 있으면 `--force`를 붙인다.
 - inspect 응답이 클 때는 `--max-depth N`으로 깊이를 제한하고 `--omit-defaults`로 기본값을 생략한다.
 - `material info`도 `--omit-defaults`를 지원한다. URP/Lit 기준 48개 속성 → 변경된 것만 반환하여 토큰을 71% 절약한다.
 - `--omit-defaults` 결과는 read-only이다. patch input으로 그대로 쓰면 생략된 필드가 복원되지 않는다.

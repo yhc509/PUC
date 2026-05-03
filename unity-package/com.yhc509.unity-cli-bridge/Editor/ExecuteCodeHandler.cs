@@ -52,6 +52,11 @@ public static class PucExecuteWrapper
         public string Handle(string command, string argumentsJson)
         {
             ExecuteCodeArgs args = ProtocolJson.Deserialize<ExecuteCodeArgs>(argumentsJson) ?? new ExecuteCodeArgs();
+            if (!args.force)
+            {
+                throw new CommandFailureException(ProtocolConstants.ErrorExecuteForceRequired, "코드 실행에는 --force가 필요합니다.");
+            }
+
             if (string.IsNullOrWhiteSpace(args.code))
             {
                 throw new CommandFailureException("INVALID_ARGS", "실행할 코드가 비어 있습니다.");

@@ -215,6 +215,11 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             AssetCommandSupport.EnsureParentFolderExists(to);
+            if (!args.force && AssetCommandSupport.AssetExists(to))
+            {
+                throw new CommandFailureException(ProtocolConstants.ErrorAssetForceRequired, "asset 덮어쓰기 또는 삭제에는 --force가 필요합니다.");
+            }
+
             bool isOverwritten = AssetCommandSupport.DeleteIfTargetExists(to, args.force, "asset-move");
 
             string error = AssetDatabase.MoveAsset(from, to);
@@ -257,6 +262,11 @@ namespace UnityCliBridge.Bridge.Editor
                 });
             }
 
+            if (!args.force && AssetCommandSupport.AssetExists(destination))
+            {
+                throw new CommandFailureException(ProtocolConstants.ErrorAssetForceRequired, "asset 덮어쓰기 또는 삭제에는 --force가 필요합니다.");
+            }
+
             bool isOverwritten = AssetCommandSupport.DeleteIfTargetExists(destination, args.force, "asset-rename");
             string error = AssetDatabase.MoveAsset(path, destination);
             if (!string.IsNullOrWhiteSpace(error))
@@ -276,6 +286,11 @@ namespace UnityCliBridge.Bridge.Editor
         private static string HandleDelete(string argumentsJson)
         {
             AssetPathArgs args = ProtocolJson.Deserialize<AssetPathArgs>(argumentsJson) ?? new AssetPathArgs();
+            if (!args.force)
+            {
+                throw new CommandFailureException(ProtocolConstants.ErrorAssetForceRequired, "asset 덮어쓰기 또는 삭제에는 --force가 필요합니다.");
+            }
+
             string path = AssetCommandSupport.RequireExistingAssetPath(args.path, "asset-delete");
             AssetRecord beforeDelete = AssetCommandSupport.BuildRecordFromPath(path);
             if (!AssetDatabase.DeleteAsset(path))

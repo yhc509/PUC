@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+- Enforce server-side `--force` gates on destructive or dangerous commands, including asset delete/move/rename, scene and prefab patch destructive operations, execute-code, and package remove. CLI-only validation could be bypassed through raw IPC.
+
+### Added
+- Catalog `ForceRule` metadata as the single source of truth for force-gated commands.
+- `raw --force` support to inject `force=true` into raw envelope arguments.
+
+### Changed
+- `raw --force` now fails fast when the raw payload explicitly conflicts with the flag instead of overwriting payload `force`.
+
+### Compatibility Note
+- Destructive command protocol arguments now include a `force` field. Older clients that omit it are interpreted by the bridge as `force=false`, so destructive or dangerous operations are rejected until the client sends `force=true`.
+
 ## [0.1.8] - 2026-04-30
 
 ### Changed

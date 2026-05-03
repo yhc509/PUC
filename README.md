@@ -149,6 +149,7 @@ unity-cli prefab create --path Assets/Prefabs/Enemy.prefab \
   --spec-json '{"root":{"name":"Enemy","children":[...]}}'
 unity-cli prefab inspect --path ... --with-values
 unity-cli prefab patch --path ... --spec-json '{"operations":[...]}'
+unity-cli prefab patch --path ... --spec-file destructive-patch.json --force
 
 # Component operations
 unity-cli prefab list-components --path Assets/Prefabs/Player.prefab --node "/Root[0]"
@@ -225,7 +226,8 @@ docs/                          Generated CLI reference, specs
 
 ## Safety Rules
 
-- **Destructive ops require `--force`:** `asset delete`, overwrites, `package remove`, scene `delete-gameobject` / `remove-component`
+- **Destructive or dangerous ops require `--force`:** `asset delete`, overwrites, `execute`, `package remove`, scene `delete-gameobject` / `remove-component`, prefab `remove-node` / `remove-component`, and prefab `remove-component` shortcut commands
+- **Raw force payloads are explicit:** `raw --force` only injects `force=true` when the payload omits `force` or already sets it to `true`; conflicting payload values fail fast.
 - **Asset paths:** Write operations are `Assets/...` only. Reads allow `Packages/...` too.
 - **Scene paths:** `/Root[0]/Child[0]` format with sibling indices. `/` is the virtual scene root.
 - **Inspect before patch:** Always `scene inspect --with-values` or `prefab inspect --with-values` before writing patch specs.

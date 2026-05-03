@@ -56,7 +56,9 @@ The CLI executable and Codex skill are not included in the UPM package payload. 
 - `input-actions` assets are created as JSON files that Unity's Input System importer reads.
 - `scene inspect --with-values` is meant to be used as the source of truth when authoring `scene patch` specs.
 - `scene patch` uses `/Root[0]/Child[0]` paths, treats `/` as the virtual scene root, and requires `--force` for destructive ops.
+- `prefab patch` requires `--force` for destructive ops such as `remove-node` and `remove-component`.
 - `execute` is live-only and always requires `--force` because it runs arbitrary C# in the editor context.
+- `package remove` always requires `--force`.
 - `custom` is live-only and invokes project-defined static methods marked with `[PucCommand("name")]`.
 - if the target scene is already loaded, `scene inspect` and `scene patch` expect it to be clean before they run.
 - `scene open` requires `--force` if the currently loaded scenes have unsaved changes that should be discarded.

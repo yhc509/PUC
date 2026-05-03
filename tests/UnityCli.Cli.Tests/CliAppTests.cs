@@ -316,7 +316,7 @@ public sealed class CliAppTests
 
         var details = ParseDetails(response.error?.details);
         Assert.Equal(
-            "usage: unity-cli [--json] [--output <default|json|compact>] [--project <path|name>] raw --json '{\"command\":\"status\",\"arguments\":{}}'",
+            "usage: unity-cli [--json] [--output <default|json|compact>] [--project <path|name>] raw [--force] --json '{\"command\":\"status\",\"arguments\":{}}'",
             details.GetProperty("usage").GetString());
     }
 

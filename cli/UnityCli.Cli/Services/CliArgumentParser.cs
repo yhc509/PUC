@@ -361,6 +361,9 @@ public static partial class CliArgumentParser
                 case CommandKind.Raw when token == "--json":
                     parsed.RawJson = RequireValue(tokens, "--json");
                     break;
+                case CommandKind.Raw when token == "--force":
+                    parsed.Force = true;
+                    break;
                 case CommandKind.ReadConsole when token == "--limit":
                     parsed.ConsoleLimit = RequireInt(RequireValue(tokens, "--limit"), "--limit");
                     break;
@@ -660,6 +663,7 @@ public static partial class CliArgumentParser
                     parsed.PrefabPath = RequireAssetPath(RequireValue(tokens, "--path"), "--path");
                     break;
                 case CommandKind.PrefabCreate when token == "--force":
+                case CommandKind.PrefabPatch when token == "--force":
                 case CommandKind.PrefabRemoveComponent when token == "--force":
                     parsed.Force = true;
                     break;

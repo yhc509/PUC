@@ -12,6 +12,26 @@ namespace UnityCliBridge.Bridge.Editor
         // main thread and no method using this buffer calls another that also uses it.
         private static readonly List<Component> _componentBuffer = new List<Component>(8);
 
+        private static bool HasDestructiveOperation(PrefabPatchSpec spec)
+        {
+            for (int index = 0; index < spec.Operations.Length; index++)
+            {
+                PrefabPatchOperationSpec operation = spec.Operations[index];
+                if (operation == null || string.IsNullOrWhiteSpace(operation.Operation))
+                {
+                    continue;
+                }
+
+                if (string.Equals(operation.Operation, "remove-node", StringComparison.Ordinal)
+                    || string.Equals(operation.Operation, "remove-component", StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static void AddChildren(Transform parent, PrefabNodeSpec[] children, string commandName)
         {
             if (children == null)

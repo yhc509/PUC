@@ -79,8 +79,8 @@ public static class CliReferenceDocumentRenderer
         builder.AppendLine();
         builder.AppendLine(GetGroupSummary(group));
         builder.AppendLine();
-        builder.AppendLine("| Command | Synopsis | Modes | Summary |");
-        builder.AppendLine("| --- | --- | --- | --- |");
+        builder.AppendLine("| Command | Synopsis | Modes | Force Rule | Summary |");
+        builder.AppendLine("| --- | --- | --- | --- | --- |");
 
         foreach (CliCommandDescriptor command in commands)
         {
@@ -90,6 +90,8 @@ public static class CliReferenceDocumentRenderer
             builder.Append(EscapeTableCell("`" + command.Synopsis + "`"));
             builder.Append(" | ");
             builder.Append(EscapeTableCell(FormatModes(command)));
+            builder.Append(" | ");
+            builder.Append(EscapeTableCell(FormatForceRule(command)));
             builder.Append(" | ");
             builder.Append(EscapeTableCell(command.Summary));
             builder.AppendLine(" |");
@@ -135,7 +137,8 @@ public static class CliReferenceDocumentRenderer
         builder.AppendLine("## Safety Rules");
         builder.AppendLine();
         builder.AppendLine("- Query-only asset reads such as `asset info --path` may use `Assets/...` or `Packages/...`, but write paths stay under `Assets/...`.");
-        builder.AppendLine("- Destructive or overwrite flows are guarded by `--force`, including `asset delete`, overwrite variants of `asset move`, `asset rename`, and `asset create`, `package remove`, plus destructive `scene patch` operations.");
+        builder.AppendLine("- Dangerous, destructive, or overwrite flows are guarded by `--force`, including `execute`, `asset delete`, overwrite variants of `asset move`, `asset rename`, and `asset create`, `package remove`, destructive `scene patch` and `prefab patch` operations, plus scene/prefab `remove-component` shortcuts.");
+        builder.AppendLine("- `raw --force` injects `force=true` only when the raw payload omits `force` or already sets it to `true`; conflicting payload values fail fast.");
         builder.AppendLine("- Use `scene inspect --with-values` before writing a scene patch spec.");
         builder.AppendLine("- Use `prefab inspect --with-values` before writing a prefab patch spec.");
         builder.AppendLine("- Scene/prefab component value patches accept friendly keys for common Rigidbody, Collider, Renderer, Light, and Camera properties; inspect remains the source of truth for unsupported fields.");
@@ -202,6 +205,11 @@ public static class CliReferenceDocumentRenderer
         }
 
         return modes.Count == 0 ? "-" : string.Join(", ", modes);
+    }
+
+    private static string FormatForceRule(CliCommandDescriptor command)
+    {
+        return "`" + command.ForceRule + "`";
     }
 
     private static string FormatCodeList(IEnumerable<string> values)

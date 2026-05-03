@@ -110,6 +110,11 @@ namespace UnityCliBridge.Bridge.Editor
         private string HandleRemove(string argumentsJson)
         {
             PackageRemoveArgs args = ProtocolJson.Deserialize<PackageRemoveArgs>(argumentsJson) ?? new PackageRemoveArgs();
+            if (!args.force)
+            {
+                throw new CommandFailureException(ProtocolConstants.ErrorPackageForceRequired, "패키지 제거에는 --force가 필요합니다.");
+            }
+
             if (string.IsNullOrWhiteSpace(args.name))
             {
                 throw new CommandFailureException("INVALID_ARGS", "패키지 이름이 필요합니다.", false, null);
