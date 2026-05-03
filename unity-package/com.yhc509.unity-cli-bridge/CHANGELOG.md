@@ -6,11 +6,14 @@
 - Added `Library/com.yhc509.unity-cli-bridge/backups/` backup/restore transactions for scene/prefab patch and asset overwrite flows, including `.meta` preservation and critical restore-failure reporting; backups stay outside `Assets/` and normal Unity git tracking.
 
 ### Added
-- `BACKUP_FAILED`, `BACKUP_RESTORE_FAILED`, and `SCENE_DIRTY` protocol error constants for transactional mutation failures and dirty scene refusal.
+- `BACKUP_FAILED`, `BACKUP_RESTORE_FAILED`, `SCENE_DIRTY`, and `PACKAGE_TIMEOUT` protocol error constants for transactional mutation failures, dirty scene refusal, and stalled Package Manager requests.
 
 ### Changed
 - `scene patch` now refuses already-loaded dirty target scenes even with `--force`; callers must save or discard in-memory scene changes before patching.
 - Backup files are written under the project `Library/` folder instead of next to assets, avoiding AssetDatabase scanning and accidental git exposure.
+
+### Fixed
+- `package list`, `package add`, `package remove`, and `package search` now poll Unity Package Manager requests from `EditorApplication.update` instead of blocking the editor thread, preserving bridge heartbeats and returning `PACKAGE_TIMEOUT` after 300 seconds if Package Manager stalls.
 
 ### Notes
 - Prefab Edit Mode dirty-state checks remain a follow-up item for a later PR.
