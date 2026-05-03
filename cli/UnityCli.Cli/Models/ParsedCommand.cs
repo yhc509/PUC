@@ -498,6 +498,20 @@ public sealed class ParsedCommand
                 ?? throw new CliUsageException("raw `--force`를 쓰려면 `arguments`가 JSON object여야 합니다.");
         }
 
+        // Raw force is explicit: the flag may fill a missing value, but not contradict payload intent.
+        if (arguments.TryGetPropertyValue("force", out JsonNode? forceNode))
+        {
+            if (forceNode is JsonValue forceValue
+                && forceValue.TryGetValue<bool>(out bool payloadForce)
+                && payloadForce)
+            {
+                arguments["force"] = true;
+                return arguments.ToJsonString(ProtocolJson.Default);
+            }
+
+            throw new CliUsageException("force flag conflicts with raw payload");
+        }
+
         arguments["force"] = true;
         return arguments.ToJsonString(ProtocolJson.Default);
     }
