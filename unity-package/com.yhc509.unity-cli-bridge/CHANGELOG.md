@@ -2,7 +2,10 @@
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-05-03
+
 ### Security
+- Bridge now enforces server-side `--force` gates on destructive or dangerous commands, including asset delete/move/rename, scene and prefab patch destructive operations, execute-code, and package remove. Earlier releases relied on CLI-only validation that could be bypassed through raw IPC.
 - Added `Library/com.yhc509.unity-cli-bridge/backups/` backup/restore transactions for scene/prefab patch and asset overwrite flows, including `.meta` preservation and critical restore-failure reporting; backups stay outside `Assets/` and normal Unity git tracking.
 
 ### Added
@@ -16,9 +19,13 @@
 ### Fixed
 - `package list`, `package add`, `package remove`, and `package search` now poll Unity Package Manager requests from `EditorApplication.update` instead of blocking the editor thread, preserving bridge heartbeats and returning `PACKAGE_TIMEOUT` after 300 seconds if Package Manager stalls.
 - Concurrent package commands now return `PACKAGE_BUSY` immediately instead of issuing overlapping Unity Package Manager `Client` requests.
+- Instance registry lock now uses atomic `FileMode.CreateNew` ownership with PID + UTC timestamp content, releases the lock only when this process actually acquired it, and recovers crash-leftover lock files through an open-then-rename-then-delete reclaim path that compares `Process.StartTime` against the recorded lock timestamp. Earlier behaviour could unlink a peer's live lock during a retry and could leave the bridge unable to register itself after a crash.
 
 ### Notes
 - Prefab Edit Mode dirty-state checks remain a follow-up item for a later PR.
+
+### Compatibility Note
+- Destructive command protocol arguments now include a `force` field. Older CLI clients that omit it are interpreted by the bridge as `force=false`, so destructive or dangerous operations are rejected until the client sends `force=true`.
 
 ## [0.1.8] - 2026-04-30
 
