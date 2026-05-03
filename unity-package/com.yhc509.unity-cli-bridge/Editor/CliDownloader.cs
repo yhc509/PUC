@@ -253,14 +253,42 @@ namespace UnityCliBridge.Bridge.Editor
                     CreateNoWindow = true,
                 };
 
+                var stderrBuilder = new System.Text.StringBuilder();
+                object stderrLock = new object();
+
+                process.OutputDataReceived += (sender, e) =>
+                {
+                    // stdout is intentionally discarded; async drain prevents pipe-buffer deadlocks.
+                };
+                process.ErrorDataReceived += (sender, e) =>
+                {
+                    if (e.Data == null)
+                    {
+                        return;
+                    }
+
+                    lock (stderrLock)
+                    {
+                        stderrBuilder.AppendLine(e.Data);
+                    }
+                };
+
                 if (!process.Start())
                 {
                     throw new InvalidOperationException(stepName + " process failed to start.");
                 }
 
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
                 process.WaitForExit();
 
-                string standardError = process.StandardError.ReadToEnd().Trim();
+                string standardError;
+                lock (stderrLock)
+                {
+                    standardError = stderrBuilder.ToString().Trim();
+                }
+
                 if (process.ExitCode != 0)
                 {
                     throw new InvalidOperationException(stepName + " failed: " + standardError);
