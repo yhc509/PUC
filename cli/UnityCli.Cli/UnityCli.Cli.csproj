@@ -4,6 +4,12 @@
     <ProjectReference Include="..\UnityCli.Protocol\UnityCli.Protocol.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>UnityCli.Cli.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <AssemblyName>unity-cli</AssemblyName>
