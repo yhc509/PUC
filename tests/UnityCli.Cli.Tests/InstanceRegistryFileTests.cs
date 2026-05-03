@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Threading;
@@ -134,9 +135,10 @@ public sealed class InstanceRegistryFileTests
         using var temp = new TempDirectory();
         string registryPath = Path.Combine(temp.Path, "instances.json");
         string lockPath = registryPath + ".lock";
+        const string marker = "99999999\n2026-05-03T00:00:00.0000000+00:00\n";
 
         using var lockStream = new FileStream(lockPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None);
-        WriteLockContent(lockStream, Environment.ProcessId);
+        WriteLockContent(lockStream, marker);
 
         using var started = new ManualResetEventSlim();
         var store = new InstanceRegistryStore(registryPath);
@@ -149,6 +151,7 @@ public sealed class InstanceRegistryFileTests
         Assert.True(started.Wait(TimeSpan.FromSeconds(1)));
         Assert.False(await CompletesWithinAsync(saveTask, TimeSpan.FromMilliseconds(100)));
         Assert.True(File.Exists(lockPath));
+        Assert.Equal(marker, ReadLockContentForAssertion(lockPath, lockStream));
 
         lockStream.Dispose();
         File.Delete(lockPath);
@@ -158,6 +161,60 @@ public sealed class InstanceRegistryFileTests
         Assert.Equal("abc", registry.activeProjectHash);
         Assert.Single(registry.instances);
         Assert.False(File.Exists(lockPath));
+    }
+
+    [Fact]
+    public async Task Save_RetainsLiveLockEvenWhenMtimeAppearsStale()
+    {
+        using var temp = new TempDirectory();
+        string registryPath = Path.Combine(temp.Path, "instances.json");
+        string lockPath = registryPath + ".lock";
+        const string marker = "99999999\n2026-05-03T00:00:00.0000000+00:00\n";
+
+        using FileStream lockStream = CreateHeldLockFileWithStaleMtime(lockPath, marker, out DateTime staleMtimeUtc);
+
+        using var started = new ManualResetEventSlim();
+        var store = new InstanceRegistryStore(registryPath);
+        Task saveTask = Task.Run(() =>
+        {
+            started.Set();
+            store.Save(CreateRegistry("abc"));
+        });
+
+        Assert.True(started.Wait(TimeSpan.FromSeconds(1)));
+        Assert.False(await CompletesWithinAsync(saveTask, TimeSpan.FromMilliseconds(250)));
+        Assert.True(File.Exists(lockPath));
+        Assert.Equal(marker, ReadLockContentForAssertion(lockPath, lockStream));
+        Assert.Equal(staleMtimeUtc, File.GetLastWriteTimeUtc(lockPath));
+
+        lockStream.Dispose();
+        File.Delete(lockPath);
+        await saveTask;
+
+        InstanceRegistry registry = InstanceRegistryFile.Load(registryPath);
+        Assert.Equal("abc", registry.activeProjectHash);
+        Assert.Single(registry.instances);
+        Assert.False(File.Exists(lockPath));
+    }
+
+    [Fact]
+    public async Task Save_DoesNotReclaimWhenLiveOwnerStartTimeMatchesLockTimestamp()
+    {
+        using var temp = new TempDirectory();
+        string registryPath = Path.Combine(temp.Path, "instances.json");
+        string lockPath = registryPath + ".lock";
+        string lockContent = BuildLockContent(Process.GetCurrentProcess().Id, DateTimeOffset.UtcNow);
+        File.WriteAllText(lockPath, lockContent, new UTF8Encoding(false));
+        File.SetLastWriteTimeUtc(lockPath, DateTime.UtcNow.AddSeconds(-60));
+
+        var store = new InstanceRegistryStore(registryPath);
+        Task saveTask = Task.Run(() => store.Save(CreateRegistry("abc")));
+
+        IOException exception = await Assert.ThrowsAsync<IOException>(() => saveTask);
+        Assert.Contains(lockPath, exception.Message);
+        Assert.Equal(lockContent, File.ReadAllText(lockPath, Encoding.UTF8));
+
+        File.Delete(lockPath);
     }
 
     [Fact]
@@ -241,15 +298,69 @@ public sealed class InstanceRegistryFileTests
         File.SetLastWriteTimeUtc(lockPath, DateTime.UtcNow.AddSeconds(-60));
     }
 
+    private static FileStream CreateHeldLockFileWithStaleMtime(string lockPath, string content, out DateTime staleMtimeUtc)
+    {
+        var stream = new FileStream(lockPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None);
+        WriteLockContent(stream, content);
+        DateTime targetMtimeUtc = DateTime.UtcNow.AddSeconds(-60);
+
+        try
+        {
+            File.SetLastWriteTimeUtc(lockPath, targetMtimeUtc);
+        }
+        catch (IOException)
+        {
+            stream.Dispose();
+            File.SetLastWriteTimeUtc(lockPath, targetMtimeUtc);
+            stream = new FileStream(lockPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            stream.Dispose();
+            File.SetLastWriteTimeUtc(lockPath, targetMtimeUtc);
+            stream = new FileStream(lockPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        }
+
+        staleMtimeUtc = File.GetLastWriteTimeUtc(lockPath);
+        return stream;
+    }
+
     private static void WriteLockContent(FileStream stream, int ownerPid)
     {
-        string content = ownerPid.ToString(CultureInfo.InvariantCulture)
-            + Environment.NewLine
-            + DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture)
-            + Environment.NewLine;
+        WriteLockContent(stream, BuildLockContent(ownerPid, DateTimeOffset.UtcNow));
+    }
+
+    private static void WriteLockContent(FileStream stream, string content)
+    {
         byte[] bytes = Encoding.UTF8.GetBytes(content);
         stream.Write(bytes, 0, bytes.Length);
         stream.Flush();
+    }
+
+    private static string BuildLockContent(int ownerPid, DateTimeOffset timestamp)
+    {
+        return ownerPid.ToString(CultureInfo.InvariantCulture)
+            + Environment.NewLine
+            + timestamp.ToString("O", CultureInfo.InvariantCulture)
+            + Environment.NewLine;
+    }
+
+    private static string ReadLockContentForAssertion(string lockPath, FileStream heldStream)
+    {
+        try
+        {
+            return File.ReadAllText(lockPath, Encoding.UTF8);
+        }
+        catch (IOException)
+        {
+            long position = heldStream.Position;
+            heldStream.Flush();
+            heldStream.Position = 0;
+            using var reader = new StreamReader(heldStream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
+            string content = reader.ReadToEnd();
+            heldStream.Position = position;
+            return content;
+        }
     }
 
     private static async Task<bool> CompletesWithinAsync(Task task, TimeSpan timeout)

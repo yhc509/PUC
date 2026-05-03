@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -104,10 +105,7 @@ namespace UnityCli.Protocol
                 else
                 {
                     lastException = new IOException("Failed to acquire registry lock: " + lockPath);
-                    if (IsStaleLock(lockPath))
-                    {
-                        TryDeleteFile(lockPath);
-                    }
+                    TryReclaimStaleLock(lockPath);
                 }
 
                 Thread.Sleep((attempt + 1) * RetryDelayMs);
@@ -152,7 +150,59 @@ namespace UnityCli.Protocol
             }
         }
 
-        private static bool IsStaleLock(string lockPath)
+        private static bool TryReclaimStaleLock(string lockPath)
+        {
+            FileStream stream;
+
+            try
+            {
+                stream = new FileStream(lockPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (FileNotFoundException)
+            {
+                return false;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return false;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+
+            string graveyardPath = lockPath + "." + Guid.NewGuid().ToString("N") + ".stale";
+
+            using (stream)
+            {
+                if (!IsOpenedLockStale(lockPath, stream))
+                {
+                    return false;
+                }
+
+                try
+                {
+                    File.Move(lockPath, graveyardPath);
+                }
+                catch (IOException)
+                {
+                    return false;
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    return false;
+                }
+            }
+
+            TryDeleteFile(graveyardPath);
+            return true;
+        }
+
+        private static bool IsOpenedLockStale(string lockPath, FileStream stream)
         {
             DateTime lastWriteTimeUtc;
 
@@ -164,6 +214,10 @@ namespace UnityCli.Protocol
             {
                 return false;
             }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
 
             if (DateTime.UtcNow - lastWriteTimeUtc < TimeSpan.FromSeconds(StaleLockSeconds))
             {
@@ -172,16 +226,62 @@ namespace UnityCli.Protocol
 
             try
             {
-                string[] lines = File.ReadAllLines(lockPath);
-                if (lines.Length == 0 || !int.TryParse(lines[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out int processId))
+                stream.Position = 0;
+                using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
+                string? ownerPidLine = reader.ReadLine();
+                if (ownerPidLine == null || !int.TryParse(ownerPidLine, NumberStyles.Integer, CultureInfo.InvariantCulture, out int ownerPid))
                 {
                     return true;
                 }
 
-                using Process process = Process.GetProcessById(processId);
-                return process.HasExited;
+                string? lockTimestampLine = reader.ReadLine();
+                if (lockTimestampLine == null
+                    || !DateTimeOffset.TryParseExact(lockTimestampLine, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTimeOffset lockTimestamp))
+                {
+                    return true;
+                }
+
+                return IsProcessStale(ownerPid, lockTimestamp);
             }
-            catch
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
+
+        private static bool IsProcessStale(int ownerPid, DateTimeOffset lockTimestamp)
+        {
+            try
+            {
+                using Process process = Process.GetProcessById(ownerPid);
+                if (process.HasExited)
+                {
+                    return true;
+                }
+
+                try
+                {
+                    DateTime processStartUtc = process.StartTime.ToUniversalTime();
+                    return processStartUtc > lockTimestamp.UtcDateTime.AddSeconds(1);
+                }
+                catch (InvalidOperationException)
+                {
+                    return false;
+                }
+                catch (Win32Exception)
+                {
+                    return false;
+                }
+                catch (NotSupportedException)
+                {
+                    return false;
+                }
+            }
+            catch (ArgumentException)
             {
                 return true;
             }
