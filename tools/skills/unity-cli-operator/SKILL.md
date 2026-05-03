@@ -47,6 +47,8 @@ description: "Unity Editor 외부 제어 1차 진입점. 씬/프리팹/에셋/�
 
 - 모든 asset 경로는 `Assets/...` 형식으로 다룬다. 조회 전용(`asset find`, `asset info`)은 `Packages/...`도 허용된다.
 - 파괴 연산과 덮어쓰기는 `--force`가 있을 때만 허용된다고 가정한다. 특히 asset delete/overwrite, scene `delete-gameobject`/`remove-component`, prefab `remove-node`/`remove-component`, `package remove`는 force-gated다.
+- scene/prefab patch와 asset overwrite는 같은 폴더의 hidden `.bridge-bak` 파일로 본체와 `.meta`를 백업한 뒤 실행된다. `BACKUP_RESTORE_FAILED`가 나오면 즉시 중단하고 응답의 백업 경로로 수동 복구를 안내한다.
+- `scene patch`는 대상 scene이 이미 dirty이면 `--force`와 무관하게 거부된다. 먼저 저장하거나 변경을 폐기한 뒤 다시 실행한다.
 - `execute`/`execute-code`는 임의 C# 실행이므로 항상 `--force`가 필요하다.
 - `execute --code 'Debug.Log(__pucArgsJson);' --args '{"k":"v"}' --force`로 넘긴 JSON은 사용자 코드에서 `__pucArgsJson` 문자열 변수로 읽는다.
 - `execute --args` 사용자 코드에서는 wrapper 예약 prefix인 `__puc_internal_*` 변수를 선언하지 않는다.

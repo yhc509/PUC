@@ -51,6 +51,7 @@ unity-package/com.yhc509.unity-cli-bridge/
   ├── Editor/
   │   ├── BridgeHost.cs       Bridge bootstrap, registry registration, IPC listener, handler orchestration
   │   ├── AssetCommandHandler.cs  Asset CRUD operations and asset metadata
+  │   ├── AssetBackupTransaction.cs  Same-folder backup/restore transactions for Editor asset mutations
   │   ├── BuiltInAssetCreateProviders.cs  Basic built-in asset create providers
   │   ├── BuiltInAssetCreateProviders.Advanced.cs  Complex/dependency-aware asset providers (partial class)
   │   ├── ComponentOperations.cs  Component list/add/remove shared logic and friendly key resolution
@@ -80,6 +81,7 @@ unity-package/com.yhc509.unity-cli-bridge/
       ├── ProtocolConstants.cs  Registry paths, timeouts, command names
       ├── ProtocolHelpers.cs    Command grouping helpers
       ├── ProtocolJson.cs       Shared JSON serialization helpers
+      ├── FileBackupTransaction.cs  Shared file backup/restore transaction core
       ├── Registry*.cs          Registry persistence/path models
       └── TransportModels.cs    IPC transport payloads
 
@@ -93,6 +95,8 @@ tests/UnityCli.Cli.Tests/    xUnit tests
 - **Nullable references enabled** throughout (`#nullable enable`, implicit usings).
 - **Asset paths** always use `Assets/...` format.
 - **Destructive/dangerous ops require `--force`:** `asset delete` (always), `asset move/rename/create` (when overwriting), destructive scene/prefab patches, scene/prefab `remove-component`, `package remove`, and `execute`.
+- **Patch/overwrite rollback:** Scene/prefab patch and asset overwrite flows use same-folder hidden `.bridge-bak` backups for the asset body and `.meta`; restore failures return backup paths for manual recovery.
+- **Dirty scene patch refusal:** `scene patch` refuses an already-loaded dirty target scene even with `--force`; save or discard first.
 - **macOS paths:** Use real paths (`pwd -P`), not symlinks, for hashing and registry lookups.
 - **Scene paths:** Format `/Root[0]/Child[0]` with array notation for sibling indexing; `/` is the virtual scene root.
 - **Scene/prefab node flags:** Convenience commands that point at a hierarchy node use `--node`; JSON patch specs still use `target`/`parent`.

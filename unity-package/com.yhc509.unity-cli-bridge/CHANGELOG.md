@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Security
+- Added same-folder hidden `.bridge-bak` backup/restore transactions for scene/prefab patch and asset overwrite flows, including `.meta` preservation and critical restore-failure reporting.
+
+### Added
+- `BACKUP_FAILED`, `BACKUP_RESTORE_FAILED`, and `SCENE_DIRTY` protocol error constants for transactional mutation failures and dirty scene refusal.
+
+### Changed
+- `scene patch` now refuses already-loaded dirty target scenes even with `--force`; callers must save or discard in-memory scene changes before patching.
+
 ## [0.1.8] - 2026-04-30
 
 ### Changed

@@ -28,6 +28,8 @@
 - On macOS, hashes are computed from the real path instead of a symlink path.
 - When no running Editor with an active bridge is reachable, commands fail instead of trying any editor-off fallback.
 - Destructive operations and overwrite behavior require `--force`.
+- Patch and overwrite mutations use same-folder hidden `.bridge-bak` backups for asset files and `.meta` files so rollback stays on the same volume.
+- `scene patch` refuses already-loaded dirty target scenes because disk backups cannot preserve in-memory edits.
 - Scene editing is split into `scene open`, `scene inspect`, and `scene patch`, and scene node paths use `/Root[0]/Child[0]` with `/` as the virtual scene root.
 - Prefab editing is split into `prefab create`, `prefab inspect`, and `prefab patch`, and field patching is based on `SerializedProperty.propertyPath`.
 
@@ -45,6 +47,7 @@ Inside `unity-package/com.yhc509.unity-cli-bridge/Editor`, the bridge is split b
 
 - `BridgeHost.cs` bootstraps the bridge, registers the live instance, opens the IPC listener, and wires command handlers together
 - `AssetCommandHandler.cs` covers asset CRUD and metadata flows
+- `AssetBackupTransaction.cs` wraps Editor asset mutations in backup/restore transactions backed by shared protocol file logic
 - `BuiltInAssetCreateProviders.cs` and `BuiltInAssetCreateProviders.Advanced.cs` split built-in asset creation into basic and dependency-aware providers
 - `SceneCommandHandler.cs`, `SceneCommandHandler.Patching.cs`, `SceneInspector.cs`, and `SceneSpecModels.cs` split scene entry points, patch logic, graph traversal, and DTO/spec models
 - `PrefabCommandHandler.cs`, `PrefabCommandHandler.Patching.cs`, `PrefabInspector.cs`, and `PrefabSpecModels.cs` split prefab entry points, patch logic, inspection, and DTO/spec models
@@ -59,6 +62,7 @@ Inside `unity-package/com.yhc509.unity-cli-bridge/Editor`, the bridge is split b
 - `CliCommandCatalog.cs`: command descriptors
 - `CommandModels.cs`: request/response envelopes
 - `ProtocolConstants.cs`: command names, timeouts, and registry constants
+- `FileBackupTransaction.cs`: file backup/restore transaction core shared by the Editor bridge and .NET tests
 - `ProtocolHelpers.cs` and `ProtocolJson.cs`: shared command/serialization helpers
 - `Registry*.cs`: registry persistence and path models
 - `TransportModels.cs`: IPC transport payloads

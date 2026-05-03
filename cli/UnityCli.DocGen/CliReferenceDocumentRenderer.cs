@@ -139,6 +139,8 @@ public static class CliReferenceDocumentRenderer
         builder.AppendLine("- Query-only asset reads such as `asset info --path` may use `Assets/...` or `Packages/...`, but write paths stay under `Assets/...`.");
         builder.AppendLine("- Dangerous, destructive, or overwrite flows are guarded by `--force`, including `execute`, `asset delete`, overwrite variants of `asset move`, `asset rename`, and `asset create`, `package remove`, destructive `scene patch` and `prefab patch` operations, plus scene/prefab `remove-component` shortcuts.");
         builder.AppendLine("- `raw --force` injects `force=true` only when the raw payload omits `force` or already sets it to `true`; conflicting payload values fail fast.");
+        builder.AppendLine("- Scene/prefab patch and asset overwrite flows create same-folder hidden `.bridge-bak` backups for the asset body and `.meta` before mutating files.");
+        builder.AppendLine("- `scene patch` refuses a loaded dirty target scene even with `--force`; save or discard the scene first.");
         builder.AppendLine("- Use `scene inspect --with-values` before writing a scene patch spec.");
         builder.AppendLine("- Use `prefab inspect --with-values` before writing a prefab patch spec.");
         builder.AppendLine("- Scene/prefab component value patches accept friendly keys for common Rigidbody, Collider, Renderer, Light, and Camera properties; inspect remains the source of truth for unsupported fields.");

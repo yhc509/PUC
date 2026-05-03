@@ -60,8 +60,10 @@ The CLI executable and Codex skill are not included in the UPM package payload. 
 - `execute` is live-only and always requires `--force` because it runs arbitrary C# in the editor context.
 - `package remove` always requires `--force`.
 - `custom` is live-only and invokes project-defined static methods marked with `[PucCommand("name")]`.
-- if the target scene is already loaded, `scene inspect` and `scene patch` expect it to be clean before they run.
+- if the target scene is already loaded, `scene inspect` expects it to be clean and `scene patch` refuses unsaved target-scene changes even with `--force`.
 - `scene open` requires `--force` if the currently loaded scenes have unsaved changes that should be discarded.
+- Scene/prefab patch and asset overwrite flows create same-folder hidden `.bridge-bak` backups for the asset body and `.meta` before mutating files.
+- If backup restore itself fails, the bridge returns `BACKUP_RESTORE_FAILED` with backup paths for manual recovery.
 - `prefab patch` values are applied through `SerializedProperty.propertyPath`.
 - `prefab inspect --with-values` is meant to be used as the source of truth when authoring patch specs.
 - The root prefab object name is normalized to the prefab file name after save.
