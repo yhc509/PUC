@@ -56,6 +56,47 @@ namespace UnityCliBridge.Bridge.Editor.Tests
             Assert.That(PackageCommandHandler.TryBeginActiveRequestForTesting(), Is.True);
         }
 
+        [Test]
+        public void ActiveRequestCompletionTracker_KeepsLockUntilRequestCompletes()
+        {
+            bool isCompleted = false;
+            int stopTrackingCalls = 0;
+
+            Assert.That(PackageCommandHandler.TryBeginActiveRequestForTesting(), Is.True);
+            var tracker = new PackageCommandHandler.ActiveRequestCompletionTracker(
+                () => isCompleted,
+                () => stopTrackingCalls++,
+                PackageCommandHandler.EndActiveRequestForTesting);
+
+            tracker.Poll();
+
+            Assert.That(PackageCommandHandler.HasActiveRequestForTesting(), Is.True);
+            Assert.That(stopTrackingCalls, Is.EqualTo(0));
+
+            isCompleted = true;
+            tracker.Poll();
+
+            Assert.That(PackageCommandHandler.HasActiveRequestForTesting(), Is.False);
+            Assert.That(stopTrackingCalls, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ActiveRequestCompletionTracker_ReleasesLockOnlyOnce()
+        {
+            int stopTrackingCalls = 0;
+            int endActiveCalls = 0;
+            var tracker = new PackageCommandHandler.ActiveRequestCompletionTracker(
+                () => true,
+                () => stopTrackingCalls++,
+                () => endActiveCalls++);
+
+            tracker.Poll();
+            tracker.Poll();
+
+            Assert.That(stopTrackingCalls, Is.EqualTo(1));
+            Assert.That(endActiveCalls, Is.EqualTo(1));
+        }
+
         private static TaskCompletionSource<ResponseEnvelope> CreateCompletion(string requestId)
         {
             return new TaskCompletionSource<ResponseEnvelope>(

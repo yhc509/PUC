@@ -102,10 +102,29 @@ public sealed class PackageDeferredPolicyTests
         Assert.Contains("void FinishPolling()", packageHandler);
         Assert.Contains("EndActiveRequest();", packageHandler);
         Assert.Contains("if (completion.Task.IsCompleted)", packageHandler);
-        Assert.Contains("ProtocolConstants.ErrorPackageTimeout", packageHandler);
         Assert.True(
-            CountOccurrences(packageHandler, "FinishPolling();") >= 5,
-            "Package polling should finish on cancellation, success, request failure, timeout, and exception paths.");
+            CountOccurrences(packageHandler, "FinishPolling();") >= 4,
+            "Package polling should finish on cancellation, success, request failure, and exception paths.");
+    }
+
+    [Fact]
+    public void EditorPackageDispatch_KeepsActiveRequestAfterTimeoutUntilUnityRequestCompletes()
+    {
+        string packageHandler = ReadPackageHandler();
+        int timeoutIndex = packageHandler.IndexOf("ProtocolConstants.ErrorPackageTimeout", StringComparison.Ordinal);
+        int finishTimeoutIndex = packageHandler.IndexOf("FinishPollingAfterTimeout();", timeoutIndex, StringComparison.Ordinal);
+
+        Assert.True(timeoutIndex >= 0, "Timeout response should use the PACKAGE_TIMEOUT error code.");
+        Assert.True(finishTimeoutIndex > timeoutIndex, "Timeout response should enter the timeout-specific finish path.");
+        Assert.DoesNotContain(
+            "EndActiveRequest();",
+            packageHandler.Substring(timeoutIndex, finishTimeoutIndex - timeoutIndex));
+        Assert.Contains("void FinishPollingAfterTimeout()", packageHandler);
+        Assert.Contains("StartBackgroundActiveRequestTracker(request);", packageHandler);
+        Assert.Contains("private static void StartBackgroundActiveRequestTracker(Request request)", packageHandler);
+        Assert.Contains("new ActiveRequestCompletionTracker(", packageHandler);
+        Assert.Contains("() => request.IsCompleted", packageHandler);
+        Assert.Contains("() => EditorApplication.update -= BackgroundPoll", packageHandler);
     }
 
     private static string ReadPackageHandler()

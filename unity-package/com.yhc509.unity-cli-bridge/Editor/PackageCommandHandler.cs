@@ -244,7 +244,7 @@ namespace UnityCliBridge.Bridge.Editor
         {
             bool isFinished = false;
 
-            void FinishPolling()
+            void StopPolling()
             {
                 if (isFinished)
                 {
@@ -254,7 +254,18 @@ namespace UnityCliBridge.Bridge.Editor
                 isFinished = true;
                 EditorApplication.update -= Poll;
                 stopwatch.Stop();
+            }
+
+            void FinishPolling()
+            {
+                StopPolling();
                 EndActiveRequest();
+            }
+
+            void FinishPollingAfterTimeout()
+            {
+                StopPolling();
+                StartBackgroundActiveRequestTracker(request);
             }
 
             void Poll()
@@ -305,7 +316,7 @@ namespace UnityCliBridge.Bridge.Editor
                             stopwatch.ElapsedMilliseconds,
                             ProtocolConstants.TransportLive,
                             null));
-                        FinishPolling();
+                        FinishPollingAfterTimeout();
                     }
                 }
                 catch (Exception exception)
@@ -317,6 +328,54 @@ namespace UnityCliBridge.Bridge.Editor
 
             EditorApplication.update += Poll;
             Poll();
+        }
+
+        private static void StartBackgroundActiveRequestTracker(Request request)
+        {
+            ActiveRequestCompletionTracker? tracker = null;
+
+            void BackgroundPoll()
+            {
+                tracker!.Poll();
+            }
+
+            tracker = new ActiveRequestCompletionTracker(
+                () => request.IsCompleted,
+                () => EditorApplication.update -= BackgroundPoll,
+                EndActiveRequest);
+
+            EditorApplication.update += BackgroundPoll;
+            BackgroundPoll();
+        }
+
+        internal sealed class ActiveRequestCompletionTracker
+        {
+            private readonly Func<bool> _isCompleted;
+            private readonly Action _stopTracking;
+            private readonly Action _endActiveRequest;
+            private bool _isEnded;
+
+            internal ActiveRequestCompletionTracker(
+                Func<bool> isCompleted,
+                Action stopTracking,
+                Action endActiveRequest)
+            {
+                _isCompleted = isCompleted;
+                _stopTracking = stopTracking;
+                _endActiveRequest = endActiveRequest;
+            }
+
+            internal void Poll()
+            {
+                if (_isEnded || !_isCompleted())
+                {
+                    return;
+                }
+
+                _isEnded = true;
+                _stopTracking();
+                _endActiveRequest();
+            }
         }
 
         internal static bool TryBeginActiveRequestForTesting()
