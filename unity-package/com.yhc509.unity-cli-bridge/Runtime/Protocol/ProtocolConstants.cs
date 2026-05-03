@@ -14,12 +14,14 @@ namespace UnityCli.Protocol
         public const int DefaultTimeoutMs = DefaultLiveTimeoutMs;
         public const int DefaultConsoleLimit = 50;
         public const int DefaultAssetFindLimit = 50;
+        public const int DefaultPackageRequestTimeoutSeconds = 300;
         public const int RegistryHeartbeatSeconds = 2;
         public const string BusyErrorCode = "BUSY";
         public const string ErrorAssetForceRequired = "ASSET_FORCE_REQUIRED";
         public const string ErrorExecuteForceRequired = "EXECUTE_FORCE_REQUIRED";
         public const string ErrorPrefabForceRequired = "PREFAB_FORCE_REQUIRED";
         public const string ErrorPackageForceRequired = "PACKAGE_FORCE_REQUIRED";
+        public const string ErrorPackageTimeout = "PACKAGE_TIMEOUT";
         public const string ErrorSceneForceRequired = "SCENE_FORCE_REQUIRED";
         public const string ErrorBackupFailed = "BACKUP_FAILED";
         public const string ErrorBackupRestoreFailed = "BACKUP_RESTORE_FAILED";
@@ -105,6 +107,21 @@ namespace UnityCli.Protocol
                 default:
                     return string.Empty;
             }
+        }
+
+        public static bool IsPackageRequestTimedOut(TimeSpan elapsed, int timeoutSeconds = DefaultPackageRequestTimeoutSeconds)
+        {
+            if (timeoutSeconds <= 0)
+            {
+                return true;
+            }
+
+            return elapsed.TotalSeconds >= timeoutSeconds;
+        }
+
+        public static string BuildPackageRequestTimeoutMessage(int timeoutSeconds)
+        {
+            return $"패키지 명령이 {timeoutSeconds}초 안에 완료되지 않았습니다. Editor의 Package Manager 상태를 확인해 주세요.";
         }
 
         public static string ComputeProjectHash(string projectRoot)
