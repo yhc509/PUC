@@ -59,7 +59,6 @@ namespace UnityCliBridge.Bridge.Editor
             PrefabCreateArgs args = ProtocolJson.Deserialize<PrefabCreateArgs>(argumentsJson) ?? new PrefabCreateArgs();
             string path = ResolvePrefabPath(args.path);
             AssetCommandSupport.EnsureParentFolderExists(path);
-            bool isOverwritten = AssetCommandSupport.DeleteIfTargetExists(path, args.force, "prefab-create");
 
             PrefabCreateSpec spec = DeserializeSpec<PrefabCreateSpec>(args.specJson, "prefab-create");
             ValidateVersion(spec.Version, "prefab-create");
@@ -68,6 +67,20 @@ namespace UnityCliBridge.Bridge.Editor
                 throw new CommandFailureException("PREFAB_SPEC_INVALID", "`root`가 필요합니다.");
             }
 
+            bool isOverwritten = AssetCommandSupport.AssetExists(path);
+            if (isOverwritten && !args.force)
+            {
+                throw new CommandFailureException(ProtocolConstants.ErrorPrefabForceRequired, "prefab 덮어쓰기에는 --force가 필요합니다.");
+            }
+
+            Func<string> action = () => CreatePrefab(path, spec, isOverwritten);
+            return isOverwritten
+                ? AssetBackupTransaction.RunWithMovedBackup(path, "prefab-create", action)
+                : action();
+        }
+
+        private static string CreatePrefab(string path, PrefabCreateSpec spec, bool isOverwritten)
+        {
             string rootName = string.IsNullOrWhiteSpace(spec.Root.Name)
                 ? Path.GetFileNameWithoutExtension(path)
                 : spec.Root.Name.Trim();
@@ -120,6 +133,12 @@ namespace UnityCliBridge.Bridge.Editor
                 throw new CommandFailureException(ProtocolConstants.ErrorPrefabForceRequired, "`remove-node` 또는 `remove-component`를 쓰려면 --force가 필요합니다.");
             }
 
+            return AssetBackupTransaction.RunWithBackup(path, "prefab-patch", () => PatchPrefab(path, spec));
+        }
+
+        private static string PatchPrefab(string path, PrefabPatchSpec spec)
+        {
+            // Prefab Edit Mode dirtiness is out of scope; LoadPrefabContents edits an isolated instance.
             GameObject root = PrefabUtility.LoadPrefabContents(path);
             PrefabPatchApplyResult patchResult;
             try
