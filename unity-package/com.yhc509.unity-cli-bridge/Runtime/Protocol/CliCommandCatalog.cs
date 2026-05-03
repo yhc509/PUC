@@ -18,6 +18,14 @@ namespace UnityCli.Protocol
         QaWorkflows,
     }
 
+    public enum ForceRule
+    {
+        None,
+        OnOverwrite,
+        OnDestructiveOp,
+        Always,
+    }
+
     public sealed class CliCommandDescriptor
     {
         public CliCommandDescriptor(
@@ -30,7 +38,7 @@ namespace UnityCli.Protocol
             bool canUseLive,
             bool isAllowedWhileBusy,
             string[]? notes = null,
-            bool requiresForce = false)
+            ForceRule forceRule = ForceRule.None)
         {
             Command = command;
             Synopsis = synopsis;
@@ -41,7 +49,7 @@ namespace UnityCli.Protocol
             CanUseLive = canUseLive;
             IsAllowedWhileBusy = isAllowedWhileBusy;
             Notes = notes ?? Array.Empty<string>();
-            RequiresForce = requiresForce;
+            ForceRule = forceRule;
         }
 
         public string Command { get; }
@@ -58,7 +66,10 @@ namespace UnityCli.Protocol
 
         public bool CanUseLive { get; }
         public bool IsAllowedWhileBusy { get; }
-        public bool RequiresForce { get; }
+        public ForceRule ForceRule { get; }
+
+        [Obsolete("Use ForceRule instead.")]
+        public bool RequiresForce => ForceRule != ForceRule.None;
 
         public string[] Notes { get; }
     }
@@ -173,7 +184,7 @@ namespace UnityCli.Protocol
                     "--args 값에는 secret/credential을 넣지 마세요. CodeDOM 컴파일 중 OS temp에 .cs 파일이 잠시 생성될 수 있습니다.",
                     "C# 5.0 이하 문법만 지원합니다 (CodeDOM 제한).",
                 },
-                requiresForce: true),
+                forceRule: ForceRule.Always),
             new CliCommandDescriptor(
                 "custom",
                 "custom <command-name> [--json <args>]",
@@ -239,7 +250,7 @@ namespace UnityCli.Protocol
                 canUseLive: true,
                 isAllowedWhileBusy: false,
                 notes: new[] { "Overwriting an existing target requires --force." },
-                requiresForce: true),
+                forceRule: ForceRule.OnOverwrite),
             new CliCommandDescriptor(
                 "asset rename",
                 "asset rename --path <Assets/...> --name <newName> [--force]",
@@ -250,7 +261,7 @@ namespace UnityCli.Protocol
                 canUseLive: true,
                 isAllowedWhileBusy: false,
                 notes: new[] { "Overwriting an existing target requires --force." },
-                requiresForce: true),
+                forceRule: ForceRule.OnOverwrite),
             new CliCommandDescriptor(
                 "asset delete",
                 "asset delete --path <Assets/...> --force",
@@ -261,7 +272,7 @@ namespace UnityCli.Protocol
                 canUseLive: true,
                 isAllowedWhileBusy: false,
                 notes: new[] { "Deletion is always gated by --force." },
-                requiresForce: true),
+                forceRule: ForceRule.Always),
             new CliCommandDescriptor(
                 "asset create",
                 "asset create --type <kind> --path <Assets/...> [--data-json <json>] [options]",
@@ -271,7 +282,8 @@ namespace UnityCli.Protocol
                 canUseLocal: false,
                 canUseLive: true,
                 isAllowedWhileBusy: false,
-                notes: new[] { "This repo ships the built-in asset types documented below.", "Runtime extension providers can add more types." }),
+                notes: new[] { "This repo ships the built-in asset types documented below.", "Runtime extension providers can add more types." },
+                forceRule: ForceRule.OnOverwrite),
             new CliCommandDescriptor(
                 "scene open",
                 "scene open --path <Assets/...> [--force]",
@@ -301,7 +313,7 @@ namespace UnityCli.Protocol
                 canUseLive: true,
                 isAllowedWhileBusy: false,
                 notes: new[] { "Detailed scene patch rules live in docs/scene-spec.md." },
-                requiresForce: true),
+                forceRule: ForceRule.OnDestructiveOp),
             new CliCommandDescriptor(
                 "scene add-object",
                 "scene add-object --path <Assets/...> [--parent <scenePath>] --name <name> [--primitive <Cube|Sphere|Capsule|Cylinder|Plane|Quad>] [--position x,y,z] [--components \"Type1,Type2\"]",
@@ -342,7 +354,7 @@ namespace UnityCli.Protocol
                 canUseLive: true,
                 isAllowedWhileBusy: false,
                 notes: new[] { "Always requires --force.", "Internally delegates to scene patch." },
-                requiresForce: true),
+                forceRule: ForceRule.Always),
             new CliCommandDescriptor(
                 "scene assign-material",
                 "scene assign-material --node <scenePath> --material <Assets/...>",
@@ -393,7 +405,7 @@ namespace UnityCli.Protocol
                 canUseLive: true,
                 isAllowedWhileBusy: false,
                 notes: new[] { "Detailed prefab patch rules live in docs/prefab-spec.md." },
-                requiresForce: true),
+                forceRule: ForceRule.OnDestructiveOp),
             new CliCommandDescriptor(
                 "prefab add-component",
                 "prefab add-component --path <Assets/...> --node <nodePath> --type <ComponentType> [--values <json>]",
@@ -414,7 +426,7 @@ namespace UnityCli.Protocol
                 canUseLive: true,
                 isAllowedWhileBusy: false,
                 notes: new[] { "Always requires --force.", "Internally delegates to prefab patch." },
-                requiresForce: true),
+                forceRule: ForceRule.Always),
             new CliCommandDescriptor(
                 "prefab list-components",
                 "prefab list-components --path <Assets/...> --node <nodePath>",
@@ -454,7 +466,7 @@ namespace UnityCli.Protocol
                 canUseLive: true,
                 isAllowedWhileBusy: false,
                 notes: new[] { "Removal is always gated by --force.", "패키지 작업 중 Editor가 일시 정지될 수 있습니다." },
-                requiresForce: true),
+                forceRule: ForceRule.Always),
             new CliCommandDescriptor(
                 "package search",
                 "package search --query <text>",

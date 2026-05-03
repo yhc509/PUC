@@ -27,115 +27,115 @@ Project-specific extension providers can still add more `asset create` types at 
 
 Commands for editor state, compilation, play state, menus, arbitrary code execution, project-defined custom commands, and console access.
 
-| Command | Synopsis | Modes | Force | Summary |
+| Command | Synopsis | Modes | Force Rule | Summary |
 | --- | --- | --- | --- | --- |
-| `status` | `status` | local, live | - | Reports the selected project and live editor state when a running bridge is reachable, with a local fallback when it is not. |
-| `compile` | `compile` | live | - | Triggers a script compile in the running editor. |
-| `refresh` | `refresh` | live | - | Refreshes the AssetDatabase in the running editor. |
-| `read-console` | `read-console [--limit N] [--type log\|warning\|error]` | live | - | Reads recent editor console entries from a running editor. |
-| `play` | `play` | live | - | Starts Play Mode in a running editor. |
-| `pause` | `pause` | live | - | Pauses Play Mode in a running editor. |
-| `stop` | `stop` | live | - | Stops Play Mode in a running editor. |
-| `execute-menu` | `execute-menu (--path "Menu/Item" \| --list "Prefix")` | live | - | Executes a Unity menu item or lists registered menu items matching a prefix in a running editor. |
-| `screenshot` | `screenshot [--view game\|scene (default: game) \| --camera <name>] [--path <output.png>] [--width N] [--height N]` | live | - | Captures a screenshot from the Game View, Scene View, or a named camera. Defaults to Game View when neither --view nor --camera is supplied. The response includes image size plus screen-space metadata (`screenWidth`, `screenHeight`, `imageOrigin`, `coordinateOrigin`) for QA coordinate alignment. In Play Mode, --view game can downscale the native Game View capture but does not upscale it. |
-| `execute` | `execute (--code <csharp> \| --file <path>) [--args <json>] --force` | live | `--force` gate | Executes arbitrary C# code in the running editor context with optional JSON arguments; always requires --force. |
-| `custom` | `custom <command-name> [--json <args>]` | live | - | Invokes a project-defined custom command registered via [PucCommand] attribute. |
+| `status` | `status` | local, live | `None` | Reports the selected project and live editor state when a running bridge is reachable, with a local fallback when it is not. |
+| `compile` | `compile` | live | `None` | Triggers a script compile in the running editor. |
+| `refresh` | `refresh` | live | `None` | Refreshes the AssetDatabase in the running editor. |
+| `read-console` | `read-console [--limit N] [--type log\|warning\|error]` | live | `None` | Reads recent editor console entries from a running editor. |
+| `play` | `play` | live | `None` | Starts Play Mode in a running editor. |
+| `pause` | `pause` | live | `None` | Pauses Play Mode in a running editor. |
+| `stop` | `stop` | live | `None` | Stops Play Mode in a running editor. |
+| `execute-menu` | `execute-menu (--path "Menu/Item" \| --list "Prefix")` | live | `None` | Executes a Unity menu item or lists registered menu items matching a prefix in a running editor. |
+| `screenshot` | `screenshot [--view game\|scene (default: game) \| --camera <name>] [--path <output.png>] [--width N] [--height N]` | live | `None` | Captures a screenshot from the Game View, Scene View, or a named camera. Defaults to Game View when neither --view nor --camera is supplied. The response includes image size plus screen-space metadata (`screenWidth`, `screenHeight`, `imageOrigin`, `coordinateOrigin`) for QA coordinate alignment. In Play Mode, --view game can downscale the native Game View capture but does not upscale it. |
+| `execute` | `execute (--code <csharp> \| --file <path>) [--args <json>] --force` | live | `Always` | Executes arbitrary C# code in the running editor context with optional JSON arguments; always requires --force. |
+| `custom` | `custom <command-name> [--json <args>]` | live | `None` | Invokes a project-defined custom command registered via [PucCommand] attribute. |
 
 ## Asset Workflows
 
 Commands for querying assets under `Assets/...` and `Packages/...`, plus mutating and creating assets under `Assets/...`.
 
-| Command | Synopsis | Modes | Force | Summary |
+| Command | Synopsis | Modes | Force Rule | Summary |
 | --- | --- | --- | --- | --- |
-| `asset find` | `asset find [--name <term>] [--type <type>] [--folder <Assets/...>] [--limit N]` | live | - | Finds assets by name and/or type, with an optional folder filter. Requires at least one of --name or --type. |
-| `asset types` | `asset types` | live | - | Lists built-in and project extension asset-create type descriptors available to the target project. |
-| `asset info` | `asset info (--path <Assets/...\|Packages/...> \| --guid <guid>)` | live | - | Reads asset metadata by path or GUID. Query paths may point to package assets. |
-| `asset reimport` | `asset reimport --path <Assets/...>` | live | - | Reimports an existing asset. |
-| `asset mkdir` | `asset mkdir --path <Assets/...>` | live | - | Creates missing folders under `Assets/...`. |
-| `asset move` | `asset move --from <Assets/...> --to <Assets/...> [--force]` | live | `--force` gate | Moves an asset to a new path; overwriting the destination requires --force. |
-| `asset rename` | `asset rename --path <Assets/...> --name <newName> [--force]` | live | `--force` gate | Renames an asset in place; overwriting the destination requires --force. |
-| `asset delete` | `asset delete --path <Assets/...> --force` | live | `--force` gate | Deletes an asset and always requires --force. |
-| `asset create` | `asset create --type <kind> --path <Assets/...> [--data-json <json>] [options]` | live | - | Creates a built-in or extension asset type; overwriting an existing asset requires --force. |
+| `asset find` | `asset find [--name <term>] [--type <type>] [--folder <Assets/...>] [--limit N]` | live | `None` | Finds assets by name and/or type, with an optional folder filter. Requires at least one of --name or --type. |
+| `asset types` | `asset types` | live | `None` | Lists built-in and project extension asset-create type descriptors available to the target project. |
+| `asset info` | `asset info (--path <Assets/...\|Packages/...> \| --guid <guid>)` | live | `None` | Reads asset metadata by path or GUID. Query paths may point to package assets. |
+| `asset reimport` | `asset reimport --path <Assets/...>` | live | `None` | Reimports an existing asset. |
+| `asset mkdir` | `asset mkdir --path <Assets/...>` | live | `None` | Creates missing folders under `Assets/...`. |
+| `asset move` | `asset move --from <Assets/...> --to <Assets/...> [--force]` | live | `OnOverwrite` | Moves an asset to a new path; overwriting the destination requires --force. |
+| `asset rename` | `asset rename --path <Assets/...> --name <newName> [--force]` | live | `OnOverwrite` | Renames an asset in place; overwriting the destination requires --force. |
+| `asset delete` | `asset delete --path <Assets/...> --force` | live | `Always` | Deletes an asset and always requires --force. |
+| `asset create` | `asset create --type <kind> --path <Assets/...> [--data-json <json>] [options]` | live | `OnOverwrite` | Creates a built-in or extension asset type; overwriting an existing asset requires --force. |
 
 ## Scene Workflows
 
 Commands for opening, inspecting, and patching saved scene assets.
 
-| Command | Synopsis | Modes | Force | Summary |
+| Command | Synopsis | Modes | Force Rule | Summary |
 | --- | --- | --- | --- | --- |
-| `scene open` | `scene open --path <Assets/...> [--force]` | live | - | Opens a saved scene asset; use --force to discard dirty loaded scenes. |
-| `scene inspect` | `scene inspect --path <Assets/...> [--with-values] [--max-depth <N>] [--omit-defaults]` | live | - | Inspects a saved scene hierarchy; use --with-values when authoring scene patch specs and the other options to reduce payload size. |
-| `scene patch` | `scene patch --path <Assets/...> (--spec-file <file.json> \| --spec-json <json>) [--force]` | live | `--force` gate | Applies a deterministic scene patch spec; destructive operations require --force. |
-| `scene add-object` | `scene add-object --path <Assets/...> [--parent <scenePath>] --name <name> [--primitive <Cube\|Sphere\|Capsule\|Cylinder\|Plane\|Quad>] [--position x,y,z] [--components "Type1,Type2"]` | live | - | Adds a new GameObject or built-in primitive to a scene; shortcut for a single add-gameobject scene patch operation. |
-| `scene set-transform` | `scene set-transform --node <scenePath> [--position x,y,z] [--rotation x,y,z] [--scale x,y,z]` | live | - | Sets local transform values on a node in the active loaded scene and saves the scene immediately. |
-| `scene add-component` | `scene add-component --path <Assets/...> --node <scenePath> --type <ComponentType> [--values <json>]` | live | - | Adds a component to a GameObject; shortcut for a single add-component scene patch operation. |
-| `scene remove-component` | `scene remove-component --path <Assets/...> --node <scenePath> --type <ComponentType> [--index N] --force` | live | `--force` gate | Removes a component from a GameObject; shortcut for a single remove-component scene patch operation. |
-| `scene assign-material` | `scene assign-material --node <scenePath> --material <Assets/...>` | live | - | Assigns a material asset to MeshRenderer.sharedMaterials[0] on a node in the active loaded scene. |
-| `scene list-components` | `scene list-components --node <scenePath>` | live | - | Lists all components on a GameObject in the active loaded scene, returning type names and indices. |
+| `scene open` | `scene open --path <Assets/...> [--force]` | live | `None` | Opens a saved scene asset; use --force to discard dirty loaded scenes. |
+| `scene inspect` | `scene inspect --path <Assets/...> [--with-values] [--max-depth <N>] [--omit-defaults]` | live | `None` | Inspects a saved scene hierarchy; use --with-values when authoring scene patch specs and the other options to reduce payload size. |
+| `scene patch` | `scene patch --path <Assets/...> (--spec-file <file.json> \| --spec-json <json>) [--force]` | live | `OnDestructiveOp` | Applies a deterministic scene patch spec; destructive operations require --force. |
+| `scene add-object` | `scene add-object --path <Assets/...> [--parent <scenePath>] --name <name> [--primitive <Cube\|Sphere\|Capsule\|Cylinder\|Plane\|Quad>] [--position x,y,z] [--components "Type1,Type2"]` | live | `None` | Adds a new GameObject or built-in primitive to a scene; shortcut for a single add-gameobject scene patch operation. |
+| `scene set-transform` | `scene set-transform --node <scenePath> [--position x,y,z] [--rotation x,y,z] [--scale x,y,z]` | live | `None` | Sets local transform values on a node in the active loaded scene and saves the scene immediately. |
+| `scene add-component` | `scene add-component --path <Assets/...> --node <scenePath> --type <ComponentType> [--values <json>]` | live | `None` | Adds a component to a GameObject; shortcut for a single add-component scene patch operation. |
+| `scene remove-component` | `scene remove-component --path <Assets/...> --node <scenePath> --type <ComponentType> [--index N] --force` | live | `Always` | Removes a component from a GameObject; shortcut for a single remove-component scene patch operation. |
+| `scene assign-material` | `scene assign-material --node <scenePath> --material <Assets/...>` | live | `None` | Assigns a material asset to MeshRenderer.sharedMaterials[0] on a node in the active loaded scene. |
+| `scene list-components` | `scene list-components --node <scenePath>` | live | `None` | Lists all components on a GameObject in the active loaded scene, returning type names and indices. |
 
 ## Prefab Workflows
 
 Commands for inspecting, creating, and patching prefab assets.
 
-| Command | Synopsis | Modes | Force | Summary |
+| Command | Synopsis | Modes | Force Rule | Summary |
 | --- | --- | --- | --- | --- |
-| `prefab inspect` | `prefab inspect --path <Assets/...> [--with-values] [--max-depth <N>] [--omit-defaults]` | live | - | Inspects prefab hierarchy and serialized property paths; use --with-values when authoring patch specs and the other options to reduce payload size. |
-| `prefab create` | `prefab create --path <Assets/...> (--spec-file <file.json> \| --spec-json <json>) [--force]` | live | - | Creates a prefab from a JSON structure spec; use --force to overwrite an existing asset. |
-| `prefab patch` | `prefab patch --path <Assets/...> (--spec-file <file.json> \| --spec-json <json>) [--force]` | live | `--force` gate | Applies a deterministic patch spec to an existing prefab; destructive operations require --force. |
-| `prefab add-component` | `prefab add-component --path <Assets/...> --node <nodePath> --type <ComponentType> [--values <json>]` | live | - | Adds a component to a prefab node; shortcut for a single add-component prefab patch operation. |
-| `prefab remove-component` | `prefab remove-component --path <Assets/...> --node <nodePath> --type <ComponentType> [--index N] --force` | live | `--force` gate | Removes a component from a prefab node; shortcut for a single remove-component prefab patch operation. |
-| `prefab list-components` | `prefab list-components --path <Assets/...> --node <nodePath>` | live | - | Lists all components on a node in a prefab asset, returning type names and indices. |
+| `prefab inspect` | `prefab inspect --path <Assets/...> [--with-values] [--max-depth <N>] [--omit-defaults]` | live | `None` | Inspects prefab hierarchy and serialized property paths; use --with-values when authoring patch specs and the other options to reduce payload size. |
+| `prefab create` | `prefab create --path <Assets/...> (--spec-file <file.json> \| --spec-json <json>) [--force]` | live | `None` | Creates a prefab from a JSON structure spec; use --force to overwrite an existing asset. |
+| `prefab patch` | `prefab patch --path <Assets/...> (--spec-file <file.json> \| --spec-json <json>) [--force]` | live | `OnDestructiveOp` | Applies a deterministic patch spec to an existing prefab; destructive operations require --force. |
+| `prefab add-component` | `prefab add-component --path <Assets/...> --node <nodePath> --type <ComponentType> [--values <json>]` | live | `None` | Adds a component to a prefab node; shortcut for a single add-component prefab patch operation. |
+| `prefab remove-component` | `prefab remove-component --path <Assets/...> --node <nodePath> --type <ComponentType> [--index N] --force` | live | `Always` | Removes a component from a prefab node; shortcut for a single remove-component prefab patch operation. |
+| `prefab list-components` | `prefab list-components --path <Assets/...> --node <nodePath>` | live | `None` | Lists all components on a node in a prefab asset, returning type names and indices. |
 
 ## Package Management
 
 Commands for listing, adding, removing, and searching Unity packages.
 
-| Command | Synopsis | Modes | Force | Summary |
+| Command | Synopsis | Modes | Force Rule | Summary |
 | --- | --- | --- | --- | --- |
-| `package list` | `package list` | live | - | Lists all installed packages in the project. |
-| `package add` | `package add --name <package> [--version <version>]` | live | - | Adds a package to the project; supports registry, git URL, and local paths. |
-| `package remove` | `package remove --name <package> --force` | live | `--force` gate | Removes a package from the project; always requires --force. |
-| `package search` | `package search --query <text>` | live | - | Searches the Unity registry for packages matching the query. |
+| `package list` | `package list` | live | `None` | Lists all installed packages in the project. |
+| `package add` | `package add --name <package> [--version <version>]` | live | `None` | Adds a package to the project; supports registry, git URL, and local paths. |
+| `package remove` | `package remove --name <package> --force` | live | `Always` | Removes a package from the project; always requires --force. |
+| `package search` | `package search --query <text>` | live | `None` | Searches the Unity registry for packages matching the query. |
 
 ## Material Workflows
 
 Commands for inspecting and mutating material properties and texture slots.
 
-| Command | Synopsis | Modes | Force | Summary |
+| Command | Synopsis | Modes | Force Rule | Summary |
 | --- | --- | --- | --- | --- |
-| `material info` | `material info --path <Assets/...mat> [--omit-defaults]` | live | - | Inspects a material's shader and property values, with an option to omit properties still at the shader defaults. |
-| `material set` | `material set --path <Assets/...mat> (--property <name> --value <val> \| --texture <name> --asset <Assets/...>)` | live | - | Sets a material property value or texture. |
+| `material info` | `material info --path <Assets/...mat> [--omit-defaults]` | live | `None` | Inspects a material's shader and property values, with an option to omit properties still at the shader defaults. |
+| `material set` | `material set --path <Assets/...mat> (--property <name> --value <val> \| --texture <name> --asset <Assets/...>)` | live | `None` | Sets a material property value or texture. |
 
 ## QA Workflows
 
 Commands for Play Mode QA interactions such as click, tap, swipe, key input, and wait conditions.
 
-| Command | Synopsis | Modes | Force | Summary |
+| Command | Synopsis | Modes | Force Rule | Summary |
 | --- | --- | --- | --- | --- |
-| `qa click` | `qa click (--qa-id <id> \| --target <path>)` | live | - | Clicks a UI element identified by QA ID or GameObject path; requires Play Mode. |
-| `qa tap` | `qa tap --x <int> --y <int> [--screenshot-width <int> --screenshot-height <int>]` | live | - | Taps at a screenshot-derived coordinate. Pass screenshot image coordinates directly with a top-left origin; the bridge auto-uses the last captured screenshot size when available and handles Y-flip plus scaling internally. Pass --screenshot-width/--screenshot-height to override the source size; requires Play Mode. |
-| `qa swipe` | `qa swipe [--target <path>] --from <x,y> --to <x,y> [--duration <ms>] [--screenshot-width <int> --screenshot-height <int>]` | live | - | Swipes over multiple frames; without --target, --from/--to use screenshot-style top-origin coordinates and auto-scale from the last captured screenshot when available, while --target keeps them as pixel offsets from the target RectTransform center; pass --screenshot-width/--screenshot-height to override the source size; requires Play Mode. |
-| `qa key` | `qa key --key <keyName>` | live | - | Simulates a key press via Input System; requires Play Mode. |
-| `qa wait` | `qa wait --ms <int>` | local | - | Waits for the specified number of milliseconds (local only, does not contact the editor). |
-| `qa wait-until` | `qa wait-until (--scene <name> \| --log-contains <text> \| --object-exists <qa-id\|path>) [--timeout <ms>]` | live | - | Polls the editor until a condition is met or timeout expires; requires Play Mode. |
+| `qa click` | `qa click (--qa-id <id> \| --target <path>)` | live | `None` | Clicks a UI element identified by QA ID or GameObject path; requires Play Mode. |
+| `qa tap` | `qa tap --x <int> --y <int> [--screenshot-width <int> --screenshot-height <int>]` | live | `None` | Taps at a screenshot-derived coordinate. Pass screenshot image coordinates directly with a top-left origin; the bridge auto-uses the last captured screenshot size when available and handles Y-flip plus scaling internally. Pass --screenshot-width/--screenshot-height to override the source size; requires Play Mode. |
+| `qa swipe` | `qa swipe [--target <path>] --from <x,y> --to <x,y> [--duration <ms>] [--screenshot-width <int> --screenshot-height <int>]` | live | `None` | Swipes over multiple frames; without --target, --from/--to use screenshot-style top-origin coordinates and auto-scale from the last captured screenshot when available, while --target keeps them as pixel offsets from the target RectTransform center; pass --screenshot-width/--screenshot-height to override the source size; requires Play Mode. |
+| `qa key` | `qa key --key <keyName>` | live | `None` | Simulates a key press via Input System; requires Play Mode. |
+| `qa wait` | `qa wait --ms <int>` | local | `None` | Waits for the specified number of milliseconds (local only, does not contact the editor). |
+| `qa wait-until` | `qa wait-until (--scene <name> \| --log-contains <text> \| --object-exists <qa-id\|path>) [--timeout <ms>]` | live | `None` | Polls the editor until a condition is met or timeout expires; requires Play Mode. |
 
 ## Instance Management
 
 Commands for selecting the active Unity project target from the local registry.
 
-| Command | Synopsis | Modes | Force | Summary |
+| Command | Synopsis | Modes | Force Rule | Summary |
 | --- | --- | --- | --- | --- |
-| `instances list` | `instances list` | local | - | Lists known Unity project instances and the active registry selection. |
-| `instances use` | `instances use <projectHash\|projectPath\|projectName>` | local | - | Pins the active target project by hash, project path, or registered project name. Existing directory paths win over name matches. |
+| `instances list` | `instances list` | local | `None` | Lists known Unity project instances and the active registry selection. |
+| `instances use` | `instances use <projectHash\|projectPath\|projectName>` | local | `None` | Pins the active target project by hash, project path, or registered project name. Existing directory paths win over name matches. |
 
 ## Diagnostics
 
 Low-level commands for environment inspection and raw protocol debugging.
 
-| Command | Synopsis | Modes | Force | Summary |
+| Command | Synopsis | Modes | Force Rule | Summary |
 | --- | --- | --- | --- | --- |
-| `doctor` | `doctor` | local | - | Shows registry, project detection, Unity path, and live reachability diagnostics. |
-| `raw` | `raw [--force] --json '{"command":"status","arguments":{}}'` | live | - | Sends a raw live protocol envelope for low-level debugging. |
+| `doctor` | `doctor` | local | `None` | Shows registry, project detection, Unity path, and live reachability diagnostics. |
+| `raw` | `raw [--force] --json '{"command":"status","arguments":{}}'` | live | `None` | Sends a raw live protocol envelope for low-level debugging. |
 
 ## Built-In Asset Create Types
 
@@ -162,6 +162,7 @@ Runtime extension providers can add more rows to `asset types`, but they are not
 
 - Query-only asset reads such as `asset info --path` may use `Assets/...` or `Packages/...`, but write paths stay under `Assets/...`.
 - Dangerous, destructive, or overwrite flows are guarded by `--force`, including `execute`, `asset delete`, overwrite variants of `asset move`, `asset rename`, and `asset create`, `package remove`, destructive `scene patch` and `prefab patch` operations, plus scene/prefab `remove-component` shortcuts.
+- `raw --force` injects `force=true` only when the raw payload omits `force` or already sets it to `true`; conflicting payload values fail fast.
 - Use `scene inspect --with-values` before writing a scene patch spec.
 - Use `prefab inspect --with-values` before writing a prefab patch spec.
 - Scene/prefab component value patches accept friendly keys for common Rigidbody, Collider, Renderer, Light, and Camera properties; inspect remains the source of truth for unsupported fields.

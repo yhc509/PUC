@@ -23,9 +23,7 @@ namespace UnityCliBridge.Bridge.Editor
                 }
 
                 if (string.Equals(operation.Operation, "remove-node", StringComparison.Ordinal)
-                    || string.Equals(operation.Operation, "remove-component", StringComparison.Ordinal)
-                    || string.Equals(operation.Operation, "delete-gameobject", StringComparison.Ordinal)
-                    || string.Equals(operation.Operation, "remove-gameobject", StringComparison.Ordinal))
+                    || string.Equals(operation.Operation, "remove-component", StringComparison.Ordinal))
                 {
                     return true;
                 }
