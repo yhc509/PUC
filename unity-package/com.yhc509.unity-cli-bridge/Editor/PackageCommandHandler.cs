@@ -14,6 +14,8 @@ namespace UnityCliBridge.Bridge.Editor
     internal sealed class PackageCommandHandler
     {
         internal const int PackageRequestTimeoutSeconds = ProtocolConstants.DefaultPackageRequestTimeoutSeconds;
+        private static readonly object _activeLock = new object();
+        private static bool _hasActiveRequest;
 
         public bool CanHandle(string command)
         {
@@ -49,96 +51,118 @@ namespace UnityCliBridge.Bridge.Editor
 
             string requestId = GetRequestId(completion);
             var stopwatch = Stopwatch.StartNew();
-
-            if (string.Equals(command, ProtocolConstants.CommandPackageList, StringComparison.Ordinal))
+            if (!TryBeginActiveRequest())
             {
-                ListRequest request = Client.List(true);
-                StartPollingRequest(
-                    request,
-                    CreateListPayloadJson,
-                    "PACKAGE_LIST_FAILED",
-                    "패키지 목록 조회에 실패했습니다.",
-                    completion,
-                    projectHash,
+                stopwatch.Stop();
+                completion.TrySetResult(ResponseEnvelope.Failure(
                     requestId,
-                    stopwatch);
+                    projectHash,
+                    ProtocolConstants.ErrorPackageBusy,
+                    ProtocolConstants.PackageBusyMessage,
+                    true,
+                    stopwatch.ElapsedMilliseconds,
+                    ProtocolConstants.TransportLive,
+                    null));
                 return;
             }
 
-            if (string.Equals(command, ProtocolConstants.CommandPackageAdd, StringComparison.Ordinal))
+            try
             {
-                PackageAddArgs args = ProtocolJson.Deserialize<PackageAddArgs>(argumentsJson) ?? new PackageAddArgs();
-                if (string.IsNullOrWhiteSpace(args.name))
+                if (string.Equals(command, ProtocolConstants.CommandPackageList, StringComparison.Ordinal))
                 {
-                    throw new CommandFailureException("INVALID_ARGS", "패키지 이름이 필요합니다.", false, null);
+                    ListRequest request = Client.List(true);
+                    StartPollingRequest(
+                        request,
+                        CreateListPayloadJson,
+                        "PACKAGE_LIST_FAILED",
+                        "패키지 목록 조회에 실패했습니다.",
+                        completion,
+                        projectHash,
+                        requestId,
+                        stopwatch);
+                    return;
                 }
 
-                string identifier = !string.IsNullOrWhiteSpace(args.version)
-                    ? $"{args.name}@{args.version}"
-                    : args.name;
+                if (string.Equals(command, ProtocolConstants.CommandPackageAdd, StringComparison.Ordinal))
+                {
+                    PackageAddArgs args = ProtocolJson.Deserialize<PackageAddArgs>(argumentsJson) ?? new PackageAddArgs();
+                    if (string.IsNullOrWhiteSpace(args.name))
+                    {
+                        throw new CommandFailureException("INVALID_ARGS", "패키지 이름이 필요합니다.", false, null);
+                    }
 
-                AddRequest request = Client.Add(identifier);
-                StartPollingRequest(
-                    request,
-                    CreateAddPayloadJson,
-                    "PACKAGE_ADD_FAILED",
-                    $"패키지 추가에 실패했습니다: {identifier}",
-                    completion,
-                    projectHash,
-                    requestId,
-                    stopwatch);
-                return;
+                    string identifier = !string.IsNullOrWhiteSpace(args.version)
+                        ? $"{args.name}@{args.version}"
+                        : args.name;
+
+                    AddRequest request = Client.Add(identifier);
+                    StartPollingRequest(
+                        request,
+                        CreateAddPayloadJson,
+                        "PACKAGE_ADD_FAILED",
+                        $"패키지 추가에 실패했습니다: {identifier}",
+                        completion,
+                        projectHash,
+                        requestId,
+                        stopwatch);
+                    return;
+                }
+
+                if (string.Equals(command, ProtocolConstants.CommandPackageRemove, StringComparison.Ordinal))
+                {
+                    PackageRemoveArgs args = ProtocolJson.Deserialize<PackageRemoveArgs>(argumentsJson) ?? new PackageRemoveArgs();
+                    if (!args.force)
+                    {
+                        throw new CommandFailureException(ProtocolConstants.ErrorPackageForceRequired, "패키지 제거에는 --force가 필요합니다.");
+                    }
+
+                    if (string.IsNullOrWhiteSpace(args.name))
+                    {
+                        throw new CommandFailureException("INVALID_ARGS", "패키지 이름이 필요합니다.", false, null);
+                    }
+
+                    RemoveRequest request = Client.Remove(args.name);
+                    StartPollingRequest(
+                        request,
+                        _ => CreateRemovePayloadJson(args.name),
+                        "PACKAGE_REMOVE_FAILED",
+                        $"패키지 제거에 실패했습니다: {args.name}",
+                        completion,
+                        projectHash,
+                        requestId,
+                        stopwatch);
+                    return;
+                }
+
+                if (string.Equals(command, ProtocolConstants.CommandPackageSearch, StringComparison.Ordinal))
+                {
+                    PackageSearchArgs args = ProtocolJson.Deserialize<PackageSearchArgs>(argumentsJson) ?? new PackageSearchArgs();
+                    if (string.IsNullOrWhiteSpace(args.query))
+                    {
+                        throw new CommandFailureException("INVALID_ARGS", "검색 키워드가 필요합니다.", false, null);
+                    }
+
+                    string query = args.query.Trim();
+                    SearchRequest request = Client.SearchAll();
+                    StartPollingRequest(
+                        request,
+                        completedRequest => CreateSearchPayloadJson(completedRequest, query),
+                        "PACKAGE_SEARCH_FAILED",
+                        $"패키지 검색에 실패했습니다: {query}",
+                        completion,
+                        projectHash,
+                        requestId,
+                        stopwatch);
+                    return;
+                }
+
+                throw new InvalidOperationException("지원하지 않는 package 명령입니다: " + command);
             }
-
-            if (string.Equals(command, ProtocolConstants.CommandPackageRemove, StringComparison.Ordinal))
+            catch
             {
-                PackageRemoveArgs args = ProtocolJson.Deserialize<PackageRemoveArgs>(argumentsJson) ?? new PackageRemoveArgs();
-                if (!args.force)
-                {
-                    throw new CommandFailureException(ProtocolConstants.ErrorPackageForceRequired, "패키지 제거에는 --force가 필요합니다.");
-                }
-
-                if (string.IsNullOrWhiteSpace(args.name))
-                {
-                    throw new CommandFailureException("INVALID_ARGS", "패키지 이름이 필요합니다.", false, null);
-                }
-
-                RemoveRequest request = Client.Remove(args.name);
-                StartPollingRequest(
-                    request,
-                    _ => CreateRemovePayloadJson(args.name),
-                    "PACKAGE_REMOVE_FAILED",
-                    $"패키지 제거에 실패했습니다: {args.name}",
-                    completion,
-                    projectHash,
-                    requestId,
-                    stopwatch);
-                return;
+                EndActiveRequest();
+                throw;
             }
-
-            if (string.Equals(command, ProtocolConstants.CommandPackageSearch, StringComparison.Ordinal))
-            {
-                PackageSearchArgs args = ProtocolJson.Deserialize<PackageSearchArgs>(argumentsJson) ?? new PackageSearchArgs();
-                if (string.IsNullOrWhiteSpace(args.query))
-                {
-                    throw new CommandFailureException("INVALID_ARGS", "검색 키워드가 필요합니다.", false, null);
-                }
-
-                string query = args.query.Trim();
-                SearchRequest request = Client.SearchAll();
-                StartPollingRequest(
-                    request,
-                    completedRequest => CreateSearchPayloadJson(completedRequest, query),
-                    "PACKAGE_SEARCH_FAILED",
-                    $"패키지 검색에 실패했습니다: {query}",
-                    completion,
-                    projectHash,
-                    requestId,
-                    stopwatch);
-                return;
-            }
-
-            throw new InvalidOperationException("지원하지 않는 package 명령입니다: " + command);
         }
 
         private static string CreateListPayloadJson(ListRequest request)
@@ -218,12 +242,26 @@ namespace UnityCliBridge.Bridge.Editor
             Stopwatch stopwatch)
             where TRequest : Request
         {
+            bool isFinished = false;
+
+            void FinishPolling()
+            {
+                if (isFinished)
+                {
+                    return;
+                }
+
+                isFinished = true;
+                EditorApplication.update -= Poll;
+                stopwatch.Stop();
+                EndActiveRequest();
+            }
+
             void Poll()
             {
                 if (completion.Task.IsCompleted)
                 {
-                    EditorApplication.update -= Poll;
-                    stopwatch.Stop();
+                    FinishPolling();
                     return;
                 }
 
@@ -231,9 +269,6 @@ namespace UnityCliBridge.Bridge.Editor
                 {
                     if (request.IsCompleted)
                     {
-                        EditorApplication.update -= Poll;
-                        stopwatch.Stop();
-
                         if (request.Status == StatusCode.Failure)
                         {
                             completion.TrySetResult(ResponseEnvelope.Failure(
@@ -245,6 +280,7 @@ namespace UnityCliBridge.Bridge.Editor
                                 stopwatch.ElapsedMilliseconds,
                                 ProtocolConstants.TransportLive,
                                 request.Error?.errorCode.ToString()));
+                            FinishPolling();
                             return;
                         }
 
@@ -254,13 +290,12 @@ namespace UnityCliBridge.Bridge.Editor
                             createPayloadJson(request),
                             stopwatch.ElapsedMilliseconds,
                             ProtocolConstants.TransportLive));
+                        FinishPolling();
                         return;
                     }
 
                     if (ProtocolConstants.IsPackageRequestTimedOut(stopwatch.Elapsed, PackageRequestTimeoutSeconds))
                     {
-                        EditorApplication.update -= Poll;
-                        stopwatch.Stop();
                         completion.TrySetResult(ResponseEnvelope.Failure(
                             requestId,
                             projectHash,
@@ -270,18 +305,66 @@ namespace UnityCliBridge.Bridge.Editor
                             stopwatch.ElapsedMilliseconds,
                             ProtocolConstants.TransportLive,
                             null));
+                        FinishPolling();
                     }
                 }
                 catch (Exception exception)
                 {
-                    EditorApplication.update -= Poll;
-                    stopwatch.Stop();
                     completion.TrySetResult(CreateFailureResponse(requestId, projectHash, exception, stopwatch.ElapsedMilliseconds));
+                    FinishPolling();
                 }
             }
 
             EditorApplication.update += Poll;
             Poll();
+        }
+
+        internal static bool TryBeginActiveRequestForTesting()
+        {
+            return TryBeginActiveRequest();
+        }
+
+        internal static void EndActiveRequestForTesting()
+        {
+            EndActiveRequest();
+        }
+
+        internal static void ResetActiveRequestForTesting()
+        {
+            lock (_activeLock)
+            {
+                _hasActiveRequest = false;
+            }
+        }
+
+        internal static bool HasActiveRequestForTesting()
+        {
+            lock (_activeLock)
+            {
+                return _hasActiveRequest;
+            }
+        }
+
+        private static bool TryBeginActiveRequest()
+        {
+            lock (_activeLock)
+            {
+                if (_hasActiveRequest)
+                {
+                    return false;
+                }
+
+                _hasActiveRequest = true;
+                return true;
+            }
+        }
+
+        private static void EndActiveRequest()
+        {
+            lock (_activeLock)
+            {
+                _hasActiveRequest = false;
+            }
         }
 
         private static string GetRequestId(TaskCompletionSource<ResponseEnvelope> completion)
