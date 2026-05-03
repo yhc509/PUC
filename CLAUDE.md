@@ -92,7 +92,7 @@ tests/UnityCli.Cli.Tests/    xUnit tests
 
 - **Nullable references enabled** throughout (`#nullable enable`, implicit usings).
 - **Asset paths** always use `Assets/...` format.
-- **Destructive ops require `--force`:** `asset delete` (always), `asset move/rename/create` (when overwriting).
+- **Destructive/dangerous ops require `--force`:** `asset delete` (always), `asset move/rename/create` (when overwriting), destructive scene/prefab patches, scene/prefab `remove-component`, `package remove`, and `execute`.
 - **macOS paths:** Use real paths (`pwd -P`), not symlinks, for hashing and registry lookups.
 - **Scene paths:** Format `/Root[0]/Child[0]` with array notation for sibling indexing; `/` is the virtual scene root.
 - **Scene/prefab node flags:** Convenience commands that point at a hierarchy node use `--node`; JSON patch specs still use `target`/`parent`.
