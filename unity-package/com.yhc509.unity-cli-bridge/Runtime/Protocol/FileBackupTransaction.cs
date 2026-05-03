@@ -153,10 +153,10 @@ namespace UnityCli.Protocol
 
         private static void CreateBackup(BackupEntry entry, BackupMode mode, FileBackupTransactionOptions options)
         {
-            if (PathExists(entry.BackupPath))
+            if (PathExists(entry.BackupPath) || PathExists(entry.BackupPath + ".meta"))
             {
                 options.WarningSink?.Invoke("stale bridge backup을 덮어씁니다: " + entry.BackupPath);
-                DeletePath(entry.BackupPath);
+                DeleteBackupArtifacts(entry.BackupPath);
             }
 
             if (mode == BackupMode.Move)
@@ -210,19 +210,28 @@ namespace UnityCli.Protocol
             for (int index = 0; index < backedUpEntries.Count; index++)
             {
                 BackupEntry entry = backedUpEntries[index];
-                if (!PathExists(entry.BackupPath))
-                {
-                    continue;
-                }
-
                 try
                 {
-                    DeletePath(entry.BackupPath);
+                    DeleteBackupArtifacts(entry.BackupPath);
                 }
                 catch (Exception exception)
                 {
                     options.WarningSink?.Invoke("bridge backup cleanup에 실패했습니다: " + entry.BackupPath + " (" + exception.Message + ")");
                 }
+            }
+        }
+
+        private static void DeleteBackupArtifacts(string backupPath)
+        {
+            if (PathExists(backupPath))
+            {
+                DeletePath(backupPath);
+            }
+
+            string generatedMetaPath = backupPath + ".meta";
+            if (PathExists(generatedMetaPath))
+            {
+                DeletePath(generatedMetaPath);
             }
         }
 

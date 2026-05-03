@@ -95,6 +95,7 @@ namespace UnityCliBridge.Bridge.Editor
             }
         }
 
+        [Obsolete("Use AssetBackupTransaction.RunWithMovedBackup instead.")]
         public static bool DeleteIfTargetExists(string path, bool canOverwrite, string commandName)
         {
             if (!AssetExists(path))
