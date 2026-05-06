@@ -13,3 +13,6 @@ My project/
 # Editor noise
 *.swp
 docs/plans/
+
+# Local Claude Code harness state
+.claude/
