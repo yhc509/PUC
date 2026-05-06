@@ -85,3 +85,4 @@ Tests live in `tests/UnityCli.Cli.Tests/` (xUnit, `.NET`-testable surface only).
 - CLI code changes → `dotnet build UnityCliBridge.sln -c Debug`
 - Test changes → `dotnet test UnityCliBridge.sln`
 - Unity integration changes → test live IPC flows with an actual Unity project
+- **Before opening a PR**: after `dotnet test` passes, exercise the change in the Unity Editor against a sample project that imports this package via a `file:` UPM reference. Run the live IPC commands related to the change (no need for a fixed smoke set — scope it to what was touched). If the Editor is not running, launch it. If a script change is not yet picked up, trigger a recompile (`unity-cli refresh` or focus the Editor). Skipping this step is only acceptable for changes that cannot reach Unity (e.g. CLI-only doc/help text).
