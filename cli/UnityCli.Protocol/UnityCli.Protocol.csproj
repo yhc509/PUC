@@ -12,4 +12,12 @@
              Link="Protocol\%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <Target Name="ValidateSharedProtocolSourceLocation" BeforeTargets="BeforeBuild">
+    <ItemGroup>
+      <LocalProtocolSource Include="$(MSBuildProjectDirectory)/*.cs" />
+    </ItemGroup>
+    <Error Condition="'@(LocalProtocolSource)' != ''"
+           Text="Protocol files must live in unity-package/com.yhc509.unity-cli-bridge/Runtime/Protocol/, not in cli/UnityCli.Protocol/. Found: @(LocalProtocolSource->'%(FullPath)', ', ')" />
+  </Target>
+
 </Project>

@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- CLI protocol builds now fail if shared protocol source files are added directly under `cli/UnityCli.Protocol/`; protocol sources must live in the Unity package's shared `Runtime/Protocol/` directory.
+
 ### Fixed
 - Asset create provider registry no longer gets stuck in a partial-init state when a built-in provider registration throws.
 - Bridge now returns a structured `INVALID_COMMAND` response when an IPC payload fails JSON deserialization, instead of dropping the connection.
