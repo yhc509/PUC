@@ -20,7 +20,7 @@ namespace UnityCliBridge.Bridge.Editor
         {
             var builder = new StringBuilder(2048);
             using var stringWriter = new StringWriter(builder, CultureInfo.InvariantCulture);
-            using var writer = new JsonTextWriter(stringWriter);
+            using var writer = InspectorJsonWriterUtility.Configure(new JsonTextWriter(stringWriter));
             writer.Formatting = Formatting.None;
             writer.WriteStartObject();
             writer.WritePropertyName("asset");

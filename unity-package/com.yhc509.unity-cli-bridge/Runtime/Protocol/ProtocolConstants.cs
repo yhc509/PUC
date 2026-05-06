@@ -10,6 +10,7 @@ namespace UnityCli.Protocol
     public static class ProtocolConstants
     {
         public const string AppName = "unity-cli";
+        public const string ProtocolVersion = "2";
         public const int DefaultLiveTimeoutMs = 30_000;
         public const int DefaultTimeoutMs = DefaultLiveTimeoutMs;
         public const int DefaultConsoleLimit = 50;
@@ -28,6 +29,8 @@ namespace UnityCli.Protocol
         public const string ErrorSceneForceRequired = "SCENE_FORCE_REQUIRED";
         public const string ErrorBackupFailed = "BACKUP_FAILED";
         public const string ErrorBackupRestoreFailed = "BACKUP_RESTORE_FAILED";
+        public const string ErrorInternalInvalidPayload = "INTERNAL_INVALID_PAYLOAD";
+        public const string ErrorProtocolMismatch = "PROTOCOL_MISMATCH";
         public const string ErrorSceneDirty = "SCENE_DIRTY";
         public const string StatusSuccess = "success";
         public const string StatusError = "error";

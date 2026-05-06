@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- Live IPC responses now send payloads as an inline JSON `data` field, so CLI `--json` output preserves structured objects directly instead of wrapping them in a string-valued `dataJson` field.
+
+### Removed
+- Removed the `ResponseEnvelope.dataJson` wire field from live IPC responses.
+
+### Compatibility
+- Upgrade the CLI binary and Unity package together. Mixing versions can make response payloads appear empty or return a protocol mismatch error because the live IPC response format changed.
+
 ## [0.1.10] - 2026-05-07
 
 ### Added

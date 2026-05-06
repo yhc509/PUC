@@ -6,57 +6,59 @@ namespace UnityCli.Cli.Tests;
 public sealed class ResponseEnvelopeTests
 {
     [Fact]
-    public void Success_WithDataJson_LeavesDataNullUntilEnsureData()
+    public void Success_WithData_AssignsJsonElement()
     {
         var response = ResponseEnvelope.Success(
             requestId: "req-1",
             target: "target-1",
-            dataJson: "{\"message\":\"hello\"}",
+            data: ParseData("{\"message\":\"hello\"}"),
             durationMs: 12);
 
-        Assert.Null(response.data);
-
-        response.EnsureData();
-
-        var data = Assert.IsType<JsonElement>(response.data);
+        var data = AssertData(response);
         Assert.Equal("hello", data.GetProperty("message").GetString());
     }
 
     [Fact]
-    public void Success_WithDirectData_PreservesData()
+    public void Success_WithNullData_LeavesDataNull()
     {
-        var payload = new { message = "hello" };
         var response = ResponseEnvelope.Success(
             requestId: "req-1",
             target: "target-1",
-            dataJson: "{\"message\":\"legacy\"}",
-            durationMs: 12,
-            data: payload);
+            data: null,
+            durationMs: 12);
 
-        Assert.Same(payload, response.data);
+        Assert.False(response.data.HasValue);
     }
 
     [Fact]
-    public void EnsureData_WithBridgeStyleResponse_PopulatesDataFromDataJson()
+    public void Success_SetsProtocolVersionAndRoundTrips()
     {
-        var response = new ResponseEnvelope
-        {
-            requestId = "req-1",
-            target = "target-1",
-            status = ProtocolConstants.StatusSuccess,
-            durationMs = 12,
-            dataJson = "{\"message\":\"hello\"}",
-            transport = ProtocolConstants.TransportLive,
-        };
+        var response = ResponseEnvelope.Success(
+            requestId: "req-1",
+            target: "target-1",
+            data: ParseData("{\"message\":\"hello\"}"),
+            durationMs: 12);
 
-        response.EnsureData();
+        var json = ProtocolJson.Serialize(response);
+        var roundTrip = ProtocolJson.Deserialize<ResponseEnvelope>(json);
 
-        var data = Assert.IsType<JsonElement>(response.data);
+        Assert.Equal(ProtocolConstants.ProtocolVersion, response.protocolVersion);
+        Assert.Equal(ProtocolConstants.ProtocolVersion, roundTrip.protocolVersion);
+        Assert.Contains("\"protocolVersion\":\"2\"", json);
+    }
+
+    [Fact]
+    public void Deserialize_WithBridgeWireData_PopulatesData()
+    {
+        var response = ProtocolJson.Deserialize<ResponseEnvelope>(
+            "{\"requestId\":\"req-1\",\"protocolVersion\":\"2\",\"target\":\"target-1\",\"status\":\"success\",\"durationMs\":12,\"data\":{\"message\":\"hello\"},\"retryable\":false,\"transport\":\"live\"}");
+
+        var data = AssertData(response);
         Assert.Equal("hello", data.GetProperty("message").GetString());
     }
 
     [Fact]
-    public void EnsureData_WithMutationWarnings_PreservesWarningsArray()
+    public void Success_WithMutationWarnings_PreservesWarningsArray()
     {
         var payload = new PrefabMutationPayload
         {
@@ -66,18 +68,16 @@ public sealed class ResponseEnvelopeTests
         var response = ResponseEnvelope.Success(
             requestId: "req-1",
             target: "target-1",
-            dataJson: ProtocolJson.Serialize(payload),
+            data: JsonSerializer.SerializeToElement(payload, ProtocolJson.Default),
             durationMs: 12);
 
-        response.EnsureData();
-
-        var data = Assert.IsType<JsonElement>(response.data);
+        var data = AssertData(response);
         Assert.False(data.GetProperty("patched").GetBoolean());
         Assert.Equal("Unknown key: m_LocalScal.x", data.GetProperty("warnings")[0].GetString());
     }
 
     [Fact]
-    public void EnsureData_WithScreenshotPayload_PreservesCoordinateMetadata()
+    public void Success_WithScreenshotPayload_PreservesCoordinateMetadata()
     {
         var payload = new ScreenshotPayload
         {
@@ -93,12 +93,10 @@ public sealed class ResponseEnvelopeTests
         var response = ResponseEnvelope.Success(
             requestId: "req-1",
             target: "target-1",
-            dataJson: ProtocolJson.Serialize(payload),
+            data: JsonSerializer.SerializeToElement(payload, ProtocolJson.Default),
             durationMs: 12);
 
-        response.EnsureData();
-
-        var data = Assert.IsType<JsonElement>(response.data);
+        var data = AssertData(response);
         Assert.Equal("/tmp/shot.png", data.GetProperty("savedPath").GetString());
         Assert.Equal(960, data.GetProperty("width").GetInt32());
         Assert.Equal(540, data.GetProperty("height").GetInt32());
@@ -107,5 +105,16 @@ public sealed class ResponseEnvelopeTests
         Assert.Equal("bottom-left", data.GetProperty("coordinateOrigin").GetString());
         Assert.Equal("top-left", data.GetProperty("imageOrigin").GetString());
         Assert.Equal(1234, data.GetProperty("fileSizeBytes").GetInt64());
+    }
+
+    private static JsonElement ParseData(string json)
+    {
+        return JsonSerializer.Deserialize<JsonElement>(json, ProtocolJson.Default);
+    }
+
+    private static JsonElement AssertData(ResponseEnvelope response)
+    {
+        Assert.True(response.data.HasValue);
+        return response.data.Value;
     }
 }

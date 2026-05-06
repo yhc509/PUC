@@ -14,12 +14,12 @@ public sealed class ResponseFormatterTests
         var response = ResponseEnvelope.Success(
             requestId: "req-1",
             target: "target-1",
-            dataJson: null,
-            durationMs: 12,
-            data: new
+            data: ToDataElement(new
             {
                 message = "AssetDatabase.Refresh 완료",
-            });
+            }),
+            durationMs: 12,
+            transport: ProtocolConstants.TransportLive);
 
         var text = ResponseFormatter.Format(parsed, response);
 
@@ -33,41 +33,35 @@ public sealed class ResponseFormatterTests
         var response = ResponseEnvelope.Success(
             requestId: "req-1",
             target: "target-1",
-            dataJson: null,
-            durationMs: 42,
-            data: new
+            data: ToDataElement(new
             {
                 path = "Assets/Prefab.prefab",
                 type = "GameObject",
-            });
+            }),
+            durationMs: 42,
+            transport: ProtocolConstants.TransportLive);
 
         var text = ResponseFormatter.Format(OutputMode.Json, response);
         var payload = JsonSerializer.Deserialize<JsonElement>(text);
+        Assert.True(payload.TryGetProperty("data", out var data));
 
-        Assert.Equal("Assets/Prefab.prefab", payload.GetProperty("data").GetProperty("path").GetString());
-        Assert.Equal("GameObject", payload.GetProperty("data").GetProperty("type").GetString());
+        Assert.Equal("Assets/Prefab.prefab", data.GetProperty("path").GetString());
+        Assert.Equal("GameObject", data.GetProperty("type").GetString());
         Assert.False(payload.TryGetProperty("dataJson", out _));
     }
 
     [Fact]
-    public void Format_JsonOutput_SuppressesLegacyDataJsonWhenDataIsPresent()
+    public void Format_JsonOutput_UsesWireDataWithoutDoubleEscaping()
     {
-        var response = ResponseEnvelope.Success(
-            requestId: "req-1",
-            target: "target-1",
-            dataJson: "{\"path\":\"Assets/Legacy.prefab\",\"type\":\"Legacy\"}",
-            durationMs: 42,
-            data: new
-            {
-                path = "Assets/Prefab.prefab",
-                type = "GameObject",
-            });
+        var response = ProtocolJson.Deserialize<ResponseEnvelope>(
+            "{\"requestId\":\"req-1\",\"target\":\"target-1\",\"status\":\"success\",\"durationMs\":42,\"data\":{\"path\":\"Assets/Prefab.prefab\",\"type\":\"GameObject\"},\"retryable\":false,\"transport\":\"live\"}");
 
         var text = ResponseFormatter.Format(OutputMode.Json, response);
         var payload = JsonSerializer.Deserialize<JsonElement>(text);
+        Assert.True(payload.TryGetProperty("data", out var data));
 
-        Assert.Equal("Assets/Prefab.prefab", payload.GetProperty("data").GetProperty("path").GetString());
-        Assert.Equal("GameObject", payload.GetProperty("data").GetProperty("type").GetString());
+        Assert.Equal("Assets/Prefab.prefab", data.GetProperty("path").GetString());
+        Assert.Equal("GameObject", data.GetProperty("type").GetString());
         Assert.False(payload.TryGetProperty("dataJson", out _));
     }
 
@@ -77,13 +71,13 @@ public sealed class ResponseFormatterTests
         var response = ResponseEnvelope.Success(
             requestId: "req-1",
             target: "target-1",
-            dataJson: null,
-            durationMs: 42,
-            data: new
+            data: ToDataElement(new
             {
                 path = "Assets/Prefab.prefab",
                 type = "GameObject",
-            });
+            }),
+            durationMs: 42,
+            transport: ProtocolConstants.TransportLive);
 
         var text = ResponseFormatter.Format(OutputMode.Compact, response);
 
@@ -91,7 +85,7 @@ public sealed class ResponseFormatterTests
     }
 
     [Fact]
-    public void Format_DefaultOutput_FallsBackToDataJsonWhenDataIsMissing()
+    public void Format_DefaultOutput_UsesDataField()
     {
         var response = new ResponseEnvelope
         {
@@ -99,7 +93,7 @@ public sealed class ResponseFormatterTests
             target = "target-1",
             status = ProtocolConstants.StatusSuccess,
             durationMs = 42,
-            dataJson = "{\"path\":\"Assets/Prefab.prefab\",\"type\":\"GameObject\"}",
+            data = ParseData("{\"path\":\"Assets/Prefab.prefab\",\"type\":\"GameObject\"}"),
             transport = ProtocolConstants.TransportLive,
         };
 
@@ -111,7 +105,7 @@ public sealed class ResponseFormatterTests
     }
 
     [Fact]
-    public void Format_CompactOutput_FallsBackToDataJsonWhenDataIsMissing()
+    public void Format_CompactOutput_UsesDataField()
     {
         var response = new ResponseEnvelope
         {
@@ -119,7 +113,7 @@ public sealed class ResponseFormatterTests
             target = "target-1",
             status = ProtocolConstants.StatusSuccess,
             durationMs = 42,
-            dataJson = "{\"path\":\"Assets/Prefab.prefab\",\"type\":\"GameObject\"}",
+            data = ParseData("{\"path\":\"Assets/Prefab.prefab\",\"type\":\"GameObject\"}"),
             transport = ProtocolConstants.TransportLive,
         };
 
@@ -134,12 +128,27 @@ public sealed class ResponseFormatterTests
         var response = ResponseEnvelope.Success(
             requestId: "req-1",
             target: "target-1",
-            dataJson: null,
+            data: null,
             durationMs: 42);
 
         var text = ResponseFormatter.Format(OutputMode.Compact, response);
 
         Assert.Equal("{}", text);
+    }
+
+    [Fact]
+    public void Format_JsonOutput_WithoutPayload_OmitsDataField()
+    {
+        var response = ResponseEnvelope.Success(
+            requestId: "req-1",
+            target: "target-1",
+            data: null,
+            durationMs: 42);
+
+        var text = ResponseFormatter.Format(OutputMode.Json, response);
+        var payload = JsonSerializer.Deserialize<JsonElement>(text);
+
+        Assert.False(payload.TryGetProperty("data", out _));
     }
 
     [Fact]
@@ -156,5 +165,15 @@ public sealed class ResponseFormatterTests
         var text = ResponseFormatter.Format(OutputMode.Compact, response);
 
         Assert.Equal("{\"error\":\"LIVE_UNAVAILABLE\",\"message\":\"Bridge가 아직 준비되지 않았습니다.\"}", text);
+    }
+
+    private static JsonElement ParseData(string json)
+    {
+        return JsonSerializer.Deserialize<JsonElement>(json, ProtocolJson.Default);
+    }
+
+    private static JsonElement ToDataElement<T>(T value)
+    {
+        return JsonSerializer.SerializeToElement(value, ProtocolJson.Default);
     }
 }

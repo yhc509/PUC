@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Changed
+- Live IPC responses now send payloads as an inline JSON `data` field, so CLI `--json` output preserves structured objects directly instead of wrapping them in a string-valued `dataJson` field.
+
+### Removed
+- Removed the `ResponseEnvelope.dataJson` wire field from live IPC responses.
+
+### Compatibility
+- Upgrade the CLI binary and Unity package together. Mixing versions can make response payloads appear empty or return a protocol mismatch error because the live IPC response format changed.
+
 ### Fixed
 - Asset create provider registry no longer gets stuck in a partial-init state when a built-in provider registration throws.
 - Bridge now returns a structured `INVALID_COMMAND` response when an IPC payload fails JSON deserialization, instead of dropping the connection.
