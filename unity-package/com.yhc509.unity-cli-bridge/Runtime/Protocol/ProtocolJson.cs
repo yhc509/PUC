@@ -34,6 +34,7 @@ namespace UnityCli.Protocol
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             IncludeFields = true,
+            MaxDepth = 128,
             WriteIndented = false,
         };
 
