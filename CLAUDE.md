@@ -68,9 +68,18 @@ Tests live in `tests/UnityCli.Cli.Tests/` (xUnit, `.NET`-testable surface only).
   3. `CLAUDE.md` — update Architecture tree if new files are added, update Key Conventions if behavior changes
   4. `tools/skills/unity-cli-operator/SKILL.md` — update command workflows and examples for AI agent usage
   5. `dotnet run --project cli/UnityCli.DocGen -- --check` — verify cli-reference is up to date
-- **Release checklist:** Before tagging a new version:
+- **Release checklist:** Cutting a new version:
   1. `CHANGELOG.md` — move `[Unreleased]` entries to new version section with date
   2. Update `package.json` version
+  3. Open a release PR (`chore: release vX.Y.Z`), wait for CI green, then merge
+  4. Push an annotated tag (`git tag -a vX.Y.Z -m "Release vX.Y.Z" <commit> && git push origin vX.Y.Z`). This triggers `.github/workflows/release.yml`, which builds artifacts and creates a **draft** GitHub Release.
+  5. **Write the GitHub Release body before publishing.** Never publish a release with an empty body.
+     - The audience is end users of the package, not contributors. Lead with user-facing impact, not the raw technical change. Translate technical work into the user benefit (e.g. "Implemented Redis caching" → "Dashboards now load up to 3× faster").
+     - **No internal codenames or work-classification labels** (e.g. "Bundle X PR0", "F-2", "the recent serializer review"). They are meaningless to readers outside this repo. Describe each change in plain terms.
+     - Reuse the prior release's section structure (`Added` / `Changed` / `Fixed` / `Compatibility` / `Notes`). Keep `Compatibility` for wire/protocol/install changes the reader must act on; omit if there are none.
+     - Apply with `gh release edit vX.Y.Z --notes-file <path>`.
+     - The `release-notes` skill is installed and can help draft this; invoke it when the change set is large.
+  6. Publish: `gh release edit vX.Y.Z --draft=false`.
 
 ## Branch Policy
 
