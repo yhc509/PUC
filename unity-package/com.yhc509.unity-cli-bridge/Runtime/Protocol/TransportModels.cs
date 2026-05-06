@@ -76,14 +76,7 @@ namespace UnityCli.Protocol
                 return null;
             }
 
-            try
-            {
-                return JsonSerializer.Deserialize<JsonElement>(dataJson, ProtocolJson.Default);
-            }
-            catch (JsonException)
-            {
-                return null;
-            }
+            return JsonSerializer.Deserialize<JsonElement>(dataJson, ProtocolJson.Default);
         }
 #endif
 
