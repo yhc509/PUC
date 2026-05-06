@@ -1,3 +1,4 @@
+using System.Text.Json;
 using UnityCli.Cli.Models;
 using UnityCli.Cli.Services;
 using UnityCli.Protocol;
@@ -106,7 +107,7 @@ public static class CliApp
         return ResponseEnvelope.Success(
             Guid.NewGuid().ToString("N"),
             null,
-            ProtocolJson.Serialize(data),
+            CreateDataElement(data),
             durationMs: 0,
             transport: "cli");
     }
@@ -135,7 +136,7 @@ public static class CliApp
         return ResponseEnvelope.Success(
             Guid.NewGuid().ToString("N"),
             target.projectHash,
-            ProtocolJson.Serialize(data),
+            CreateDataElement(data),
             durationMs: 0,
             transport: "cli");
     }
@@ -178,7 +179,7 @@ public static class CliApp
         return ResponseEnvelope.Success(
             Guid.NewGuid().ToString("N"),
             target?.projectHash,
-            ProtocolJson.Serialize(data),
+            CreateDataElement(data),
             durationMs: 0,
             transport: "cli");
     }
@@ -234,7 +235,7 @@ public static class CliApp
         return ResponseEnvelope.Success(
             Guid.NewGuid().ToString("N"),
             target?.projectHash,
-            ProtocolJson.Serialize(data),
+            CreateDataElement(data),
             durationMs: 0,
             transport: "cli");
     }
@@ -288,13 +289,18 @@ public static class CliApp
         }
 
         await Task.Delay(parsed.QaWaitMs);
-        var payload = System.Text.Json.JsonSerializer.Serialize(new { waited = true, ms = parsed.QaWaitMs });
+        var payload = new { waited = true, ms = parsed.QaWaitMs };
         return ResponseEnvelope.Success(
             Guid.NewGuid().ToString("N"),
             null,
-            payload,
+            CreateDataElement(payload),
             parsed.QaWaitMs,
             "cli");
+    }
+
+    private static JsonElement CreateDataElement(object data)
+    {
+        return JsonSerializer.SerializeToElement(data, ProtocolJson.Default);
     }
 
     private static ResponseEnvelope CreateLiveUnavailableResponse(string? projectHash, string? details)

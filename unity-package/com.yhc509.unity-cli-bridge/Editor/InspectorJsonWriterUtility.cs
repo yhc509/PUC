@@ -7,6 +7,12 @@ namespace UnityCliBridge.Bridge.Editor
 {
     internal static class InspectorJsonWriterUtility
     {
+        internal static JsonTextWriter Configure(JsonTextWriter writer)
+        {
+            writer.FloatFormatHandling = FloatFormatHandling.String;
+            return writer;
+        }
+
         internal static void WriteAssetToken(JsonWriter writer, string path)
         {
             AssetRecord record = AssetCommandSupport.BuildRecordFromPath(path, allowPackages: true);

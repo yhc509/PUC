@@ -8,6 +8,7 @@ namespace UnityCliBridge.Bridge.Editor
         internal static readonly JsonSerializerSettings CamelCaseIgnoreNull = new JsonSerializerSettings
         {
             ContractResolver = new CamelCasePropertyNamesContractResolver(),
+            FloatFormatHandling = FloatFormatHandling.String,
             NullValueHandling = NullValueHandling.Ignore,
         };
 

@@ -28,7 +28,7 @@ public static class ResponseFormatter
     {
         if (outputMode == OutputMode.Json)
         {
-            return ProtocolJson.Serialize(BuildJsonEnvelope(response));
+            return ProtocolJson.Serialize(response);
         }
 
         if (outputMode == OutputMode.Compact)
@@ -62,15 +62,10 @@ public static class ResponseFormatter
             lines.Add($"durationMs: {response.durationMs}");
         }
 
-        if (response.data is not null)
+        if (response.data is { } data)
         {
             lines.Add("data:");
-            lines.Add(PrettyData(response.data));
-        }
-        else if (!string.IsNullOrWhiteSpace(response.dataJson))
-        {
-            lines.Add("data:");
-            lines.Add(PrettyJson(response.dataJson));
+            lines.Add(PrettyData(data));
         }
 
         return string.Join(Environment.NewLine, lines);
@@ -89,12 +84,12 @@ public static class ResponseFormatter
                 CompactPrintOptions);
         }
 
-        if (response.data is not null)
+        if (response.data is { } data)
         {
-            return CompactData(response.data);
+            return CompactData(data);
         }
 
-        return CompactJson(response.dataJson);
+        return "{}";
     }
 
     private static string BuildErrorText(ResponseEnvelope response)
@@ -125,71 +120,27 @@ public static class ResponseFormatter
         return string.Join(Environment.NewLine, lines);
     }
 
-    private static string CompactJson(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return "{}";
-        }
-
-        var element = JsonSerializer.Deserialize<JsonElement>(json, ProtocolJson.Default);
-        return JsonSerializer.Serialize(element, CompactPrintOptions);
-    }
-
-    private static string PrettyJson(string json)
-    {
-        var element = JsonSerializer.Deserialize<JsonElement>(json, ProtocolJson.Default);
-        return JsonSerializer.Serialize(element, PrettyPrintOptions);
-    }
-
-    private static string CompactData(object data)
+    private static string CompactData(JsonElement data)
     {
         return SerializeData(data, CompactPrintOptions);
     }
 
-    private static string PrettyData(object data)
+    private static string PrettyData(JsonElement data)
     {
         return SerializeData(data, PrettyPrintOptions);
     }
 
-    // data is expected to be JsonElement (from EnsureData). The runtime-type
-    // fallback path (data.GetType()) is a safety net for future Bridge-native data.
-    private static string SerializeData(object data, JsonSerializerOptions options)
+    private static string SerializeData(JsonElement data, JsonSerializerOptions options)
     {
-        if (data is JsonElement element)
-        {
-            return JsonSerializer.Serialize(element, options);
-        }
-
-        return JsonSerializer.Serialize(data, data.GetType(), options);
-    }
-
-    private static ResponseEnvelope BuildJsonEnvelope(ResponseEnvelope response)
-    {
-        if (response.data is null || response.dataJson is null)
-        {
-            return response;
-        }
-
-        return new ResponseEnvelope
-        {
-            requestId = response.requestId,
-            target = response.target,
-            status = response.status,
-            durationMs = response.durationMs,
-            data = response.data,
-            dataJson = null,
-            error = response.error,
-            retryable = response.retryable,
-            transport = response.transport,
-        };
+        return JsonSerializer.Serialize(data, options);
     }
 
     private static string TryPrettyJson(string input)
     {
         try
         {
-            return PrettyJson(input);
+            var element = JsonSerializer.Deserialize<JsonElement>(input, ProtocolJson.Default);
+            return JsonSerializer.Serialize(element, PrettyPrintOptions);
         }
         catch
         {

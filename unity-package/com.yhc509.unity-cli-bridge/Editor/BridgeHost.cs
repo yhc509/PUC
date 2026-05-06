@@ -367,6 +367,21 @@ namespace UnityCliBridge.Bridge.Editor
                     command.requestId = Guid.NewGuid().ToString("N");
                 }
 
+                if (!string.Equals(command.protocolVersion, ProtocolConstants.ProtocolVersion, StringComparison.Ordinal))
+                {
+                    var error = ResponseEnvelope.Failure(
+                        command.requestId,
+                        _projectHash,
+                        ProtocolConstants.ErrorProtocolMismatch,
+                        "CLI version is incompatible with this Unity package. Please upgrade both CLI binary and Unity package together.",
+                        false,
+                        0,
+                        ProtocolConstants.TransportLive,
+                        "Expected protocolVersion " + ProtocolConstants.ProtocolVersion + ".");
+                    await WriteResponseAsync(writer, error);
+                    return;
+                }
+
                 var pending = new PendingRequest(command);
                 _pendingRequests.Enqueue(pending);
 
@@ -408,7 +423,25 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static async Task WriteResponseAsync(StreamWriter writer, ResponseEnvelope response)
         {
-            await writer.WriteLineAsync(ProtocolJson.Serialize(response)).ConfigureAwait(false);
+            string responseJson;
+            try
+            {
+                responseJson = EnvelopeJsonWriter.Write(response);
+            }
+            catch (Exception exception)
+            {
+                responseJson = EnvelopeJsonWriter.Write(ResponseEnvelope.Failure(
+                    response.requestId,
+                    response.target,
+                    ProtocolConstants.ErrorInternalInvalidPayload,
+                    "Bridge generated an invalid response payload.",
+                    false,
+                    response.durationMs,
+                    response.transport,
+                    exception.ToString()));
+            }
+
+            await writer.WriteLineAsync(responseJson).ConfigureAwait(false);
             await writer.FlushAsync().ConfigureAwait(false);
         }
 
@@ -566,91 +599,91 @@ namespace UnityCliBridge.Bridge.Editor
                     return BuildBusyResponse(command, stopwatch.ElapsedMilliseconds);
                 }
 
-                string dataJson;
+                string data;
                 if (_assetCommandHandler.CanHandle(command.command))
                 {
-                    dataJson = _assetCommandHandler.Handle(command.command, command.argumentsJson);
+                    data = _assetCommandHandler.Handle(command.command, command.argumentsJson);
                 }
                 else if (_sceneCommandHandler.CanHandle(command.command))
                 {
-                    dataJson = _sceneCommandHandler.Handle(command.command, command.argumentsJson);
+                    data = _sceneCommandHandler.Handle(command.command, command.argumentsJson);
                 }
                 else if (_prefabCommandHandler.CanHandle(command.command))
                 {
-                    dataJson = _prefabCommandHandler.Handle(command.command, command.argumentsJson);
+                    data = _prefabCommandHandler.Handle(command.command, command.argumentsJson);
                 }
                 else if (_screenshotCommandHandler.CanHandle(command.command))
                 {
-                    dataJson = _screenshotCommandHandler.Handle(command.command, command.argumentsJson);
+                    data = _screenshotCommandHandler.Handle(command.command, command.argumentsJson);
                 }
                 else if (_executeCodeHandler.CanHandle(command.command))
                 {
-                    dataJson = _executeCodeHandler.Handle(command.command, command.argumentsJson);
+                    data = _executeCodeHandler.Handle(command.command, command.argumentsJson);
                 }
                 else if (_customCommandHandler.CanHandle(command.command))
                 {
-                    dataJson = _customCommandHandler.Handle(command.command, command.argumentsJson);
+                    data = _customCommandHandler.Handle(command.command, command.argumentsJson);
                 }
                 else if (_materialCommandHandler.CanHandle(command.command))
                 {
-                    dataJson = _materialCommandHandler.Handle(command.command, command.argumentsJson);
+                    data = _materialCommandHandler.Handle(command.command, command.argumentsJson);
                 }
                 else if (_qaCommandHandler.CanHandle(command.command))
                 {
-                    dataJson = _qaCommandHandler.Handle(command.command, command.argumentsJson);
+                    data = _qaCommandHandler.Handle(command.command, command.argumentsJson);
                 }
                 else if (_packageCommandHandler.CanHandle(command.command))
                 {
-                    dataJson = _packageCommandHandler.Handle(command.command, command.argumentsJson);
+                    data = _packageCommandHandler.Handle(command.command, command.argumentsJson);
                 }
                 else
                 {
                     switch (command.command)
                     {
                         case ProtocolConstants.CommandPing:
-                            dataJson = ProtocolJson.Serialize(new PingPayload
+                            data = ProtocolJson.Serialize(new PingPayload
                             {
                                 message = "pong",
                                 timestampUtc = DateTimeOffset.UtcNow.ToString("O"),
                             });
                             break;
                         case ProtocolConstants.CommandStatus:
-                            dataJson = BuildStatusJson();
+                            data = BuildStatusJson();
                             break;
                         case ProtocolConstants.CommandRefresh:
                             AssetDatabase.Refresh();
-                            dataJson = ProtocolJson.Serialize(new MessagePayload { message = "AssetDatabase.Refresh 완료" });
+                            data = ProtocolJson.Serialize(new MessagePayload { message = "AssetDatabase.Refresh 완료" });
                             break;
                         case ProtocolConstants.CommandCompile:
                             CompilationPipeline.RequestScriptCompilation();
-                            dataJson = ProtocolJson.Serialize(new MessagePayload { message = "script compilation 요청 완료" });
+                            data = ProtocolJson.Serialize(new MessagePayload { message = "script compilation 요청 완료" });
                             break;
                         case ProtocolConstants.CommandPlay:
                             EditorApplication.isPaused = false;
                             EditorApplication.isPlaying = true;
                             _originalRunInBackground = UnityEngine.Application.runInBackground;
                             UnityEngine.Application.runInBackground = true;
-                            dataJson = ProtocolJson.Serialize(new PlayStatePayload { isPlaying = true });
+                            data = ProtocolJson.Serialize(new PlayStatePayload { isPlaying = true });
                             break;
                         case ProtocolConstants.CommandPause:
                             EditorApplication.isPaused = true;
-                            dataJson = ProtocolJson.Serialize(new PauseStatePayload { isPaused = true });
+                            data = ProtocolJson.Serialize(new PauseStatePayload { isPaused = true });
                             break;
                         case ProtocolConstants.CommandStop:
                             EditorApplication.isPlaying = false;
                             EditorApplication.isPaused = false;
                             UnityEngine.Application.runInBackground = _originalRunInBackground;
-                            dataJson = ProtocolJson.Serialize(new StopStatePayload
+                            data = ProtocolJson.Serialize(new StopStatePayload
                             {
                                 isPlaying = false,
                                 isPaused = false,
                             });
                             break;
                         case ProtocolConstants.CommandExecuteMenu:
-                            dataJson = HandleExecuteMenu(command.argumentsJson);
+                            data = HandleExecuteMenu(command.argumentsJson);
                             break;
                         case ProtocolConstants.CommandReadConsole:
-                            dataJson = HandleReadConsole(command.argumentsJson);
+                            data = HandleReadConsole(command.argumentsJson);
                             break;
                         default:
                             throw new InvalidOperationException("지원하지 않는 명령입니다: " + command.command);
@@ -661,7 +694,7 @@ namespace UnityCliBridge.Bridge.Editor
                 return ResponseEnvelope.Success(
                     command.requestId,
                     _projectHash,
-                    dataJson,
+                    data,
                     stopwatch.ElapsedMilliseconds,
                     ProtocolConstants.TransportLive);
             }

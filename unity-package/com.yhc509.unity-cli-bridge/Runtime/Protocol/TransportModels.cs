@@ -10,6 +10,7 @@ namespace UnityCli.Protocol
     public sealed class CommandEnvelope
     {
         public string requestId = string.Empty;
+        public string? protocolVersion;
         public string command = string.Empty;
         public string argumentsJson = "{}";
     }
@@ -18,65 +19,56 @@ namespace UnityCli.Protocol
     public sealed class ResponseEnvelope
     {
         public string requestId = string.Empty;
+        public string? protocolVersion;
         public string? target;
         public string status = ProtocolConstants.StatusSuccess;
         public long durationMs;
-        // INVARIANT: In the CLI build, data is always a JsonElement after EnsureData().
-        // When Bridge eventually sends data directly (post-JsonUtility migration),
-        // --json mode serialization may need custom handling for non-JsonElement types.
-        [System.NonSerialized]
-        public object? data;
-        public string? dataJson;
+#if UNITY_5_3_OR_NEWER
+        public string? data;
+#else
+        public JsonElement? data;
+#endif
         public ProtocolError? error;
         public bool retryable;
         public string transport = ProtocolConstants.TransportLive;
 
+#if UNITY_5_3_OR_NEWER
         public static ResponseEnvelope Success(
             string requestId,
             string? target,
-            string? dataJson,
+            string? data,
             long durationMs,
-            string transport = ProtocolConstants.TransportLive,
-            object? data = null)
+            string transport = ProtocolConstants.TransportLive)
         {
             return new ResponseEnvelope
             {
                 requestId = requestId,
+                protocolVersion = ProtocolConstants.ProtocolVersion,
                 target = target,
                 status = ProtocolConstants.StatusSuccess,
                 durationMs = durationMs,
                 data = data,
-                dataJson = dataJson,
                 transport = transport,
             };
         }
-
-        public void EnsureData()
-        {
-            if (data is not null)
-            {
-                return;
-            }
-
-            data = DeserializeData(dataJson);
-        }
-
-#if UNITY_5_3_OR_NEWER
-        private static object? DeserializeData(string? dataJson)
-        {
-            // Unity's JsonUtility cannot serialize object-typed fields, so the bridge
-            // continues to rely on dataJson until the transport fully moves to v2.
-            return null;
-        }
 #else
-        private static object? DeserializeData(string? dataJson)
+        public static ResponseEnvelope Success(
+            string requestId,
+            string? target,
+            JsonElement? data,
+            long durationMs,
+            string transport = ProtocolConstants.TransportLive)
         {
-            if (string.IsNullOrWhiteSpace(dataJson))
+            return new ResponseEnvelope
             {
-                return null;
-            }
-
-            return JsonSerializer.Deserialize<JsonElement>(dataJson, ProtocolJson.Default);
+                requestId = requestId,
+                protocolVersion = ProtocolConstants.ProtocolVersion,
+                target = target,
+                status = ProtocolConstants.StatusSuccess,
+                durationMs = durationMs,
+                data = data,
+                transport = transport,
+            };
         }
 #endif
 
@@ -93,6 +85,7 @@ namespace UnityCli.Protocol
             return new ResponseEnvelope
             {
                 requestId = requestId,
+                protocolVersion = ProtocolConstants.ProtocolVersion,
                 target = target,
                 status = ProtocolConstants.StatusError,
                 durationMs = durationMs,

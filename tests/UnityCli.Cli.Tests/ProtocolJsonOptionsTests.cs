@@ -15,30 +15,19 @@ public sealed class ProtocolJsonOptionsTests
     }
 
     [Fact]
-    public void EnsureData_ParsesDepth64Payload()
+    public void Default_DeserializesDepth64DataPayload()
     {
-        var response = ResponseEnvelope.Success(
-            requestId: "req-1",
-            target: "target-1",
-            dataJson: BuildNestedObject(depth: 64),
-            durationMs: 1);
+        var response = ProtocolJson.Deserialize<ResponseEnvelope>(
+            BuildEnvelopeWithData(BuildNestedObject(depth: 64)));
 
-        response.EnsureData();
-
-        Assert.IsType<JsonElement>(response.data);
+        Assert.True(response.data.HasValue);
     }
 
     [Fact]
-    public void EnsureData_ThrowsJsonExceptionWhenPayloadExceedsMaxDepth()
+    public void Default_ThrowsJsonExceptionWhenDataPayloadExceedsMaxDepth()
     {
-        var response = ResponseEnvelope.Success(
-            requestId: "req-1",
-            target: "target-1",
-            dataJson: BuildNestedObject(depth: 130),
-            durationMs: 1);
-
-        Assert.Throws<JsonException>(() => response.EnsureData());
-        Assert.Null(response.data);
+        Assert.Throws<JsonException>(() =>
+            ProtocolJson.Deserialize<ResponseEnvelope>(BuildEnvelopeWithData(BuildNestedObject(depth: 130))));
     }
 
     [Fact]
@@ -77,5 +66,12 @@ public sealed class ProtocolJsonOptionsTests
         }
 
         return builder.ToString();
+    }
+
+    private static string BuildEnvelopeWithData(string dataFragment)
+    {
+        return "{\"requestId\":\"req-1\",\"status\":\"success\",\"durationMs\":1,\"data\":"
+            + dataFragment
+            + ",\"retryable\":false,\"transport\":\"live\"}";
     }
 }

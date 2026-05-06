@@ -51,6 +51,7 @@ public sealed class LocalIpcClient
         using var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true);
         using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
 
+        command.protocolVersion = ProtocolConstants.ProtocolVersion;
         await writer.WriteLineAsync(ProtocolJson.Serialize(command));
         await writer.FlushAsync(cancellationToken);
 
@@ -66,7 +67,24 @@ public sealed class LocalIpcClient
             throw new IOException("Unity IPC 응답을 파싱하지 못했습니다.");
         }
 
-        response.EnsureData();
-        return response;
+        return EnsureCompatibleResponse(response);
+    }
+
+    internal static ResponseEnvelope EnsureCompatibleResponse(ResponseEnvelope response)
+    {
+        if (string.Equals(response.protocolVersion, ProtocolConstants.ProtocolVersion, StringComparison.Ordinal))
+        {
+            return response;
+        }
+
+        return ResponseEnvelope.Failure(
+            string.IsNullOrWhiteSpace(response.requestId) ? Guid.NewGuid().ToString("N") : response.requestId,
+            response.target,
+            ProtocolConstants.ErrorProtocolMismatch,
+            "Unity package version is incompatible with this CLI. Please upgrade both CLI binary and Unity package together.",
+            false,
+            response.durationMs,
+            string.IsNullOrWhiteSpace(response.transport) ? ProtocolConstants.TransportLive : response.transport,
+            "Expected protocolVersion " + ProtocolConstants.ProtocolVersion + ".");
     }
 }
