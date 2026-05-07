@@ -2,6 +2,9 @@
 using System;
 using System.Globalization;
 using System.Text;
+#if !UNITY_5_3_OR_NEWER
+using System.Text.Json;
+#endif
 using Newtonsoft.Json.Linq;
 using UnityCli.Protocol;
 
@@ -71,7 +74,20 @@ namespace UnityCliBridge.Bridge.Editor
             builder.Append(rawJson);
         }
 
-        private static void ValidateRawJson(string rawJson)
+#if !UNITY_5_3_OR_NEWER
+        private static void WriteRawField(StringBuilder builder, ref bool wroteField, string name, JsonElement? rawJson)
+        {
+            if (!rawJson.HasValue)
+            {
+                return;
+            }
+
+            WriteFieldPrefix(builder, ref wroteField, name);
+            builder.Append(JsonSerializer.Serialize(rawJson.Value, ProtocolJson.Default));
+        }
+#endif
+
+        internal static void ValidateRawJson(string rawJson)
         {
             try
             {
@@ -79,7 +95,7 @@ namespace UnityCliBridge.Bridge.Editor
             }
             catch (Exception exception)
             {
-                throw new InvalidOperationException("Response envelope data must be a valid JSON fragment.", exception);
+                throw new InvalidOperationException("Response envelope JSON fragment is not valid.", exception);
             }
         }
 
@@ -96,7 +112,7 @@ namespace UnityCliBridge.Bridge.Editor
             builder.Append('{');
             WriteStringField(builder, ref wroteErrorField, "code", error.code, true);
             WriteStringField(builder, ref wroteErrorField, "message", error.message, true);
-            WriteStringField(builder, ref wroteErrorField, "details", error.details, false);
+            WriteRawField(builder, ref wroteErrorField, "details", error.details);
             builder.Append('}');
         }
 
