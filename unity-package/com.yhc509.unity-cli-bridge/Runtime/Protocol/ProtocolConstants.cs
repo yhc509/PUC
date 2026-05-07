@@ -10,7 +10,7 @@ namespace UnityCli.Protocol
     public static class ProtocolConstants
     {
         public const string AppName = "unity-cli";
-        public const string ProtocolVersion = "2";
+        public const string ProtocolVersion = "3";
         public const int DefaultLiveTimeoutMs = 30_000;
         public const int DefaultTimeoutMs = DefaultLiveTimeoutMs;
         public const int DefaultConsoleLimit = 50;

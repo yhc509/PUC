@@ -44,14 +44,14 @@ public sealed class ResponseEnvelopeTests
 
         Assert.Equal(ProtocolConstants.ProtocolVersion, response.protocolVersion);
         Assert.Equal(ProtocolConstants.ProtocolVersion, roundTrip.protocolVersion);
-        Assert.Contains("\"protocolVersion\":\"2\"", json);
+        Assert.Contains("\"protocolVersion\":\"3\"", json);
     }
 
     [Fact]
     public void Deserialize_WithBridgeWireData_PopulatesData()
     {
         var response = ProtocolJson.Deserialize<ResponseEnvelope>(
-            "{\"requestId\":\"req-1\",\"protocolVersion\":\"2\",\"target\":\"target-1\",\"status\":\"success\",\"durationMs\":12,\"data\":{\"message\":\"hello\"},\"retryable\":false,\"transport\":\"live\"}");
+            "{\"requestId\":\"req-1\",\"protocolVersion\":\"3\",\"target\":\"target-1\",\"status\":\"success\",\"durationMs\":12,\"data\":{\"message\":\"hello\"},\"retryable\":false,\"transport\":\"live\"}");
 
         var data = AssertData(response);
         Assert.Equal("hello", data.GetProperty("message").GetString());
