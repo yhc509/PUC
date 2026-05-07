@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Encodings.Web;
 using UnityCli.Cli.Models;
 using UnityCli.Protocol;
 
@@ -10,13 +9,11 @@ public static class ResponseFormatter
     private static readonly JsonSerializerOptions PrettyPrintOptions = new(ProtocolJson.Default)
     {
         WriteIndented = true,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
     private static readonly JsonSerializerOptions CompactPrintOptions = new(ProtocolJson.Default)
     {
         WriteIndented = false,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
     public static string Format(ParsedCommand parsed, ResponseEnvelope response)
