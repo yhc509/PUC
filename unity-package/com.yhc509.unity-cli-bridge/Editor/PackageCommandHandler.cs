@@ -290,7 +290,7 @@ namespace UnityCliBridge.Bridge.Editor
                                 false,
                                 stopwatch.ElapsedMilliseconds,
                                 ProtocolConstants.TransportLive,
-                                request.Error?.errorCode.ToString()));
+                                ProtocolErrorDetails.FromString(request.Error?.errorCode.ToString())));
                             FinishPolling();
                             return;
                         }
@@ -464,7 +464,7 @@ namespace UnityCliBridge.Bridge.Editor
                 false,
                 durationMs,
                 ProtocolConstants.TransportLive,
-                exception.ToString());
+                ProtocolErrorDetails.FromString(exception.ToString()));
         }
     }
 }

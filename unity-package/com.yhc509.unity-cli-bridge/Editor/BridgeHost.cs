@@ -339,7 +339,7 @@ namespace UnityCliBridge.Bridge.Editor
                         false,
                         0,
                         ProtocolConstants.TransportLive,
-                        line);
+                        ProtocolErrorDetails.FromString(line));
                     await WriteResponseAsync(writer, error);
                     return;
                 }
@@ -357,7 +357,7 @@ namespace UnityCliBridge.Bridge.Editor
                         false,
                         0,
                         ProtocolConstants.TransportLive,
-                        line);
+                        ProtocolErrorDetails.FromString(line));
                     await WriteResponseAsync(writer, error);
                     return;
                 }
@@ -377,7 +377,7 @@ namespace UnityCliBridge.Bridge.Editor
                         false,
                         0,
                         ProtocolConstants.TransportLive,
-                        "Expected protocolVersion " + ProtocolConstants.ProtocolVersion + ".");
+                        ProtocolErrorDetails.FromString("Expected protocolVersion " + ProtocolConstants.ProtocolVersion + "."));
                     await WriteResponseAsync(writer, error);
                     return;
                 }
@@ -438,7 +438,7 @@ namespace UnityCliBridge.Bridge.Editor
                     false,
                     response.durationMs,
                     response.transport,
-                    exception.ToString()));
+                    ProtocolErrorDetails.FromString(exception.ToString())));
             }
 
             await writer.WriteLineAsync(responseJson).ConfigureAwait(false);
@@ -529,7 +529,7 @@ namespace UnityCliBridge.Bridge.Editor
                     false,
                     stopwatch.ElapsedMilliseconds,
                     ProtocolConstants.TransportLive,
-                    exception.ToString()));
+                    ProtocolErrorDetails.FromString(exception.ToString())));
             }
         }
 
@@ -573,7 +573,7 @@ namespace UnityCliBridge.Bridge.Editor
                     false,
                     stopwatch.ElapsedMilliseconds,
                     ProtocolConstants.TransportLive,
-                    exception.ToString()));
+                    ProtocolErrorDetails.FromString(exception.ToString())));
             }
         }
 
@@ -722,7 +722,7 @@ namespace UnityCliBridge.Bridge.Editor
                     false,
                     stopwatch.ElapsedMilliseconds,
                     ProtocolConstants.TransportLive,
-                    exception.ToString());
+                    ProtocolErrorDetails.FromString(exception.ToString()));
             }
         }
 

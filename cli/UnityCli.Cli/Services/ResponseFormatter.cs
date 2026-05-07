@@ -106,10 +106,12 @@ public static class ResponseFormatter
         {
             lines.Add($"errorCode: {response.error.code}");
             lines.Add($"message: {response.error.message}");
-            if (!string.IsNullOrWhiteSpace(response.error.details))
+            if (response.error.details is JsonElement details && details.ValueKind != JsonValueKind.Null)
             {
                 lines.Add("details:");
-                lines.Add(TryPrettyJson(response.error.details));
+                lines.Add(details.ValueKind == JsonValueKind.String
+                    ? details.GetString() ?? string.Empty
+                    : JsonSerializer.Serialize(details, PrettyPrintOptions));
             }
         }
 
@@ -132,16 +134,4 @@ public static class ResponseFormatter
         return JsonSerializer.Serialize(data, options);
     }
 
-    private static string TryPrettyJson(string input)
-    {
-        try
-        {
-            var element = JsonSerializer.Deserialize<JsonElement>(input, ProtocolJson.Default);
-            return JsonSerializer.Serialize(element, PrettyPrintOptions);
-        }
-        catch
-        {
-            return input;
-        }
-    }
 }

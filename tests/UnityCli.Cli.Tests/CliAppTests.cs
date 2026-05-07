@@ -299,7 +299,7 @@ public sealed class CliAppTests
 
         var response = ParseResponse(result.Stdout);
         Assert.Equal("CLI_ERROR", response.error?.code);
-        Assert.Contains("JsonException", response.error?.details);
+        Assert.Contains("JsonException", response.error?.details?.GetString());
     }
 
     [Fact]
@@ -387,10 +387,10 @@ public sealed class CliAppTests
         return ProtocolJson.Deserialize<ResponseEnvelope>(stdout.Trim());
     }
 
-    private static JsonElement ParseDetails(string? details)
+    private static JsonElement ParseDetails(JsonElement? details)
     {
-        Assert.False(string.IsNullOrWhiteSpace(details));
-        return JsonSerializer.Deserialize<JsonElement>(details!);
+        Assert.True(details.HasValue);
+        return details.Value;
     }
 
     private static JsonElement ParseJson(string json)

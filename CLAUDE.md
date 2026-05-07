@@ -62,6 +62,7 @@ Tests live in `tests/UnityCli.Cli.Tests/` (xUnit, `.NET`-testable surface only).
 - **Scene paths:** Format `/Root[0]/Child[0]` with array notation for sibling indexing; `/` is the virtual scene root.
 - **Scene/prefab node flags:** Convenience commands that point at a hierarchy node use `--node`; JSON patch specs still use `target`/`parent`.
 - **Prefab editing:** Based on `SerializedProperty.propertyPath` (run `prefab inspect --with-values` to verify paths before patching).
+- **New `.cs` files in `unity-package/`:** Never hand-author `.meta` files. Unity assigns the GUID — let it. After adding a new `.cs` file, trigger an Editor reimport (`unity-cli refresh` against the sample project, or focus the Editor) so Unity writes the matching `.meta`. CI's `scripts/check-unity-meta.sh` will fail if a `.cs` ships without its `.meta`. If `unity-cli refresh` is blocked by `PROTOCOL_MISMATCH` because the wire version was just bumped, ask the user to focus the Editor (or do a Reimport All in the package folder) instead — do not fall back to a hand-written GUID.
 - **Doc sync:** CLI command or option changes must update all docs. Run through this checklist:
   1. `dotnet run --project cli/UnityCli.DocGen -- --write` — auto-updates `docs/cli-reference.md`
   2. `README.md` — update examples for new/changed commands in both Scene and Prefab sections

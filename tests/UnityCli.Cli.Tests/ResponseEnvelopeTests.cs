@@ -44,17 +44,62 @@ public sealed class ResponseEnvelopeTests
 
         Assert.Equal(ProtocolConstants.ProtocolVersion, response.protocolVersion);
         Assert.Equal(ProtocolConstants.ProtocolVersion, roundTrip.protocolVersion);
-        Assert.Contains("\"protocolVersion\":\"2\"", json);
+        Assert.Contains("\"protocolVersion\":\"3\"", json);
     }
 
     [Fact]
     public void Deserialize_WithBridgeWireData_PopulatesData()
     {
         var response = ProtocolJson.Deserialize<ResponseEnvelope>(
-            "{\"requestId\":\"req-1\",\"protocolVersion\":\"2\",\"target\":\"target-1\",\"status\":\"success\",\"durationMs\":12,\"data\":{\"message\":\"hello\"},\"retryable\":false,\"transport\":\"live\"}");
+            "{\"requestId\":\"req-1\",\"protocolVersion\":\"3\",\"target\":\"target-1\",\"status\":\"success\",\"durationMs\":12,\"data\":{\"message\":\"hello\"},\"retryable\":false,\"transport\":\"live\"}");
 
         var data = AssertData(response);
         Assert.Equal("hello", data.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public void ProtocolError_Details_RoundTripsAsJsonElement_WhenObject()
+    {
+        var json = "{\"requestId\":\"r1\",\"protocolVersion\":\"3\",\"status\":\"error\"," +
+                   "\"durationMs\":0,\"error\":{\"code\":\"E\",\"message\":\"m\"," +
+                   "\"details\":{\"path\":\"/Root[0]\",\"reason\":\"missing\"}}," +
+                   "\"retryable\":false,\"transport\":\"live\"}";
+
+        var env = JsonSerializer.Deserialize<ResponseEnvelope>(json, ProtocolJson.Default)!;
+
+        Assert.NotNull(env.error);
+        Assert.NotNull(env.error!.details);
+        Assert.Equal(JsonValueKind.Object, env.error!.details!.Value.ValueKind);
+        Assert.Equal("/Root[0]", env.error.details.Value.GetProperty("path").GetString());
+    }
+
+    [Fact]
+    public void ProtocolError_Details_RoundTripsAsJsonElement_WhenString()
+    {
+        var json = "{\"requestId\":\"r1\",\"protocolVersion\":\"3\",\"status\":\"error\"," +
+                   "\"durationMs\":0,\"error\":{\"code\":\"E\",\"message\":\"m\"," +
+                   "\"details\":\"plain text\"}," +
+                   "\"retryable\":false,\"transport\":\"live\"}";
+
+        var env = JsonSerializer.Deserialize<ResponseEnvelope>(json, ProtocolJson.Default)!;
+
+        Assert.Equal(JsonValueKind.String, env.error!.details!.Value.ValueKind);
+        Assert.Equal("plain text", env.error.details.Value.GetString());
+    }
+
+    [Fact]
+    public void ProtocolError_Details_Null_WhenAbsentOrJsonNull()
+    {
+        var json = "{\"requestId\":\"r\",\"protocolVersion\":\"3\",\"status\":\"error\"," +
+                   "\"durationMs\":0,\"error\":{\"code\":\"E\",\"message\":\"m\"}," +
+                   "\"retryable\":false,\"transport\":\"live\"}";
+        var env = JsonSerializer.Deserialize<ResponseEnvelope>(json, ProtocolJson.Default)!;
+        Assert.Null(env.error!.details);
+
+        var jsonExplicitNull = json.Replace("\"message\":\"m\"", "\"message\":\"m\",\"details\":null");
+        var env2 = JsonSerializer.Deserialize<ResponseEnvelope>(jsonExplicitNull, ProtocolJson.Default)!;
+        Assert.True(env2.error!.details is null
+            || env2.error.details!.Value.ValueKind == JsonValueKind.Null);
     }
 
     [Fact]

@@ -8,7 +8,7 @@ namespace UnityCliBridge.Bridge.Editor
             : base(message)
         {
             ErrorCode = errorCode;
-            Details = details;
+            Details = ProtocolErrorDetails.FromString(details);
             IsRetryable = isRetryable;
         }
 
