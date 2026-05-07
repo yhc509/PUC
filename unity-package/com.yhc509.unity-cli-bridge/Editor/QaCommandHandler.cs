@@ -447,7 +447,7 @@ namespace UnityCliBridge.Bridge.Editor
                 false,
                 durationMs,
                 ProtocolConstants.TransportLive,
-                exception.ToString());
+                ProtocolErrorDetails.FromString(exception.ToString()));
         }
 
         private static CommandFailureException CreateInputSystemRequiredException(string commandName)

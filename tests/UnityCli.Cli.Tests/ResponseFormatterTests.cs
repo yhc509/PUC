@@ -193,6 +193,16 @@ public sealed class ResponseFormatterTests
         Assert.Contains("plain text", output);
     }
 
+    [Fact]
+    public void Format_ErrorWithNullDetails_OmitsDetailsLine()
+    {
+        var env = NewErrorEnvelopeWithoutDetails();
+
+        var output = ResponseFormatter.Format(OutputMode.Default, env);
+
+        Assert.DoesNotContain("details:", output);
+    }
+
     private static JsonElement ParseData(string json)
     {
         return JsonSerializer.Deserialize<JsonElement>(json, ProtocolJson.Default);
@@ -212,5 +222,15 @@ public sealed class ResponseFormatterTests
             message: "m",
             retryable: false,
             details: details);
+    }
+
+    private static ResponseEnvelope NewErrorEnvelopeWithoutDetails()
+    {
+        return ResponseEnvelope.Failure(
+            requestId: "req-1",
+            target: "target-1",
+            code: "E",
+            message: "m",
+            retryable: false);
     }
 }

@@ -88,6 +88,21 @@ public sealed class ResponseEnvelopeTests
     }
 
     [Fact]
+    public void ProtocolError_Details_Null_WhenAbsentOrJsonNull()
+    {
+        var json = "{\"requestId\":\"r\",\"protocolVersion\":\"3\",\"status\":\"error\"," +
+                   "\"durationMs\":0,\"error\":{\"code\":\"E\",\"message\":\"m\"}," +
+                   "\"retryable\":false,\"transport\":\"live\"}";
+        var env = JsonSerializer.Deserialize<ResponseEnvelope>(json, ProtocolJson.Default)!;
+        Assert.Null(env.error!.details);
+
+        var jsonExplicitNull = json.Replace("\"message\":\"m\"", "\"message\":\"m\",\"details\":null");
+        var env2 = JsonSerializer.Deserialize<ResponseEnvelope>(jsonExplicitNull, ProtocolJson.Default)!;
+        Assert.True(env2.error!.details is null
+            || env2.error.details!.Value.ValueKind == JsonValueKind.Null);
+    }
+
+    [Fact]
     public void Success_WithMutationWarnings_PreservesWarningsArray()
     {
         var payload = new PrefabMutationPayload

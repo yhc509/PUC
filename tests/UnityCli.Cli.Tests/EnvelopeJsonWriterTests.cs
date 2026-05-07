@@ -35,7 +35,18 @@ public sealed class EnvelopeJsonWriterTests
         Assert.Equal("Response envelope JSON fragment is not valid.", exception.Message);
     }
 
-    private static ResponseEnvelope NewErrorEnvelope(string details)
+    [Fact]
+    public void ProtocolErrorDetails_FromString_EncodesFreeformTextAsJsonStringFragment()
+    {
+        var details = ProtocolErrorDetails.FromString("line\nquoted \"value\"");
+        var envelope = NewErrorEnvelope(details);
+
+        var json = EnvelopeJsonWriter.Write(envelope);
+
+        Assert.Contains("\"details\":\"line\\nquoted \\\"value\\\"\"", json);
+    }
+
+    private static ResponseEnvelope NewErrorEnvelope(string? details)
     {
         return ResponseEnvelope.Failure(
             requestId: "r1",

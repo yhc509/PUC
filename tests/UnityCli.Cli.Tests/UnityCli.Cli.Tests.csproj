@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <Compile Include="..\..\unity-package\com.yhc509.unity-cli-bridge\Editor\EnvelopeJsonWriter.cs" Link="UnityEditor\EnvelopeJsonWriter.cs" />
+    <Compile Include="..\..\unity-package\com.yhc509.unity-cli-bridge\Editor\ProtocolErrorDetails.cs" Link="UnityEditor\ProtocolErrorDetails.cs" />
   </ItemGroup>
 
 </Project>
