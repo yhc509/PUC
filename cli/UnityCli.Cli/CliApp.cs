@@ -362,7 +362,9 @@ public static class CliApp
             if (response.error.details is JsonElement details && details.ValueKind != JsonValueKind.Null)
             {
                 Console.Error.WriteLine();
-                Console.Error.WriteLine(details.ToString());
+                Console.Error.WriteLine(details.ValueKind == JsonValueKind.String
+                    ? details.GetString()
+                    : JsonSerializer.Serialize(details, ProtocolJson.Default));
             }
 
             return;

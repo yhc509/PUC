@@ -167,6 +167,32 @@ public sealed class ResponseFormatterTests
         Assert.Equal("{\"error\":\"LIVE_UNAVAILABLE\",\"message\":\"Bridge가 아직 준비되지 않았습니다.\"}", text);
     }
 
+    [Fact]
+    public void Format_ErrorWithObjectDetails_PrettyPrintsAsIndentedJson()
+    {
+        var json = "{\"requestId\":\"r\",\"protocolVersion\":\"3\",\"status\":\"error\"," +
+                   "\"durationMs\":0,\"error\":{\"code\":\"E\",\"message\":\"m\"," +
+                   "\"details\":{\"path\":\"/Root\",\"reason\":\"x\"}}," +
+                   "\"retryable\":false,\"transport\":\"live\"}";
+        var env = JsonSerializer.Deserialize<ResponseEnvelope>(json, ProtocolJson.Default)!;
+
+        var output = ResponseFormatter.Format(OutputMode.Default, env);
+
+        Assert.Contains("details:", output);
+        Assert.Contains("\"path\": \"/Root\"", output);
+        Assert.DoesNotContain("\\\"path\\\"", output);
+    }
+
+    [Fact]
+    public void Format_ErrorWithStringDetails_PrintsRawString()
+    {
+        var env = NewErrorEnvelopeWithStringDetails("plain text");
+
+        var output = ResponseFormatter.Format(OutputMode.Default, env);
+
+        Assert.Contains("plain text", output);
+    }
+
     private static JsonElement ParseData(string json)
     {
         return JsonSerializer.Deserialize<JsonElement>(json, ProtocolJson.Default);
@@ -175,5 +201,16 @@ public sealed class ResponseFormatterTests
     private static JsonElement ToDataElement<T>(T value)
     {
         return JsonSerializer.SerializeToElement(value, ProtocolJson.Default);
+    }
+
+    private static ResponseEnvelope NewErrorEnvelopeWithStringDetails(string details)
+    {
+        return ResponseEnvelope.Failure(
+            requestId: "req-1",
+            target: "target-1",
+            code: "E",
+            message: "m",
+            retryable: false,
+            details: details);
     }
 }
