@@ -7,7 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Changed
+- Live IPC error responses now carry `error.details` as an inline JSON value (object, string, or null), mirroring the `data` field. CLI `--json` output preserves structured error context directly instead of wrapping it in an escaped JSON string.
 - Bumped GitHub Actions workflows to versions running on Node 24 (`actions/checkout@v5`, `actions/setup-dotnet@v5`, `actions/upload-artifact@v6`, `actions/download-artifact@v7`, `softprops/action-gh-release@v3`) ahead of the GitHub Actions Node 20 sunset.
+
+### Compatibility
+- Upgrade the CLI binary and Unity package together. The wire `protocolVersion` is bumped to `3` for the inline `error.details` change; mixing versions returns a clear `PROTOCOL_MISMATCH` error pointing to whichever side is out of date.
 
 ## [0.1.11] - 2026-05-07
 
