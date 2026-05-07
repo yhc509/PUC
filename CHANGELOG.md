@@ -6,14 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-05-07
+
+### Added
+- Live IPC now reports a clear, side-specific error message when the CLI and Unity package wire versions are incompatible, telling you which side to upgrade instead of returning empty or malformed responses.
+
 ### Changed
 - Live IPC responses now send payloads as an inline JSON `data` field, so CLI `--json` output preserves structured objects directly instead of wrapping them in a string-valued `dataJson` field.
+- JSON output paths (`--output json` and outbound IPC payloads) now emit non-ASCII text (such as Korean) literally instead of escaping it as `\uXXXX`. Existing recipients keep working because `\uXXXX` and literal forms are both valid JSON.
+
+### Fixed
+- Inspector and patch responses with `NaN` or `±Infinity` float values now serialize as JSON strings instead of breaking JSON parsing on the CLI side.
+- The bridge falls back to a structured `INTERNAL_INVALID_PAYLOAD` error envelope when a handler somehow produces invalid raw JSON, instead of dropping the connection.
 
 ### Removed
 - Removed the `ResponseEnvelope.dataJson` wire field from live IPC responses.
 
 ### Compatibility
-- Upgrade the CLI binary and Unity package together. Mixing versions can make response payloads appear empty or return a protocol mismatch error because the live IPC response format changed.
+- Upgrade the CLI binary and Unity package together. Mixing versions returns a clear protocol-mismatch error pointing to whichever side is out of date, but commands cannot run until both sides match.
 
 ## [0.1.10] - 2026-05-07
 
