@@ -18,6 +18,16 @@ public sealed class ProtocolJsonOptionsTests
     public void Default_DeserializesDepth64DataPayload()
     {
         var response = ProtocolJson.Deserialize<ResponseEnvelope>(
+            BuildEnvelopeWithData(BuildNestedObject(depth: 63)));
+
+        Assert.True(response.data.HasValue);
+    }
+
+    [Fact]
+    // Depth 64 becomes wire depth 65 once wrapped in the envelope, which default STJ 64 would reject.
+    public void Default_DeserializesWireDepthAboveStjDefault()
+    {
+        var response = ProtocolJson.Deserialize<ResponseEnvelope>(
             BuildEnvelopeWithData(BuildNestedObject(depth: 64)));
 
         Assert.True(response.data.HasValue);
@@ -27,7 +37,7 @@ public sealed class ProtocolJsonOptionsTests
     public void Default_ThrowsJsonExceptionWhenDataPayloadExceedsMaxDepth()
     {
         Assert.Throws<JsonException>(() =>
-            ProtocolJson.Deserialize<ResponseEnvelope>(BuildEnvelopeWithData(BuildNestedObject(depth: 130))));
+            ProtocolJson.Deserialize<ResponseEnvelope>(BuildEnvelopeWithData(BuildNestedObject(depth: 128))));
     }
 
     [Fact]
