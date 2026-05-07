@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-05-08
+
 ### Changed
 - Live IPC error responses now carry `error.details` as an inline JSON value (object, string, or null), mirroring the `data` field. CLI `--json` output preserves structured error context directly instead of wrapping it in an escaped JSON string.
 - Bumped GitHub Actions workflows to versions running on Node 24 (`actions/checkout@v5`, `actions/setup-dotnet@v5`, `actions/upload-artifact@v6`, `actions/download-artifact@v7`, `softprops/action-gh-release@v3`) ahead of the GitHub Actions Node 20 sunset.
