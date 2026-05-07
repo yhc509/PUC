@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- Bumped GitHub Actions workflows to versions running on Node 24 (`actions/checkout@v5`, `actions/setup-dotnet@v5`, `actions/upload-artifact@v6`, `actions/download-artifact@v7`, `softprops/action-gh-release@v3`) ahead of the GitHub Actions Node 20 sunset.
+
 ## [0.1.11] - 2026-05-07
 
 ### Added
