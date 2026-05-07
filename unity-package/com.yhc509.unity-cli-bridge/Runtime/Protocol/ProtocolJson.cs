@@ -22,6 +22,7 @@ namespace UnityCli.Protocol
 }
 #else
 using System;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -36,6 +37,7 @@ namespace UnityCli.Protocol
             IncludeFields = true,
             MaxDepth = 128,
             WriteIndented = false,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         };
 
         public static string Serialize<T>(T value)
