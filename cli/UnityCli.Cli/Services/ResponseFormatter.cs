@@ -106,10 +106,10 @@ public static class ResponseFormatter
         {
             lines.Add($"errorCode: {response.error.code}");
             lines.Add($"message: {response.error.message}");
-            if (!string.IsNullOrWhiteSpace(response.error.details))
+            if (response.error.details is JsonElement details && details.ValueKind != JsonValueKind.Null)
             {
                 lines.Add("details:");
-                lines.Add(TryPrettyJson(response.error.details));
+                lines.Add(details.ToString());
             }
         }
 

@@ -58,6 +58,36 @@ public sealed class ResponseEnvelopeTests
     }
 
     [Fact]
+    public void ProtocolError_Details_RoundTripsAsJsonElement_WhenObject()
+    {
+        var json = "{\"requestId\":\"r1\",\"protocolVersion\":\"3\",\"status\":\"error\"," +
+                   "\"durationMs\":0,\"error\":{\"code\":\"E\",\"message\":\"m\"," +
+                   "\"details\":{\"path\":\"/Root[0]\",\"reason\":\"missing\"}}," +
+                   "\"retryable\":false,\"transport\":\"live\"}";
+
+        var env = JsonSerializer.Deserialize<ResponseEnvelope>(json, ProtocolJson.Default)!;
+
+        Assert.NotNull(env.error);
+        Assert.NotNull(env.error!.details);
+        Assert.Equal(JsonValueKind.Object, env.error!.details!.Value.ValueKind);
+        Assert.Equal("/Root[0]", env.error.details.Value.GetProperty("path").GetString());
+    }
+
+    [Fact]
+    public void ProtocolError_Details_RoundTripsAsJsonElement_WhenString()
+    {
+        var json = "{\"requestId\":\"r1\",\"protocolVersion\":\"3\",\"status\":\"error\"," +
+                   "\"durationMs\":0,\"error\":{\"code\":\"E\",\"message\":\"m\"," +
+                   "\"details\":\"plain text\"}," +
+                   "\"retryable\":false,\"transport\":\"live\"}";
+
+        var env = JsonSerializer.Deserialize<ResponseEnvelope>(json, ProtocolJson.Default)!;
+
+        Assert.Equal(JsonValueKind.String, env.error!.details!.Value.ValueKind);
+        Assert.Equal("plain text", env.error.details.Value.GetString());
+    }
+
+    [Fact]
     public void Success_WithMutationWarnings_PreservesWarningsArray()
     {
         var payload = new PrefabMutationPayload

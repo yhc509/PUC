@@ -95,10 +95,35 @@ namespace UnityCli.Protocol
                 {
                     code = code,
                     message = message,
+#if UNITY_5_3_OR_NEWER
                     details = details,
+#else
+                    details = ParseDetails(details),
+#endif
                 },
             };
         }
+
+#if !UNITY_5_3_OR_NEWER
+        private static JsonElement? ParseDetails(string? details)
+        {
+            if (string.IsNullOrWhiteSpace(details))
+            {
+                return null;
+            }
+
+            try
+            {
+                return JsonSerializer.Deserialize<JsonElement>(details, ProtocolJson.Default);
+            }
+            catch (JsonException)
+            {
+                return JsonSerializer.Deserialize<JsonElement>(
+                    JsonSerializer.Serialize(details),
+                    ProtocolJson.Default);
+            }
+        }
+#endif
     }
 
     [Serializable]
@@ -106,6 +131,10 @@ namespace UnityCli.Protocol
     {
         public string code = string.Empty;
         public string message = string.Empty;
+#if UNITY_5_3_OR_NEWER
         public string? details;
+#else
+        public JsonElement? details;
+#endif
     }
 }

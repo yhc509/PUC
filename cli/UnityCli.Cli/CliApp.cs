@@ -359,10 +359,10 @@ public static class CliApp
         {
             Console.Error.WriteLine(response.error.message);
 
-            if (!string.IsNullOrWhiteSpace(response.error.details))
+            if (response.error.details is JsonElement details && details.ValueKind != JsonValueKind.Null)
             {
                 Console.Error.WriteLine();
-                Console.Error.WriteLine(response.error.details);
+                Console.Error.WriteLine(details.ToString());
             }
 
             return;
