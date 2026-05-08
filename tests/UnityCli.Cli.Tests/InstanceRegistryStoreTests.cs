@@ -197,6 +197,49 @@ public sealed class InstanceRegistryStoreTests
     }
 
     [Fact]
+    public void Sanitize_KeepsBothInstances_WhenHashCollidesButPathsDiffer()
+    {
+        using var temp = new TempDirectory();
+        var projectA = Path.Combine(temp.Path, "ProjA");
+        var projectB = Path.Combine(temp.Path, "ProjB");
+        Directory.CreateDirectory(projectA);
+        Directory.CreateDirectory(projectB);
+
+        var store = new InstanceRegistryStore(Path.Combine(temp.Path, "instances.json"));
+        store.Save(new InstanceRegistry
+        {
+            instances =
+            [
+                new InstanceRecord
+                {
+                    projectRoot = projectA,
+                    projectName = "ProjA",
+                    projectHash = "0000aaaa1111",
+                    pipeName = "/tmp/unity-cli-0000aaaa1111.sock",
+                    state = "offline",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                },
+                new InstanceRecord
+                {
+                    projectRoot = projectB,
+                    projectName = "ProjB",
+                    projectHash = "0000aaaa1111",
+                    pipeName = "/tmp/unity-cli-0000aaaa1111-1.sock",
+                    state = "offline",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                },
+            ],
+        });
+
+        var loaded = store.Load();
+
+        Assert.Equal(2, loaded.instances.Length);
+        Assert.Contains(loaded.instances, i => i.projectName == "ProjA");
+        Assert.Contains(loaded.instances, i => i.projectName == "ProjB");
+        Assert.All(loaded.instances, i => Assert.Equal("0000aaaa1111", i.projectHash));
+    }
+
+    [Fact]
     public void Load_RemovesMissingProjectsAndPromotesLiveInstance()
     {
         using var temp = new TempDirectory();
@@ -235,7 +278,8 @@ public sealed class InstanceRegistryStoreTests
 
         Assert.Single(registry.instances);
         Assert.Equal("ProjectA", registry.instances[0].projectName);
-        Assert.Equal(registry.instances[0].projectHash, registry.activeProjectHash);
+        Assert.Equal(registry.instances[0].projectRoot, registry.activeProjectRoot);
+        Assert.True(string.IsNullOrEmpty(registry.activeProjectHash));
     }
 
     [Fact]

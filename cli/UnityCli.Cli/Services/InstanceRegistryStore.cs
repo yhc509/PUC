@@ -184,7 +184,8 @@ public sealed class InstanceRegistryStore
     private static InstanceRegistry Sanitize(InstanceRegistry registry)
     {
         var changed = false;
-        var instancesByHash = new Dictionary<string, InstanceRecord>(StringComparer.OrdinalIgnoreCase);
+        registry.instances ??= Array.Empty<InstanceRecord>();
+        var instancesByPath = new Dictionary<string, InstanceRecord>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var instance in registry.instances)
         {
@@ -200,8 +201,10 @@ public sealed class InstanceRegistryStore
             {
                 projectRoot = projectRoot,
                 projectName = string.IsNullOrWhiteSpace(instance.projectName) ? Path.GetFileName(projectRoot) : instance.projectName,
-                projectHash = projectHash,
-                pipeName = string.IsNullOrWhiteSpace(instance.pipeName) ? ProtocolConstants.BuildPipeName(projectHash) : instance.pipeName,
+                projectHash = string.IsNullOrWhiteSpace(instance.projectHash) ? projectHash : instance.projectHash,
+                pipeName = string.IsNullOrWhiteSpace(instance.pipeName)
+                    ? ProtocolConstants.BuildPipeName(string.IsNullOrWhiteSpace(instance.projectHash) ? projectHash : instance.projectHash)
+                    : instance.pipeName,
                 editorProcessId = instance.editorProcessId,
                 unityVersion = instance.unityVersion ?? string.Empty,
                 state = instance.state ?? "offline",
@@ -216,14 +219,14 @@ public sealed class InstanceRegistryStore
                 changed = true;
             }
 
-            if (!instancesByHash.TryGetValue(normalized.projectHash, out var existing)
+            if (!instancesByPath.TryGetValue(normalized.projectRoot, out var existing)
                 || CompareLastSeen(normalized.lastSeenUtc, existing.lastSeenUtc) >= 0)
             {
-                instancesByHash[normalized.projectHash] = normalized;
+                instancesByPath[normalized.projectRoot] = normalized;
             }
         }
 
-        var instances = instancesByHash.Values
+        var instances = instancesByPath.Values
             .OrderBy(item => item.projectName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(item => item.projectRoot, StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -234,14 +237,19 @@ public sealed class InstanceRegistryStore
         }
 
         registry.instances = instances;
-        if (string.IsNullOrWhiteSpace(registry.activeProjectHash)
-            || registry.instances.All(item => !string.Equals(item.projectHash, registry.activeProjectHash, StringComparison.OrdinalIgnoreCase))
-            || registry.instances.FirstOrDefault(item => string.Equals(item.projectHash, registry.activeProjectHash, StringComparison.OrdinalIgnoreCase))?.state == "offline")
+        var active = registry.instances.FirstOrDefault(item =>
+            string.Equals(item.projectRoot, registry.activeProjectRoot, StringComparison.OrdinalIgnoreCase));
+        if (string.IsNullOrWhiteSpace(registry.activeProjectRoot)
+            || active is null
+            || string.Equals(active.state, "offline", StringComparison.OrdinalIgnoreCase))
         {
-            registry.activeProjectHash = registry.instances.FirstOrDefault(item => item.state != "offline")?.projectHash
-                ?? registry.instances.FirstOrDefault()?.projectHash;
+            registry.activeProjectRoot = registry.instances.FirstOrDefault(item => !string.Equals(item.state, "offline", StringComparison.OrdinalIgnoreCase))?.projectRoot
+                ?? registry.instances.FirstOrDefault()?.projectRoot
+                ?? string.Empty;
             changed = true;
         }
+
+        registry.activeProjectHash = null;
 
         if (changed)
         {
