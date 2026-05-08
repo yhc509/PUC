@@ -66,6 +66,11 @@ public static class PucExecuteWrapper
                 throw new CommandFailureException("INVALID_ARGS", "실행할 코드가 비어 있습니다.");
             }
 
+            int effectiveTimeoutMs = ResolveEffectiveTimeoutMs(args.timeoutMs);
+
+            using var cts = new System.Threading.CancellationTokenSource();
+            cts.CancelAfter(effectiveTimeoutMs);
+
             try
             {
                 string wrappedCode = BuildWrappedCode(args.code, args.argumentsJson);
@@ -94,7 +99,7 @@ public static class PucExecuteWrapper
                 Application.logMessageReceived += OnLogMessageReceived;
                 try
                 {
-                    string consoleOutput = (string)(executeMethod.Invoke(null, null) ?? string.Empty);
+                    string consoleOutput = (string)(executeMethod.Invoke(null, new object[] { cts.Token }) ?? string.Empty);
                     string output = MergeOutput(consoleOutput, logEntries);
                     return ProtocolJson.Serialize(new ExecuteCodePayload
                     {
@@ -110,6 +115,12 @@ public static class PucExecuteWrapper
             catch (CommandFailureException)
             {
                 throw;
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException is OperationCanceledException)
+            {
+                throw new CommandFailureException(
+                    ProtocolConstants.ErrorExecuteTimeout,
+                    $"코드 실행이 {effectiveTimeoutMs}ms 안에 완료되지 않아 cancel 되었습니다.");
             }
             catch (TargetInvocationException ex) when (ex.InnerException != null)
             {
@@ -129,6 +140,20 @@ public static class PucExecuteWrapper
                     error = ex.Message,
                 });
             }
+        }
+
+        private static int ResolveEffectiveTimeoutMs(int? requested)
+        {
+            int value = requested ?? ProtocolConstants.DefaultExecuteTimeoutMs;
+            if (value < 1)
+            {
+                value = 1;
+            }
+            if (value > ProtocolConstants.MaxExecuteTimeoutMs)
+            {
+                value = ProtocolConstants.MaxExecuteTimeoutMs;
+            }
+            return value;
         }
 
         private static string BuildWrappedCode(string userCode, string? argumentsJson)
