@@ -87,11 +87,10 @@ public sealed class InstanceRegistryStore
         {
             var canonicalProjectRoot = ProtocolConstants.GetCanonicalPath(trimmed);
             projectRoot = canonicalProjectRoot;
-            var projectHash = ProtocolConstants.ComputeProjectHash(canonicalProjectRoot);
 
             // A literal directory path always wins over same-text registry name matches.
             match = registry.instances.FirstOrDefault(item =>
-                string.Equals(item.projectHash, projectHash, StringComparison.OrdinalIgnoreCase));
+                string.Equals(item.projectRoot, canonicalProjectRoot, StringComparison.OrdinalIgnoreCase));
             return true;
         }
 
@@ -122,10 +121,19 @@ public sealed class InstanceRegistryStore
 
         if (trimmed.Length == 12 && !trimmed.Contains(Path.DirectorySeparatorChar) && !trimmed.Contains(Path.AltDirectorySeparatorChar))
         {
-            var existing = registry.instances.FirstOrDefault(item => item.projectHash == trimmed);
-            if (existing is not null)
+            var hashMatches = registry.instances
+                .Where(item => string.Equals(item.projectHash, trimmed, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            if (hashMatches.Length > 1)
             {
-                return existing;
+                throw CreateAmbiguousProjectHashException(
+                    trimmed,
+                    hashMatches.Select(item => ProtocolConstants.GetCanonicalPath(item.projectRoot)).ToArray());
+            }
+
+            if (hashMatches.Length == 1)
+            {
+                return hashMatches[0];
             }
         }
 
@@ -136,20 +144,25 @@ public sealed class InstanceRegistryStore
         }
 
         var projectHash = ProtocolConstants.ComputeProjectHash(projectRoot);
-        // Reuse the entry already resolved from the loaded registry before falling back to a hash lookup.
-        var match = resolvedMatch;
-        if (match is null || !string.Equals(match.projectHash, projectHash, StringComparison.OrdinalIgnoreCase))
-        {
-            match = registry.instances.FirstOrDefault(item => string.Equals(item.projectHash, projectHash, StringComparison.OrdinalIgnoreCase));
-        }
+        var match = resolvedMatch
+            ?? registry.instances.FirstOrDefault(item =>
+                string.Equals(item.projectRoot, projectRoot, StringComparison.OrdinalIgnoreCase));
 
         if (match is not null)
         {
             // Intentionally mutate the loaded registry entry in place so callers keep using the same snapshot object.
             match.projectRoot = projectRoot;
             match.projectName = string.IsNullOrWhiteSpace(match.projectName) ? Path.GetFileName(projectRoot) : match.projectName;
-            match.projectHash = projectHash;
-            match.pipeName = string.IsNullOrWhiteSpace(match.pipeName) ? ProtocolConstants.BuildPipeName(projectHash) : match.pipeName;
+            if (string.IsNullOrWhiteSpace(match.projectHash))
+            {
+                match.projectHash = projectHash;
+            }
+
+            if (string.IsNullOrWhiteSpace(match.pipeName))
+            {
+                match.pipeName = ProtocolConstants.BuildPipeName(match.projectHash);
+            }
+
             return match;
         }
 
@@ -316,5 +329,11 @@ public sealed class InstanceRegistryStore
     {
         return new CliUsageException(
             $"등록된 프로젝트 이름이 중복되어 대상을 결정할 수 없습니다: {projectName}. project path를 사용하세요. 후보: {string.Join(", ", candidatePaths)}");
+    }
+
+    private static CliUsageException CreateAmbiguousProjectHashException(string projectHash, string[] candidatePaths)
+    {
+        return new CliUsageException(
+            $"projectHash '{projectHash}'에 매칭되는 인스턴스가 여러 개입니다. project path로 정확히 지정하세요. 후보: {string.Join(", ", candidatePaths)}");
     }
 }

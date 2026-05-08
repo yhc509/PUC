@@ -197,6 +197,81 @@ public sealed class InstanceRegistryStoreTests
     }
 
     [Fact]
+    public void ResolveOrCreateTarget_AmbiguousHash_ThrowsCliUsage()
+    {
+        using var temp = new TempDirectory();
+        var projectA = Path.Combine(temp.Path, "ProjA");
+        var projectB = Path.Combine(temp.Path, "ProjB");
+        Directory.CreateDirectory(projectA);
+        Directory.CreateDirectory(projectB);
+
+        var store = new InstanceRegistryStore(Path.Combine(temp.Path, "instances.json"));
+        var registry = new InstanceRegistry
+        {
+            instances =
+            [
+                new InstanceRecord
+                {
+                    projectRoot = projectA,
+                    projectName = "ProjA",
+                    projectHash = "0000aaaa1111",
+                    pipeName = "/tmp/unity-cli-0000aaaa1111.sock",
+                    state = "offline",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                },
+                new InstanceRecord
+                {
+                    projectRoot = projectB,
+                    projectName = "ProjB",
+                    projectHash = "0000aaaa1111",
+                    pipeName = "/tmp/unity-cli-0000aaaa1111-1.sock",
+                    state = "offline",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                },
+            ],
+        };
+
+        var exception = Assert.Throws<CliUsageException>(
+            () => store.ResolveOrCreateTarget(registry, "0000aaaa1111"));
+
+        Assert.Contains("0000aaaa1111", exception.Message);
+        Assert.Contains(ProtocolConstants.GetCanonicalPath(projectA), exception.Message);
+        Assert.Contains(ProtocolConstants.GetCanonicalPath(projectB), exception.Message);
+    }
+
+    [Fact]
+    public void ResolveOrCreateTarget_PathOverridesHashLookup_ReturnsExistingInstance()
+    {
+        using var temp = new TempDirectory();
+        var projectRoot = Path.Combine(temp.Path, "ProjA");
+        Directory.CreateDirectory(projectRoot);
+
+        var store = new InstanceRegistryStore(Path.Combine(temp.Path, "instances.json"));
+        var canonicalRoot = ProtocolConstants.GetCanonicalPath(projectRoot);
+        var registry = new InstanceRegistry
+        {
+            instances =
+            [
+                new InstanceRecord
+                {
+                    projectRoot = canonicalRoot,
+                    projectName = "ProjA",
+                    projectHash = "0000aaaa1111",
+                    pipeName = "/tmp/unity-cli-0000aaaa1111.sock",
+                    state = "offline",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                },
+            ],
+        };
+
+        var resolved = store.ResolveOrCreateTarget(registry, projectRoot);
+
+        Assert.Equal(canonicalRoot, resolved.projectRoot);
+        Assert.Equal("0000aaaa1111", resolved.projectHash);
+        Assert.Single(registry.instances);
+    }
+
+    [Fact]
     public void Sanitize_KeepsBothInstances_WhenHashCollidesButPathsDiffer()
     {
         using var temp = new TempDirectory();
