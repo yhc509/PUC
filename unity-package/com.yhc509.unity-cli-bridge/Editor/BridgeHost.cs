@@ -269,8 +269,13 @@ namespace UnityCliBridge.Bridge.Editor
                         delegate(string hash)
                         {
                             string candidatePipeName = ProtocolConstants.BuildPipeName(hash);
-                            if (string.Equals(hash, _baseProjectHash, StringComparison.Ordinal))
+                            if (string.Equals(hash, _baseProjectHash, StringComparison.Ordinal) && File.Exists(candidatePipeName))
                             {
+                                if (UnixSocketProbe.IsLiveUnixSocket(candidatePipeName))
+                                {
+                                    return null;
+                                }
+
                                 TryCleanupSocketFile(candidatePipeName);
                             }
 
