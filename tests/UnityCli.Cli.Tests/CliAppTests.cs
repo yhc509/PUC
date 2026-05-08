@@ -268,6 +268,32 @@ public sealed class CliAppTests
     }
 
     [Fact]
+    public async Task RunAsync_JsonInstancesList_ReportsActiveAndCurrentProjectRoot()
+    {
+        using var projects = new TempDirectory();
+        string projectRoot = CreateUnityProject(projects.Path, "SampleProject");
+        string canonicalProjectRoot = ProtocolConstants.GetCanonicalPath(projectRoot);
+        string projectHash = ProtocolConstants.ComputeProjectHash(canonicalProjectRoot);
+        string registryContents =
+            $$"""
+            {"activeProjectRoot":"{{canonicalProjectRoot.Replace("\\", "\\\\")}}","instances":[{"projectRoot":"{{canonicalProjectRoot.Replace("\\", "\\\\")}}","projectName":"SampleProject","projectHash":"{{projectHash}}","pipeName":"{{ProtocolConstants.BuildPipeName(projectHash).Replace("\\", "\\\\")}}","editorProcessId":1234,"unityVersion":"6000.3.10f1","state":"idle","lastSeenUtc":"{{DateTimeOffset.UtcNow.ToString("O")}}","capabilities":[]}]}
+            """;
+
+        var result = await InvokeAsync(["--json", "instances", "list"], registryContents: registryContents, currentDirectory: projectRoot);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(string.Empty, result.Stderr);
+
+        var response = ParseResponse(result.Stdout);
+        Assert.True(response.data.HasValue);
+        JsonElement data = response.data.Value;
+        Assert.Equal(canonicalProjectRoot, data.GetProperty("activeProjectRoot").GetString());
+        Assert.Equal(canonicalProjectRoot, data.GetProperty("currentProjectRoot").GetString());
+        Assert.Equal(projectHash, data.GetProperty("currentProjectHash").GetString());
+        Assert.False(data.TryGetProperty("activeProjectHash", out _));
+    }
+
+    [Fact]
     public async Task RunAsync_JsonInstancesUse_ProjectName_WhenRegistryDoesNotMatch_ReturnsUsageError()
     {
         using var temp = new TempDirectory();
