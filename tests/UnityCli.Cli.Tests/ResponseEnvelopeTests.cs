@@ -44,7 +44,7 @@ public sealed class ResponseEnvelopeTests
 
         Assert.Equal(ProtocolConstants.ProtocolVersion, response.protocolVersion);
         Assert.Equal(ProtocolConstants.ProtocolVersion, roundTrip.protocolVersion);
-        Assert.Contains("\"protocolVersion\":\"3\"", json);
+        Assert.Contains("\"protocolVersion\":\"" + ProtocolConstants.ProtocolVersion + "\"", json);
     }
 
     [Fact]
