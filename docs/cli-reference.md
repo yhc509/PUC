@@ -38,7 +38,7 @@ Commands for editor state, compilation, play state, menus, arbitrary code execut
 | `stop` | `stop` | live | `None` | Stops Play Mode in a running editor. |
 | `execute-menu` | `execute-menu (--path "Menu/Item" \| --list "Prefix")` | live | `None` | Executes a Unity menu item or lists registered menu items matching a prefix in a running editor. |
 | `screenshot` | `screenshot [--view game\|scene (default: game) \| --camera <name>] [--path <output.png>] [--width N] [--height N]` | live | `None` | Captures a screenshot from the Game View, Scene View, or a named camera. Defaults to Game View when neither --view nor --camera is supplied. The response includes image size plus screen-space metadata (`screenWidth`, `screenHeight`, `imageOrigin`, `coordinateOrigin`) for QA coordinate alignment. In Play Mode, --view game can downscale the native Game View capture but does not upscale it. |
-| `execute` | `execute (--code <csharp> \| --file <path>) [--args <json>] --force` | live | `Always` | Executes arbitrary C# code in the running editor context with optional JSON arguments; always requires --force. |
+| `execute` | `execute (--code <csharp> \| --file <path>) [--args <json>] [--timeout <초>] --force` | live | `Always` | Executes arbitrary C# code in the running editor context with optional JSON arguments and an optional cooperative timeout; always requires --force. |
 | `custom` | `custom <command-name> [--json <args>]` | live | `None` | Invokes a project-defined custom command registered via [PucCommand] attribute. |
 
 ## Asset Workflows
