@@ -39,8 +39,7 @@ namespace UnityCliBridge.Bridge.Editor
         private readonly string[] _capabilities;
         private readonly string _projectRoot;
         private readonly string _projectName;
-        private readonly string _projectHash;
-        private readonly string _pipeName;
+        private readonly string _baseProjectHash;
         private readonly string _registryFilePath;
         private readonly AssetCommandHandler _assetCommandHandler;
         private readonly SceneCommandHandler _sceneCommandHandler;
@@ -60,13 +59,16 @@ namespace UnityCliBridge.Bridge.Editor
         private bool _isDisposed;
         private bool _isInstanceRegistered;
         private volatile bool _isListenerReady;
+        private string _projectHash = string.Empty;
+        private string _pipeName = string.Empty;
+        private const int ListenerAcquireMaxAttempts = 16;
 
         public BridgeHost()
         {
             _projectRoot = ProtocolConstants.GetCanonicalPath(Path.Combine(Application.dataPath, ".."));
             _projectName = Path.GetFileName(_projectRoot);
-            _projectHash = ProtocolConstants.ComputeProjectHash(_projectRoot);
-            _pipeName = ProtocolConstants.BuildPipeName(_projectHash);
+            _baseProjectHash = ProtocolConstants.ComputeProjectHash(_projectRoot);
+            _projectHash = _baseProjectHash;
             _registryFilePath = RegistryPathUtility.GetRegistryFilePath();
             _capabilities = ProtocolHelpers.GetSupportedCommands();
             _assetCommandHandler = new AssetCommandHandler();
@@ -170,31 +172,83 @@ namespace UnityCliBridge.Bridge.Editor
 
         private async Task RunNamedPipeLoopAsync(CancellationToken cancellationToken)
         {
+            NamedPipeServerStream initialServer;
+            try
+            {
+                initialServer = await Task.Run(delegate
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return InstanceListenerKeyResolver.Acquire<NamedPipeServerStream>(
+                        _baseProjectHash,
+                        ListenerAcquireMaxAttempts,
+                        delegate(string hash)
+                        {
+                            string candidatePipeName = ProtocolConstants.BuildPipeName(hash);
+                            try
+                            {
+                                var server = new NamedPipeServerStream(
+                                    candidatePipeName,
+                                    PipeDirection.InOut,
+                                    2,
+                                    PipeTransmissionMode.Byte,
+                                    PipeOptions.Asynchronous);
+                                _projectHash = hash;
+                                _pipeName = candidatePipeName;
+                                return server;
+                            }
+                            catch (IOException)
+                            {
+                                return null;
+                            }
+                            catch (UnauthorizedAccessException)
+                            {
+                                return null;
+                            }
+                        },
+                        out _);
+                }, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception exception)
+            {
+                ReportBackgroundException("named pipe listener", exception);
+                return;
+            }
+
+            NamedPipeServerStream? server = initialServer;
             while (!cancellationToken.IsCancellationRequested)
             {
-                NamedPipeServerStream? server = null;
-
                 try
                 {
-                    // Allow one active client handler and one pending listener during reconnect races.
-                    server = new NamedPipeServerStream(
-                        _pipeName,
-                        PipeDirection.InOut,
-                        2,
-                        PipeTransmissionMode.Byte,
-                        PipeOptions.Asynchronous);
+                    if (server == null)
+                    {
+                        // Allow one active client handler and one pending listener during reconnect races.
+                        server = new NamedPipeServerStream(
+                            _pipeName,
+                            PipeDirection.InOut,
+                            2,
+                            PipeTransmissionMode.Byte,
+                            PipeOptions.Asynchronous);
+                    }
+
                     _isListenerReady = true;
                     await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
                     HandleNamedPipeClient(server, cancellationToken);
+                    server = null;
                 }
                 catch (OperationCanceledException)
                 {
                     server?.Dispose();
+                    server = null;
                 }
                 catch (Exception exception)
                 {
                     ReportBackgroundException("named pipe accept", exception);
                     server?.Dispose();
+                    server = null;
                 }
             }
         }
@@ -202,13 +256,46 @@ namespace UnityCliBridge.Bridge.Editor
 #if !UNITY_5_3_OR_NEWER || UNITY_6000_0_OR_NEWER
         private async Task RunUnixSocketLoopAsync(CancellationToken cancellationToken)
         {
-            CleanupSocketFile();
-
             Socket listener;
 
             try
             {
-                listener = await CreateUnixSocketListenerAsync(cancellationToken).ConfigureAwait(false);
+                listener = await Task.Run(delegate
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return InstanceListenerKeyResolver.Acquire<Socket>(
+                        _baseProjectHash,
+                        ListenerAcquireMaxAttempts,
+                        delegate(string hash)
+                        {
+                            string candidatePipeName = ProtocolConstants.BuildPipeName(hash);
+                            if (string.Equals(hash, _baseProjectHash, StringComparison.Ordinal))
+                            {
+                                TryCleanupSocketFile(candidatePipeName);
+                            }
+
+                            var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+                            try
+                            {
+                                socket.Bind(new UnixDomainSocketEndPoint(candidatePipeName));
+                                socket.Listen(8);
+                                _projectHash = hash;
+                                _pipeName = candidatePipeName;
+                                return socket;
+                            }
+                            catch (SocketException)
+                            {
+                                socket.Dispose();
+                                return null;
+                            }
+                            catch (IOException)
+                            {
+                                socket.Dispose();
+                                return null;
+                            }
+                        },
+                        out _);
+                }, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -248,28 +335,6 @@ namespace UnityCliBridge.Bridge.Editor
                 listener.Dispose();
                 CleanupSocketFile();
             }
-        }
-
-        private Task<Socket> CreateUnixSocketListenerAsync(CancellationToken cancellationToken)
-        {
-            return Task.Run(delegate
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                // Bind/Listen are synchronous and can briefly stall editor startup if they stay on the main thread.
-                var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-                try
-                {
-                    listener.Bind(new UnixDomainSocketEndPoint(_pipeName));
-                    listener.Listen(8);
-                    return listener;
-                }
-                catch
-                {
-                    listener.Dispose();
-                    throw;
-                }
-            }, cancellationToken);
         }
 #endif
 
@@ -840,7 +905,7 @@ namespace UnityCliBridge.Bridge.Editor
                 for (int i = 0; i < existingRecords.Length; i++)
                 {
                     InstanceRecord record = existingRecords[i];
-                    if (string.Equals(record.projectHash, _projectHash, StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(record.projectRoot, _projectRoot, StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
                     }
@@ -860,12 +925,12 @@ namespace UnityCliBridge.Bridge.Editor
                 registry.instances = updatedRecords;
 
                 InstanceRecord? activeRecord = null;
-                if (!string.IsNullOrWhiteSpace(registry.activeProjectHash))
+                if (!string.IsNullOrWhiteSpace(registry.activeProjectRoot))
                 {
                     for (int i = 0; i < registry.instances.Length; i++)
                     {
                         InstanceRecord record = registry.instances[i];
-                        if (string.Equals(record.projectHash, registry.activeProjectHash, StringComparison.OrdinalIgnoreCase))
+                        if (string.Equals(record.projectRoot, registry.activeProjectRoot, StringComparison.OrdinalIgnoreCase))
                         {
                             activeRecord = record;
                             break;
@@ -879,9 +944,10 @@ namespace UnityCliBridge.Bridge.Editor
 
                 if (isCurrentProjectPromotionNeeded)
                 {
-                    registry.activeProjectHash = _projectHash;
+                    registry.activeProjectRoot = _projectRoot;
                 }
 
+                registry.activeProjectHash = null;
                 return registry;
             });
         }
@@ -896,7 +962,7 @@ namespace UnityCliBridge.Bridge.Editor
                 for (int i = 0; i < existingRecords.Length; i++)
                 {
                     InstanceRecord record = existingRecords[i];
-                    if (string.Equals(record.projectHash, _projectHash, StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(record.projectRoot, _projectRoot, StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
                     }
@@ -912,11 +978,12 @@ namespace UnityCliBridge.Bridge.Editor
 
                 registry.instances = remainingRecords;
 
-                if (string.Equals(registry.activeProjectHash, _projectHash, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(registry.activeProjectRoot, _projectRoot, StringComparison.OrdinalIgnoreCase))
                 {
-                    registry.activeProjectHash = registry.instances.Length > 0 ? registry.instances[0].projectHash : null;
+                    registry.activeProjectRoot = registry.instances.Length > 0 ? registry.instances[0].projectRoot : string.Empty;
                 }
 
+                registry.activeProjectHash = null;
                 return registry;
             });
         }
@@ -971,11 +1038,16 @@ namespace UnityCliBridge.Bridge.Editor
 
         private void CleanupSocketFile()
         {
-            if (Path.DirectorySeparatorChar != '\\' && File.Exists(_pipeName))
+            TryCleanupSocketFile(_pipeName);
+        }
+
+        private static void TryCleanupSocketFile(string pipeName)
+        {
+            if (Path.DirectorySeparatorChar != '\\' && !string.IsNullOrWhiteSpace(pipeName) && File.Exists(pipeName))
             {
                 try
                 {
-                    File.Delete(_pipeName);
+                    File.Delete(pipeName);
                 }
                 catch
                 {
