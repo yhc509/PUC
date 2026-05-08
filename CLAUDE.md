@@ -56,6 +56,7 @@ Tests live in `tests/UnityCli.Cli.Tests/` (xUnit, `.NET`-testable surface only).
 - **Nullable references enabled** throughout (`#nullable enable`, implicit usings).
 - **Asset paths** always use `Assets/...` format.
 - **Destructive/dangerous ops require `--force`:** `asset delete` (always), `asset move/rename/create` (when overwriting), destructive scene/prefab patches, scene/prefab `remove-component`, `package remove`, and `execute`.
+- **`execute` cooperative timeout:** `--timeout <초>` (default 30, max 600) 협력적 cancel. 사용자 코드가 `__pucToken` 체크해야 강제 종료. 비협조 코드는 main thread 점유 — force 사용자 책임.
 - **Patch/overwrite rollback:** Scene/prefab patch and asset overwrite flows use `Library/com.yhc509.unity-cli-bridge/backups/` backups for the asset body and `.meta`; restore failures return backup paths for manual recovery.
 - **Dirty scene patch refusal:** `scene patch` refuses an already-loaded dirty target scene even with `--force`; save or discard first.
 - **macOS paths:** Use real paths (`pwd -P`), not symlinks, for hashing and registry lookups.

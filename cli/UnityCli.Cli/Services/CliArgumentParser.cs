@@ -413,6 +413,9 @@ public static partial class CliArgumentParser
                 case CommandKind.ExecuteCode when token == "--args":
                     parsed.ExecuteCodeArgsJson = RequireJsonValue(tokens, "--args");
                     break;
+                case CommandKind.ExecuteCode when token == "--timeout":
+                    parsed.ExecuteCodeTimeoutSeconds = RequireInt(RequireValue(tokens, "--timeout"), "--timeout");
+                    break;
                 case CommandKind.ExecuteCode when token == "--force":
                     parsed.Force = true;
                     break;

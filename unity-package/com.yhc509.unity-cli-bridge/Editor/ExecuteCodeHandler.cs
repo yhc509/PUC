@@ -20,13 +20,17 @@ namespace UnityCliBridge.Bridge.Editor
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using UnityEngine;
 using UnityEditor;
 
 public static class PucExecuteWrapper
 {
-    public static string Execute()
+    internal static CancellationToken __pucToken;
+
+    public static string Execute(CancellationToken token)
     {
+        __pucToken = token;
         var __puc_internal_sb = new System.Text.StringBuilder();
         var __puc_internal_origOut = System.Console.Out;
         var __puc_internal_writer = new System.IO.StringWriter(__puc_internal_sb);
@@ -62,6 +66,11 @@ public static class PucExecuteWrapper
                 throw new CommandFailureException("INVALID_ARGS", "실행할 코드가 비어 있습니다.");
             }
 
+            int effectiveTimeoutMs = ResolveEffectiveTimeoutMs(args.timeoutMs);
+
+            using var cts = new System.Threading.CancellationTokenSource();
+            cts.CancelAfter(effectiveTimeoutMs);
+
             try
             {
                 string wrappedCode = BuildWrappedCode(args.code, args.argumentsJson);
@@ -90,7 +99,7 @@ public static class PucExecuteWrapper
                 Application.logMessageReceived += OnLogMessageReceived;
                 try
                 {
-                    string consoleOutput = (string)(executeMethod.Invoke(null, null) ?? string.Empty);
+                    string consoleOutput = (string)(executeMethod.Invoke(null, new object[] { cts.Token }) ?? string.Empty);
                     string output = MergeOutput(consoleOutput, logEntries);
                     return ProtocolJson.Serialize(new ExecuteCodePayload
                     {
@@ -106,6 +115,12 @@ public static class PucExecuteWrapper
             catch (CommandFailureException)
             {
                 throw;
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException is OperationCanceledException)
+            {
+                throw new CommandFailureException(
+                    ProtocolConstants.ErrorExecuteTimeout,
+                    $"코드 실행이 {effectiveTimeoutMs}ms 안에 완료되지 않아 cancel 되었습니다.");
             }
             catch (TargetInvocationException ex) when (ex.InnerException != null)
             {
@@ -125,6 +140,19 @@ public static class PucExecuteWrapper
                     error = ex.Message,
                 });
             }
+        }
+
+        private static int ResolveEffectiveTimeoutMs(int requested)
+        {
+            if (requested <= 0)
+            {
+                return ProtocolConstants.DefaultExecuteTimeoutMs;
+            }
+            if (requested > ProtocolConstants.MaxExecuteTimeoutMs)
+            {
+                return ProtocolConstants.MaxExecuteTimeoutMs;
+            }
+            return requested;
         }
 
         private static string BuildWrappedCode(string userCode, string? argumentsJson)

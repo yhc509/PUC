@@ -1,3 +1,4 @@
+using System.Text.Json;
 using UnityCli.Cli.Models;
 using UnityCli.Cli.Services;
 using UnityCli.Protocol;
@@ -1360,6 +1361,101 @@ public sealed class CliArgumentParserTests
 
         Assert.Equal(CommandKind.ExecuteCode, parsed.Kind);
         Assert.Equal("{\"k\":\"v\",\"n\":1}", parsed.ExecuteCodeArgsJson);
+    }
+
+    [Fact]
+    public void Execute_WithTimeoutSeconds_StoresOnParsedCommand()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "execute",
+            "--code", "void M(){}",
+            "--force",
+            "--timeout", "60"
+        ]);
+
+        Assert.Equal(60, parsed.ExecuteCodeTimeoutSeconds);
+    }
+
+    [Fact]
+    public void Execute_WithoutTimeout_LeavesNull()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "execute",
+            "--code", "void M(){}",
+            "--force"
+        ]);
+
+        Assert.Null(parsed.ExecuteCodeTimeoutSeconds);
+    }
+
+    [Fact]
+    public void Execute_TimeoutZeroOrNegative_Throws()
+    {
+        Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "execute",
+            "--code", "x",
+            "--force",
+            "--timeout", "0"
+        ]));
+        Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "execute",
+            "--code", "x",
+            "--force",
+            "--timeout", "-5"
+        ]));
+    }
+
+    [Fact]
+    public void Execute_TimeoutAboveMax_Throws()
+    {
+        Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "execute",
+            "--code", "x",
+            "--force",
+            "--timeout", "601"
+        ]));
+    }
+
+    [Fact]
+    public void Execute_TimeoutNonInteger_Throws()
+    {
+        Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "execute",
+            "--code", "x",
+            "--force",
+            "--timeout", "abc"
+        ]));
+    }
+
+    [Fact]
+    public void Execute_TimeoutSeconds_TranslatedToTimeoutMsInArgs()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "execute",
+            "--code", "void M(){}",
+            "--force",
+            "--timeout", "45"
+        ]);
+        var envelope = parsed.ToEnvelope();
+
+        using var doc = JsonDocument.Parse(envelope.argumentsJson);
+        Assert.True(doc.RootElement.TryGetProperty("timeoutMs", out var timeoutMs));
+        Assert.Equal(45000, timeoutMs.GetInt32());
+    }
+
+    [Fact]
+    public void Execute_NoTimeout_TimeoutMsZeroInArgs()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "execute",
+            "--code", "void M(){}",
+            "--force"
+        ]);
+        var envelope = parsed.ToEnvelope();
+
+        using var doc = JsonDocument.Parse(envelope.argumentsJson);
+        bool hasField = doc.RootElement.TryGetProperty("timeoutMs", out var timeoutMs);
+        Assert.True(!hasField || timeoutMs.GetInt32() == 0);
     }
 
     [Fact]
