@@ -10,6 +10,42 @@ namespace UnityCli.Cli.Tests;
 [Collection(CurrentDirectoryCollection.Name)]
 public sealed class InstanceRegistryFileTests
 {
+    private const string ProjectRoot = "C:/Project";
+
+    [Fact]
+    public void Load_MigratesLegacyActiveProjectHash_ToActiveProjectRoot()
+    {
+        using var temp = new TempDirectory();
+        string registryPath = Path.Combine(temp.Path, "instances.json");
+        string legacyJson = """
+            {
+                "activeProjectHash":"abc123def456",
+                "instances":[
+                    {"projectRoot":"/tmp/legacy-proj","projectName":"legacy-proj","projectHash":"abc123def456","pipeName":"/tmp/unity-cli-abc123def456.sock","editorProcessId":0,"unityVersion":"6000.3.13f1","state":"offline","lastSeenUtc":"2026-05-08T00:00:00.0000000+00:00","capabilities":[]}
+                ]
+            }
+            """;
+        File.WriteAllText(registryPath, legacyJson);
+
+        var registry = InstanceRegistryFile.Load(registryPath);
+
+        Assert.Equal("/tmp/legacy-proj", registry.activeProjectRoot);
+        Assert.True(string.IsNullOrEmpty(registry.activeProjectHash));
+    }
+
+    [Fact]
+    public void Load_DropsLegacyHash_WhenNoMatchingInstance()
+    {
+        using var temp = new TempDirectory();
+        string registryPath = Path.Combine(temp.Path, "instances.json");
+        File.WriteAllText(registryPath, "{\"activeProjectHash\":\"deadbeefcafe\",\"instances\":[]}");
+
+        var registry = InstanceRegistryFile.Load(registryPath);
+
+        Assert.True(string.IsNullOrEmpty(registry.activeProjectRoot));
+        Assert.True(string.IsNullOrEmpty(registry.activeProjectHash));
+    }
+
     [Fact]
     public async Task Load_RetriesWhileRegistryFileIsTemporarilyLocked()
     {
@@ -36,7 +72,8 @@ public sealed class InstanceRegistryFileTests
         lockStream.Dispose();
 
         InstanceRegistry registry = await loadTask;
-        Assert.Equal("abc", registry.activeProjectHash);
+        Assert.Equal(ProjectRoot, registry.activeProjectRoot);
+        Assert.True(string.IsNullOrEmpty(registry.activeProjectHash));
         Assert.Single(registry.instances);
     }
 
@@ -60,7 +97,8 @@ public sealed class InstanceRegistryFileTests
         File.WriteAllText(registryPath, BuildRegistryJson("abc"));
 
         InstanceRegistry registry = await loadTask;
-        Assert.Equal("abc", registry.activeProjectHash);
+        Assert.Equal(ProjectRoot, registry.activeProjectRoot);
+        Assert.True(string.IsNullOrEmpty(registry.activeProjectHash));
         Assert.Single(registry.instances);
     }
 
@@ -92,7 +130,8 @@ public sealed class InstanceRegistryFileTests
         await saveTask;
 
         InstanceRegistry registry = InstanceRegistryFile.Load(registryPath);
-        Assert.Equal("abc", registry.activeProjectHash);
+        Assert.Equal(ProjectRoot, registry.activeProjectRoot);
+        Assert.True(string.IsNullOrEmpty(registry.activeProjectHash));
         Assert.Single(registry.instances);
         Assert.False(File.Exists(registryPath + ".lock"));
     }
@@ -108,7 +147,8 @@ public sealed class InstanceRegistryFileTests
         InstanceRegistryFile.Save(registryPath, CreateRegistry("abc"));
 
         InstanceRegistry registry = InstanceRegistryFile.Load(registryPath);
-        Assert.Equal("abc", registry.activeProjectHash);
+        Assert.Equal(ProjectRoot, registry.activeProjectRoot);
+        Assert.True(string.IsNullOrEmpty(registry.activeProjectHash));
         Assert.Single(registry.instances);
         Assert.False(File.Exists(lockPath));
     }
@@ -124,7 +164,8 @@ public sealed class InstanceRegistryFileTests
         InstanceRegistryFile.Save(registryPath, CreateRegistry("abc"));
 
         InstanceRegistry registry = InstanceRegistryFile.Load(registryPath);
-        Assert.Equal("abc", registry.activeProjectHash);
+        Assert.Equal(ProjectRoot, registry.activeProjectRoot);
+        Assert.True(string.IsNullOrEmpty(registry.activeProjectHash));
         Assert.Single(registry.instances);
         Assert.False(File.Exists(lockPath));
     }
@@ -158,7 +199,8 @@ public sealed class InstanceRegistryFileTests
         await saveTask;
 
         InstanceRegistry registry = InstanceRegistryFile.Load(registryPath);
-        Assert.Equal("abc", registry.activeProjectHash);
+        Assert.Equal(ProjectRoot, registry.activeProjectRoot);
+        Assert.True(string.IsNullOrEmpty(registry.activeProjectHash));
         Assert.Single(registry.instances);
         Assert.False(File.Exists(lockPath));
     }
@@ -192,7 +234,8 @@ public sealed class InstanceRegistryFileTests
         await saveTask;
 
         InstanceRegistry registry = InstanceRegistryFile.Load(registryPath);
-        Assert.Equal("abc", registry.activeProjectHash);
+        Assert.Equal(ProjectRoot, registry.activeProjectRoot);
+        Assert.True(string.IsNullOrEmpty(registry.activeProjectHash));
         Assert.Single(registry.instances);
         Assert.False(File.Exists(lockPath));
     }
@@ -228,12 +271,13 @@ public sealed class InstanceRegistryFileTests
 
         InstanceRegistryFile.Update(registryPath, registry =>
         {
-            registry.activeProjectHash = "def";
+            registry.activeProjectRoot = "C:/OtherProject";
             return registry;
         });
 
         InstanceRegistry updated = InstanceRegistryFile.Load(registryPath);
-        Assert.Equal("def", updated.activeProjectHash);
+        Assert.Equal("C:/OtherProject", updated.activeProjectRoot);
+        Assert.True(string.IsNullOrEmpty(updated.activeProjectHash));
         Assert.False(File.Exists(lockPath));
     }
 
@@ -246,12 +290,13 @@ public sealed class InstanceRegistryFileTests
 
         InstanceRegistryFile.Update(registryPath, registry =>
         {
-            registry.activeProjectHash = "def";
+            registry.activeProjectRoot = "C:/OtherProject";
             return registry;
         });
 
         InstanceRegistry updated = InstanceRegistryFile.Load(registryPath);
-        Assert.Equal("def", updated.activeProjectHash);
+        Assert.Equal("C:/OtherProject", updated.activeProjectRoot);
+        Assert.True(string.IsNullOrEmpty(updated.activeProjectHash));
         Assert.False(File.Exists(registryPath + ".lock"));
     }
 
@@ -259,12 +304,12 @@ public sealed class InstanceRegistryFileTests
     {
         return new InstanceRegistry
         {
-            activeProjectHash = projectHash,
+            activeProjectRoot = ProjectRoot,
             instances =
             [
                 new InstanceRecord
                 {
-                    projectRoot = "C:/Project",
+                    projectRoot = ProjectRoot,
                     projectName = "Project",
                     projectHash = projectHash,
                     pipeName = "unity-cli-" + projectHash,
