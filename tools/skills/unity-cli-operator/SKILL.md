@@ -29,6 +29,7 @@ description: "Unity Editor 외부 제어 1차 진입점. 씬/프리팹/에셋/�
   4. 여러 프로젝트가 실행 중이면 `instances list`로 확인 후 사용자에게 물어본다
 - macOS에서는 항상 `pwd -P`로 실제 경로를 사용한다.
 - `--project`는 프로젝트 이름(예: `unity-cli-bridge-sample`)이나 전체 경로 모두 가능하다.
+- 다중 인스턴스 환경에서는 `instances list`로 `projectRoot`를 확인하고 `--project <path>` 또는 `--project <projectName>`으로 라우팅한다. 12자 hash 입력은 충돌 시 ambiguous 에러로 거부된다.
 
 3. 쓰기 작업 전에는 상태를 본다.
 - 먼저 `status --json --project <name>`으로 live 연결, busy 상태, 현재 프로젝트가 맞는지 확인한다.
