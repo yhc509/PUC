@@ -438,6 +438,17 @@ public static partial class CliArgumentParser
         {
             throw new CliUsageException("`execute`는 `--force`가 필요합니다.");
         }
+
+        if (parsed.ExecuteCodeTimeoutSeconds.HasValue)
+        {
+            int seconds = parsed.ExecuteCodeTimeoutSeconds.Value;
+            int maxSeconds = ProtocolConstants.MaxExecuteTimeoutMs / 1000;
+            if (seconds <= 0 || seconds > maxSeconds)
+            {
+                throw new CliUsageException(
+                    $"--timeout 값은 1~{maxSeconds} 사이의 정수(초)여야 합니다.");
+            }
+        }
     }
 
     internal static bool ForceRequiredByCatalog(ParsedCommand parsed)

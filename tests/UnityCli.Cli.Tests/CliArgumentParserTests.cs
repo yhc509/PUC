@@ -1363,6 +1363,70 @@ public sealed class CliArgumentParserTests
     }
 
     [Fact]
+    public void Execute_WithTimeoutSeconds_StoresOnParsedCommand()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "execute",
+            "--code", "void M(){}",
+            "--force",
+            "--timeout", "60"
+        ]);
+
+        Assert.Equal(60, parsed.ExecuteCodeTimeoutSeconds);
+    }
+
+    [Fact]
+    public void Execute_WithoutTimeout_LeavesNull()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "execute",
+            "--code", "void M(){}",
+            "--force"
+        ]);
+
+        Assert.Null(parsed.ExecuteCodeTimeoutSeconds);
+    }
+
+    [Fact]
+    public void Execute_TimeoutZeroOrNegative_Throws()
+    {
+        Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "execute",
+            "--code", "x",
+            "--force",
+            "--timeout", "0"
+        ]));
+        Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "execute",
+            "--code", "x",
+            "--force",
+            "--timeout", "-5"
+        ]));
+    }
+
+    [Fact]
+    public void Execute_TimeoutAboveMax_Throws()
+    {
+        Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "execute",
+            "--code", "x",
+            "--force",
+            "--timeout", "601"
+        ]));
+    }
+
+    [Fact]
+    public void Execute_TimeoutNonInteger_Throws()
+    {
+        Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "execute",
+            "--code", "x",
+            "--force",
+            "--timeout", "abc"
+        ]));
+    }
+
+    [Fact]
     public void Parse_Execute_ToEnvelope_IncludesArgsJson()
     {
         var parsed = CliArgumentParser.Parse([
