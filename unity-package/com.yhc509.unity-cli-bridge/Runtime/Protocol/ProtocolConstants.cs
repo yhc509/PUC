@@ -13,6 +13,8 @@ namespace UnityCli.Protocol
         public const string ProtocolVersion = "3";
         public const int DefaultLiveTimeoutMs = 30_000;
         public const int DefaultTimeoutMs = DefaultLiveTimeoutMs;
+        public const int DefaultExecuteTimeoutMs = 30_000;
+        public const int MaxExecuteTimeoutMs = 600_000;
         public const int DefaultConsoleLimit = 50;
         public const int DefaultAssetFindLimit = 50;
         public const int DefaultPackageRequestTimeoutSeconds = 300;
@@ -21,6 +23,7 @@ namespace UnityCli.Protocol
         public const string BusyErrorCode = "BUSY";
         public const string ErrorAssetForceRequired = "ASSET_FORCE_REQUIRED";
         public const string ErrorExecuteForceRequired = "EXECUTE_FORCE_REQUIRED";
+        public const string ErrorExecuteTimeout = "EXECUTE_TIMEOUT";
         public const string ErrorPrefabForceRequired = "PREFAB_FORCE_REQUIRED";
         public const string ErrorPackageForceRequired = "PACKAGE_FORCE_REQUIRED";
         public const string ErrorPackageBusy = "PACKAGE_BUSY";

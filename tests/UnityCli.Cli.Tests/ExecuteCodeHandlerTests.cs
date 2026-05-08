@@ -65,6 +65,40 @@ public sealed class ExecuteCodeHandlerTests
         AssertValidCSharpEscapeSequences(literal);
     }
 
+    [Fact]
+    public void ExecuteCodeArgs_TimeoutMs_RoundTripsThroughJson()
+    {
+        var args = new ExecuteCodeArgs
+        {
+            code = "// noop",
+            force = true,
+            timeoutMs = 60000,
+        };
+
+        string json = ProtocolJson.Serialize(args);
+        var deserialized = ProtocolJson.Deserialize<ExecuteCodeArgs>(json);
+
+        Assert.NotNull(deserialized);
+        Assert.Equal(60000, deserialized!.timeoutMs);
+    }
+
+    [Fact]
+    public void ExecuteCodeArgs_TimeoutMs_DefaultsToNull_WhenOmitted()
+    {
+        var deserialized = ProtocolJson.Deserialize<ExecuteCodeArgs>("{\"code\":\"x\",\"force\":true}");
+
+        Assert.NotNull(deserialized);
+        Assert.Null(deserialized!.timeoutMs);
+    }
+
+    [Fact]
+    public void ProtocolConstants_ExecuteTimeoutDefaultsAndBounds()
+    {
+        Assert.Equal(30_000, ProtocolConstants.DefaultExecuteTimeoutMs);
+        Assert.Equal(600_000, ProtocolConstants.MaxExecuteTimeoutMs);
+        Assert.Equal("EXECUTE_TIMEOUT", ProtocolConstants.ErrorExecuteTimeout);
+    }
+
     private static void AssertValidCSharpEscapeSequences(string literal)
     {
         for (int index = 0; index < literal.Length; index++)

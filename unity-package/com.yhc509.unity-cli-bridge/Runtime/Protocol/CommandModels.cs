@@ -96,6 +96,7 @@ namespace UnityCli.Protocol
         public string code = string.Empty;
         public string? argumentsJson;
         public bool force;
+        public int? timeoutMs;
     }
 
     [Serializable]
