@@ -1,3 +1,4 @@
+using System.Text.Json;
 using UnityCli.Cli.Models;
 using UnityCli.Cli.Services;
 using UnityCli.Protocol;
@@ -1424,6 +1425,37 @@ public sealed class CliArgumentParserTests
             "--force",
             "--timeout", "abc"
         ]));
+    }
+
+    [Fact]
+    public void Execute_TimeoutSeconds_TranslatedToTimeoutMsInArgs()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "execute",
+            "--code", "void M(){}",
+            "--force",
+            "--timeout", "45"
+        ]);
+        var envelope = parsed.ToEnvelope();
+
+        using var doc = JsonDocument.Parse(envelope.argumentsJson);
+        Assert.True(doc.RootElement.TryGetProperty("timeoutMs", out var timeoutMs));
+        Assert.Equal(45000, timeoutMs.GetInt32());
+    }
+
+    [Fact]
+    public void Execute_NoTimeout_OmitsOrNullsTimeoutMsInArgs()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "execute",
+            "--code", "void M(){}",
+            "--force"
+        ]);
+        var envelope = parsed.ToEnvelope();
+
+        using var doc = JsonDocument.Parse(envelope.argumentsJson);
+        bool hasField = doc.RootElement.TryGetProperty("timeoutMs", out var timeoutMs);
+        Assert.True(!hasField || timeoutMs.ValueKind == JsonValueKind.Null);
     }
 
     [Fact]
