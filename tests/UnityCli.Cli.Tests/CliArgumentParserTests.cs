@@ -1444,7 +1444,7 @@ public sealed class CliArgumentParserTests
     }
 
     [Fact]
-    public void Execute_NoTimeout_OmitsOrNullsTimeoutMsInArgs()
+    public void Execute_NoTimeout_TimeoutMsZeroInArgs()
     {
         var parsed = CliArgumentParser.Parse([
             "execute",
@@ -1455,7 +1455,7 @@ public sealed class CliArgumentParserTests
 
         using var doc = JsonDocument.Parse(envelope.argumentsJson);
         bool hasField = doc.RootElement.TryGetProperty("timeoutMs", out var timeoutMs);
-        Assert.True(!hasField || timeoutMs.ValueKind == JsonValueKind.Null);
+        Assert.True(!hasField || timeoutMs.GetInt32() == 0);
     }
 
     [Fact]

@@ -83,12 +83,12 @@ public sealed class ExecuteCodeHandlerTests
     }
 
     [Fact]
-    public void ExecuteCodeArgs_TimeoutMs_DefaultsToNull_WhenOmitted()
+    public void ExecuteCodeArgs_TimeoutMs_DefaultsToZero_WhenOmitted()
     {
         var deserialized = ProtocolJson.Deserialize<ExecuteCodeArgs>("{\"code\":\"x\",\"force\":true}");
 
         Assert.NotNull(deserialized);
-        Assert.Null(deserialized!.timeoutMs);
+        Assert.Equal(0, deserialized!.timeoutMs);
     }
 
     [Fact]

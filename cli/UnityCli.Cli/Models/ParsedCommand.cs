@@ -292,7 +292,7 @@ public sealed class ParsedCommand
                 code = ResolveExecuteCode(),
                 argumentsJson = ExecuteCodeArgsJson,
                 force = Force,
-                timeoutMs = ExecuteCodeTimeoutSeconds.HasValue ? ExecuteCodeTimeoutSeconds.Value * 1000 : (int?)null,
+                timeoutMs = ExecuteCodeTimeoutSeconds.HasValue ? ExecuteCodeTimeoutSeconds.Value * 1000 : 0,
             },
             CommandKind.Custom => new CustomCommandArgs
             {

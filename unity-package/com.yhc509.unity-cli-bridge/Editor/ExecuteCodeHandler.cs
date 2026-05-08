@@ -142,18 +142,17 @@ public static class PucExecuteWrapper
             }
         }
 
-        private static int ResolveEffectiveTimeoutMs(int? requested)
+        private static int ResolveEffectiveTimeoutMs(int requested)
         {
-            int value = requested ?? ProtocolConstants.DefaultExecuteTimeoutMs;
-            if (value < 1)
+            if (requested <= 0)
             {
-                value = 1;
+                return ProtocolConstants.DefaultExecuteTimeoutMs;
             }
-            if (value > ProtocolConstants.MaxExecuteTimeoutMs)
+            if (requested > ProtocolConstants.MaxExecuteTimeoutMs)
             {
-                value = ProtocolConstants.MaxExecuteTimeoutMs;
+                return ProtocolConstants.MaxExecuteTimeoutMs;
             }
-            return value;
+            return requested;
         }
 
         private static string BuildWrappedCode(string userCode, string? argumentsJson)
