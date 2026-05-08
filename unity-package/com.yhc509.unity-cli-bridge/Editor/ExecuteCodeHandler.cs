@@ -20,13 +20,17 @@ namespace UnityCliBridge.Bridge.Editor
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using UnityEngine;
 using UnityEditor;
 
 public static class PucExecuteWrapper
 {
-    public static string Execute()
+    internal static CancellationToken __pucToken;
+
+    public static string Execute(CancellationToken token)
     {
+        __pucToken = token;
         var __puc_internal_sb = new System.Text.StringBuilder();
         var __puc_internal_origOut = System.Console.Out;
         var __puc_internal_writer = new System.IO.StringWriter(__puc_internal_sb);
