@@ -62,6 +62,8 @@ namespace UnityCliBridge.Bridge.Editor
         private string _projectHash = string.Empty;
         private string _pipeName = string.Empty;
         private const int ListenerAcquireMaxAttempts = 16;
+        private const int NamedPipeMaxServerInstances = 2;
+        private const int NamedPipeProbeTimeoutMilliseconds = 50;
 
         public BridgeHost()
         {
@@ -184,12 +186,17 @@ namespace UnityCliBridge.Bridge.Editor
                         delegate(string hash)
                         {
                             string candidatePipeName = ProtocolConstants.BuildPipeName(hash);
+                            if (IsLiveNamedPipe(candidatePipeName))
+                            {
+                                return null;
+                            }
+
                             try
                             {
                                 var server = new NamedPipeServerStream(
                                     candidatePipeName,
                                     PipeDirection.InOut,
-                                    1,
+                                    NamedPipeMaxServerInstances,
                                     PipeTransmissionMode.Byte,
                                     PipeOptions.Asynchronous);
                                 _projectHash = hash;
@@ -225,19 +232,17 @@ namespace UnityCliBridge.Bridge.Editor
                 {
                     if (server == null)
                     {
-                        // Keep each pipe name single-owner so hash collisions force suffix retry.
-                        // Reconnects wait until the active client disconnects and the loop opens the next server.
                         server = new NamedPipeServerStream(
                             _pipeName,
                             PipeDirection.InOut,
-                            1,
+                            NamedPipeMaxServerInstances,
                             PipeTransmissionMode.Byte,
                             PipeOptions.Asynchronous);
                     }
 
                     _isListenerReady = true;
                     await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
-                    await HandleNamedPipeClientAsync(server, cancellationToken).ConfigureAwait(false);
+                    _ = HandleNamedPipeClientAsync(server, cancellationToken);
                     server = null;
                 }
                 catch (OperationCanceledException)
@@ -250,6 +255,43 @@ namespace UnityCliBridge.Bridge.Editor
                     ReportBackgroundException("named pipe accept", exception);
                     server?.Dispose();
                     server = null;
+                }
+            }
+        }
+
+        private static bool IsLiveNamedPipe(string pipeName)
+        {
+            if (string.IsNullOrWhiteSpace(pipeName))
+            {
+                return false;
+            }
+
+            using (var client = new NamedPipeClientStream(
+                ".",
+                pipeName,
+                PipeDirection.InOut,
+                PipeOptions.Asynchronous))
+            {
+                try
+                {
+                    client.Connect(NamedPipeProbeTimeoutMilliseconds);
+                    return true;
+                }
+                catch (TimeoutException)
+                {
+                    return false;
+                }
+                catch (IOException)
+                {
+                    return false;
+                }
+                catch (SocketException)
+                {
+                    return false;
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    return false;
                 }
             }
         }
