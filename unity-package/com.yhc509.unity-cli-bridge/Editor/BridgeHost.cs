@@ -189,7 +189,7 @@ namespace UnityCliBridge.Bridge.Editor
                                 var server = new NamedPipeServerStream(
                                     candidatePipeName,
                                     PipeDirection.InOut,
-                                    2,
+                                    1,
                                     PipeTransmissionMode.Byte,
                                     PipeOptions.Asynchronous);
                                 _projectHash = hash;
@@ -225,18 +225,19 @@ namespace UnityCliBridge.Bridge.Editor
                 {
                     if (server == null)
                     {
-                        // Allow one active client handler and one pending listener during reconnect races.
+                        // Keep each pipe name single-owner so hash collisions force suffix retry.
+                        // Reconnects wait until the active client disconnects and the loop opens the next server.
                         server = new NamedPipeServerStream(
                             _pipeName,
                             PipeDirection.InOut,
-                            2,
+                            1,
                             PipeTransmissionMode.Byte,
                             PipeOptions.Asynchronous);
                     }
 
                     _isListenerReady = true;
                     await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
-                    HandleNamedPipeClient(server, cancellationToken);
+                    await HandleNamedPipeClientAsync(server, cancellationToken).ConfigureAwait(false);
                     server = null;
                 }
                 catch (OperationCanceledException)
@@ -343,7 +344,7 @@ namespace UnityCliBridge.Bridge.Editor
         }
 #endif
 
-        private async void HandleNamedPipeClient(NamedPipeServerStream server, CancellationToken cancellationToken)
+        private async Task HandleNamedPipeClientAsync(NamedPipeServerStream server, CancellationToken cancellationToken)
         {
             try
             {
