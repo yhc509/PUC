@@ -240,6 +240,38 @@ public sealed class InstanceRegistryStoreTests
     }
 
     [Fact]
+    public void ResolveOrCreateTarget_SuffixedHash_ReturnsExistingInstance()
+    {
+        using var temp = new TempDirectory();
+        var projectRoot = Path.Combine(temp.Path, "ProjA");
+        Directory.CreateDirectory(projectRoot);
+
+        var store = new InstanceRegistryStore(Path.Combine(temp.Path, "instances.json"));
+        var canonicalRoot = ProtocolConstants.GetCanonicalPath(projectRoot);
+        var registry = new InstanceRegistry
+        {
+            instances =
+            [
+                new InstanceRecord
+                {
+                    projectRoot = canonicalRoot,
+                    projectName = "ProjA",
+                    projectHash = "abc123def456-1",
+                    pipeName = ProtocolConstants.BuildPipeName("abc123def456-1"),
+                    state = "idle",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                },
+            ],
+        };
+
+        var resolved = store.ResolveOrCreateTarget(registry, "abc123def456-1");
+
+        Assert.Equal(canonicalRoot, resolved.projectRoot);
+        Assert.Equal("abc123def456-1", resolved.projectHash);
+        Assert.Single(registry.instances);
+    }
+
+    [Fact]
     public void ResolveOrCreateTarget_PathOverridesHashLookup_ReturnsExistingInstance()
     {
         using var temp = new TempDirectory();

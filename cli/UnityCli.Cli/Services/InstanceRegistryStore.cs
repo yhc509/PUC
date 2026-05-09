@@ -119,7 +119,7 @@ public sealed class InstanceRegistryStore
             throw new CliUsageException("project hash, project path 또는 project name이 필요합니다.");
         }
 
-        if (trimmed.Length == 12 && !trimmed.Contains(Path.DirectorySeparatorChar) && !trimmed.Contains(Path.AltDirectorySeparatorChar))
+        if (!ContainsDirectorySeparator(trimmed) && IsProjectHashInput(trimmed))
         {
             var hashMatches = registry.instances
                 .Where(item => string.Equals(item.projectHash, trimmed, StringComparison.OrdinalIgnoreCase))
@@ -192,6 +192,55 @@ public sealed class InstanceRegistryStore
             && !string.IsNullOrWhiteSpace(projectRoot)
             ? projectRoot
             : throw CreateUnknownProjectOverrideException(trimmed);
+    }
+
+    private static bool ContainsDirectorySeparator(string value)
+    {
+        return value.Contains(Path.DirectorySeparatorChar)
+            || value.Contains(Path.AltDirectorySeparatorChar);
+    }
+
+    private static bool IsProjectHashInput(string value)
+    {
+        if (value.Length < 12)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < 12; index++)
+        {
+            if (!IsHexDigit(value[index]))
+            {
+                return false;
+            }
+        }
+
+        if (value.Length == 12)
+        {
+            return true;
+        }
+
+        if (value[12] != '-' || value.Length == 13)
+        {
+            return false;
+        }
+
+        for (var index = 13; index < value.Length; index++)
+        {
+            if (!char.IsDigit(value[index]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsHexDigit(char value)
+    {
+        return value is >= '0' and <= '9'
+            or >= 'a' and <= 'f'
+            or >= 'A' and <= 'F';
     }
 
     private static InstanceRegistry Sanitize(InstanceRegistry registry)
