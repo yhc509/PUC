@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `instances list`/`status` responses now use `activeProjectRoot` (canonical project root) instead of `activeProjectHash`. Instances stay separated safely in multi-worktree setups even if their 12-character hashes collide.
 
 ### Compatibility
-- Wire protocol bumped from 3 to 4 for the registry identity migration. Upgrade the CLI binary and Unity package together; mixed versions return `PROTOCOL_MISMATCH`. Existing `registry.json` files with `activeProjectHash` are migrated automatically on first load.
+- Wire protocol bumped from 3 to 4 for the registry identity migration. Upgrade the CLI binary and Unity package together; mixed versions return `PROTOCOL_MISMATCH`. Existing `registry.json` files with `activeProjectHash` are migrated in memory on first load and persisted on the next registry write.
 
 ## [0.1.12] - 2026-05-08
 
