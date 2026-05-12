@@ -3,7 +3,7 @@
 ## 실행 파일 찾기
 
 - `UNITY_CLI_BIN`이 있으면 그것을 우선 사용한다.
-- 현재 작업 디렉터리나 상위 디렉터리에 `dist/unity-cli/UnityCli.Cli`가 있으면 그 경로를 사용한다.
+- 현재 작업 디렉터리나 상위 디렉터리에 `dist/unity-cli/unity-cli`가 있으면 그 경로를 사용한다.
 - 둘 다 없으면 `command -v unity-cli` 결과를 사용한다.
 - 셋 다 없으면 빌드나 설치가 필요하다고 보고 진행을 멈춘다.
 
