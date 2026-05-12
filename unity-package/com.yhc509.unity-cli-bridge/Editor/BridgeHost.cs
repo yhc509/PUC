@@ -50,6 +50,7 @@ namespace UnityCliBridge.Bridge.Editor
         private readonly PackageCommandHandler _packageCommandHandler;
         private readonly MaterialCommandHandler _materialCommandHandler;
         private readonly QaCommandHandler _qaCommandHandler;
+        private NamedPipeOwnershipLock? _namedPipeOwnershipLock;
 #if !UNITY_5_3_OR_NEWER || UNITY_6000_0_OR_NEWER
         private Socket? _unixListener;
 #endif
@@ -127,6 +128,7 @@ namespace UnityCliBridge.Bridge.Editor
             ConsoleLogBuffer.Stop();
             RemoveInstance();
             CleanupSocketFile();
+            DisposeNamedPipeOwnershipLock();
             _cancellationTokenSource.Dispose();
         }
 
@@ -186,13 +188,21 @@ namespace UnityCliBridge.Bridge.Editor
                         delegate(string hash)
                         {
                             string candidatePipeName = ProtocolConstants.BuildPipeName(hash);
-                            if (IsLiveNamedPipe(candidatePipeName))
-                            {
-                                return null;
-                            }
+                            NamedPipeOwnershipLock? ownershipLock = null;
 
                             try
                             {
+                                if (Path.DirectorySeparatorChar == '\\'
+                                    && !NamedPipeOwnershipLock.TryAcquire(candidatePipeName, out ownershipLock))
+                                {
+                                    return null;
+                                }
+
+                                if (IsLiveNamedPipe(candidatePipeName))
+                                {
+                                    return null;
+                                }
+
                                 var server = new NamedPipeServerStream(
                                     candidatePipeName,
                                     PipeDirection.InOut,
@@ -201,6 +211,8 @@ namespace UnityCliBridge.Bridge.Editor
                                     PipeOptions.Asynchronous);
                                 _projectHash = hash;
                                 _pipeName = candidatePipeName;
+                                _namedPipeOwnershipLock = ownershipLock;
+                                ownershipLock = null;
                                 return server;
                             }
                             catch (IOException)
@@ -210,6 +222,13 @@ namespace UnityCliBridge.Bridge.Editor
                             catch (UnauthorizedAccessException)
                             {
                                 return null;
+                            }
+                            finally
+                            {
+                                if (ownershipLock != null)
+                                {
+                                    ownershipLock.Dispose();
+                                }
                             }
                         },
                         out _);
@@ -226,36 +245,44 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             NamedPipeServerStream? server = initialServer;
-            while (!cancellationToken.IsCancellationRequested)
+            try
             {
-                try
+                while (!cancellationToken.IsCancellationRequested)
                 {
-                    if (server == null)
+                    try
                     {
-                        server = new NamedPipeServerStream(
-                            _pipeName,
-                            PipeDirection.InOut,
-                            NamedPipeMaxServerInstances,
-                            PipeTransmissionMode.Byte,
-                            PipeOptions.Asynchronous);
-                    }
+                        if (server == null)
+                        {
+                            server = new NamedPipeServerStream(
+                                _pipeName,
+                                PipeDirection.InOut,
+                                NamedPipeMaxServerInstances,
+                                PipeTransmissionMode.Byte,
+                                PipeOptions.Asynchronous);
+                        }
 
-                    _isListenerReady = true;
-                    await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
-                    _ = HandleNamedPipeClientAsync(server, cancellationToken);
-                    server = null;
+                        _isListenerReady = true;
+                        await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
+                        _ = HandleNamedPipeClientAsync(server, cancellationToken);
+                        server = null;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        server?.Dispose();
+                        server = null;
+                    }
+                    catch (Exception exception)
+                    {
+                        ReportBackgroundException("named pipe accept", exception);
+                        server?.Dispose();
+                        server = null;
+                    }
                 }
-                catch (OperationCanceledException)
-                {
-                    server?.Dispose();
-                    server = null;
-                }
-                catch (Exception exception)
-                {
-                    ReportBackgroundException("named pipe accept", exception);
-                    server?.Dispose();
-                    server = null;
-                }
+            }
+            finally
+            {
+                server?.Dispose();
+                DisposeNamedPipeOwnershipLock();
             }
         }
 
@@ -1101,6 +1128,18 @@ namespace UnityCliBridge.Bridge.Editor
                 {
                 }
             }
+        }
+
+        private void DisposeNamedPipeOwnershipLock()
+        {
+            var ownershipLock = _namedPipeOwnershipLock;
+            if (ownershipLock == null)
+            {
+                return;
+            }
+
+            _namedPipeOwnershipLock = null;
+            ownershipLock.Dispose();
         }
 
 #if !UNITY_5_3_OR_NEWER || UNITY_6000_0_OR_NEWER
