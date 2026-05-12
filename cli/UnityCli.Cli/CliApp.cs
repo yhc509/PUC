@@ -202,6 +202,8 @@ public static class CliApp
             : null;
 
         var liveReachable = false;
+        string? liveErrorCode = null;
+        string? liveErrorMessage = null;
         if (target is not null)
         {
             try
@@ -216,6 +218,11 @@ public static class CliApp
                 };
                 var response = await ipcClient.SendAsync(target, ping, 5_000, cts.Token);
                 liveReachable = response.status == "success";
+                if (!liveReachable && response.error is not null)
+                {
+                    liveErrorCode = response.error.code;
+                    liveErrorMessage = response.error.message;
+                }
             }
             catch
             {
@@ -234,6 +241,8 @@ public static class CliApp
             targetProjectName = target?.projectName,
             pipeName = target?.pipeName,
             liveReachable,
+            liveErrorCode,
+            liveErrorMessage,
             unityPath,
             instanceCount = registry.instances.Length,
         };
