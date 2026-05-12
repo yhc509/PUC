@@ -16,9 +16,9 @@ description: "Unity Editor 외부 제어 1차 진입점. 씬/프리팹/에셋/�
 ## Quick Workflow
 
 1. 실행 파일을 찾는다.
-- 우선순위는 `UNITY_CLI_BIN` 환경 변수, `ucli` (PATH 상의 symlink), 현재 repo의 `dist/unity-cli/UnityCli.Cli` 순서다.
+- 우선순위는 `UNITY_CLI_BIN` 환경 변수, `ucli` (PATH 상의 symlink), 현재 repo의 `dist/unity-cli/unity-cli` 순서다.
 - `ucli`가 PATH에 있으면 그대로 사용한다. 매 호출마다 변수를 재정의하지 않는다.
-- 셋 다 없으면 `ln -s ~/dev/unity/unity-cli/dist/unity-cli/UnityCli.Cli ~/bin/ucli`로 symlink을 만든다.
+- 셋 다 없으면 repo 루트에서 `./scripts/publish-osx-arm64.sh`로 `dist/unity-cli/unity-cli`를 빌드한 뒤 `ln -s <repo>/dist/unity-cli/unity-cli ~/bin/ucli`로 symlink을 만든다.
 
 2. **대상 프로젝트를 결정하고 `--project`를 항상 명시한다.**
 - CLI는 `--project` 없이 호출하면 아무 live 인스턴스에 연결한다. **의도하지 않은 프로젝트에 명령이 실행될 수 있으므로 반드시 명시한다.**
@@ -48,7 +48,7 @@ description: "Unity Editor 외부 제어 1차 진입점. 씬/프리팹/에셋/�
 
 - 모든 asset 경로는 `Assets/...` 형식으로 다룬다. 조회 전용(`asset find`, `asset info`)은 `Packages/...`도 허용된다.
 - 파괴 연산과 덮어쓰기는 `--force`가 있을 때만 허용된다고 가정한다. 다음은 항상 force-gated: `asset delete`, `execute`, `package remove`, `scene remove-component`, `prefab remove-component`. 다음은 조건부 force-gated: 기존 경로를 덮어쓰는 `asset move`/`asset rename`/`asset create`; `scene patch` 안의 `delete-gameobject`/`remove-component`; `prefab patch` 안의 `remove-node`/`remove-component`.
-- scene/prefab patch와 asset overwrite는 같은 폴더의 hidden `.bridge-bak` 파일로 본체와 `.meta`를 백업한 뒤 실행된다. `BACKUP_RESTORE_FAILED`가 나오면 즉시 중단하고 응답의 백업 경로로 수동 복구를 안내한다.
+- scene/prefab patch와 asset overwrite는 `Library/com.yhc509.unity-cli-bridge/backups/` 디렉터리에 본체와 `.meta`를 백업한 뒤 실행된다. `BACKUP_RESTORE_FAILED`가 나오면 즉시 중단하고 응답의 백업 경로로 수동 복구를 안내한다.
 - `scene patch`는 대상 scene이 이미 dirty이면 `--force`와 무관하게 거부된다. 먼저 저장하거나 변경을 폐기한 뒤 다시 실행한다.
 - `execute`/`execute-code`는 임의 C# 실행이므로 항상 `--force`가 필요하다.
 - `execute --code 'Debug.Log(__pucArgsJson);' --args '{"k":"v"}' --force`로 넘긴 JSON은 사용자 코드에서 `__pucArgsJson` 문자열 변수로 읽는다.
