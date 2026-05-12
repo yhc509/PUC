@@ -26,7 +26,7 @@ namespace UnityCliBridge.Bridge.Editor.Tests
             string json = EnvelopeJsonWriter.Write(response);
 
             Assert.That(json, Is.EqualTo(
-                "{\"requestId\":\"req-1\",\"protocolVersion\":\"2\",\"target\":\"target-1\",\"status\":\"success\",\"durationMs\":12,\"data\":"
+                "{\"requestId\":\"req-1\",\"protocolVersion\":\"" + ProtocolConstants.ProtocolVersion + "\",\"target\":\"target-1\",\"status\":\"success\",\"durationMs\":12,\"data\":"
                 + expectedData
                 + ",\"retryable\":false,\"transport\":\"live\"}"));
         }
@@ -44,7 +44,7 @@ namespace UnityCliBridge.Bridge.Editor.Tests
             string json = EnvelopeJsonWriter.Write(response);
 
             Assert.That(json, Is.EqualTo(
-                "{\"requestId\":\"req-1\",\"protocolVersion\":\"2\",\"status\":\"success\",\"durationMs\":0,\"retryable\":false,\"transport\":\"live\"}"));
+                "{\"requestId\":\"req-1\",\"protocolVersion\":\"" + ProtocolConstants.ProtocolVersion + "\",\"status\":\"success\",\"durationMs\":0,\"retryable\":false,\"transport\":\"live\"}"));
         }
 
         [Test]
@@ -80,7 +80,7 @@ namespace UnityCliBridge.Bridge.Editor.Tests
             string json = EnvelopeJsonWriter.Write(response);
 
             Assert.That(json, Is.EqualTo(
-                "{\"requestId\":\"req-1\",\"protocolVersion\":\"2\",\"status\":\"error\",\"durationMs\":34,\"error\":{\"code\":\"BOOM\",\"message\":\"Something failed.\",\"details\":\"{\\\"hint\\\":\\\"retry\\\"}\"},\"retryable\":false,\"transport\":\"live\"}"));
+                "{\"requestId\":\"req-1\",\"protocolVersion\":\"" + ProtocolConstants.ProtocolVersion + "\",\"status\":\"error\",\"durationMs\":34,\"error\":{\"code\":\"BOOM\",\"message\":\"Something failed.\",\"details\":\"{\\\"hint\\\":\\\"retry\\\"}\"},\"retryable\":false,\"transport\":\"live\"}"));
         }
 
         [Test]
@@ -99,7 +99,7 @@ namespace UnityCliBridge.Bridge.Editor.Tests
             string json = EnvelopeJsonWriter.Write(response);
 
             Assert.That(json, Is.EqualTo(
-                "{\"requestId\":\"req-1\",\"protocolVersion\":\"2\",\"status\":\"error\",\"durationMs\":34,\"error\":{\"code\":\"BOOM\",\"message\":\"Something failed.\"},\"retryable\":true,\"transport\":\"live\"}"));
+                "{\"requestId\":\"req-1\",\"protocolVersion\":\"" + ProtocolConstants.ProtocolVersion + "\",\"status\":\"error\",\"durationMs\":34,\"error\":{\"code\":\"BOOM\",\"message\":\"Something failed.\"},\"retryable\":true,\"transport\":\"live\"}"));
         }
 
         [Test]
@@ -122,7 +122,7 @@ namespace UnityCliBridge.Bridge.Editor.Tests
             string json = EnvelopeJsonWriter.Write(response);
 
             Assert.That(json, Is.EqualTo(
-                "{\"requestId\":\"req-1\",\"protocolVersion\":\"2\",\"target\":\""
+                "{\"requestId\":\"req-1\",\"protocolVersion\":\"" + ProtocolConstants.ProtocolVersion + "\",\"target\":\""
                 + escaped
                 + "\",\"status\":\"error\",\"durationMs\":1,\"error\":{\"code\":\"ESCAPE\",\"message\":\""
                 + escaped

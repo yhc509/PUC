@@ -87,11 +87,10 @@ public sealed class InstanceRegistryStore
         {
             var canonicalProjectRoot = ProtocolConstants.GetCanonicalPath(trimmed);
             projectRoot = canonicalProjectRoot;
-            var projectHash = ProtocolConstants.ComputeProjectHash(canonicalProjectRoot);
 
             // A literal directory path always wins over same-text registry name matches.
             match = registry.instances.FirstOrDefault(item =>
-                string.Equals(item.projectHash, projectHash, StringComparison.OrdinalIgnoreCase));
+                string.Equals(item.projectRoot, canonicalProjectRoot, StringComparison.OrdinalIgnoreCase));
             return true;
         }
 
@@ -120,12 +119,27 @@ public sealed class InstanceRegistryStore
             throw new CliUsageException("project hash, project path 또는 project name이 필요합니다.");
         }
 
-        if (trimmed.Length == 12 && !trimmed.Contains(Path.DirectorySeparatorChar) && !trimmed.Contains(Path.AltDirectorySeparatorChar))
+        if (!ContainsDirectorySeparator(trimmed) && IsProjectHashInput(trimmed))
         {
-            var existing = registry.instances.FirstOrDefault(item => item.projectHash == trimmed);
-            if (existing is not null)
+            var isUnsuffixedHash = trimmed.Length == 12;
+            var suffixedHashPrefix = trimmed + "-";
+            var hashMatches = registry.instances
+                .Where(item =>
+                    string.Equals(item.projectHash, trimmed, StringComparison.OrdinalIgnoreCase)
+                    || (isUnsuffixedHash
+                        && !string.IsNullOrWhiteSpace(item.projectHash)
+                        && item.projectHash.StartsWith(suffixedHashPrefix, StringComparison.OrdinalIgnoreCase)))
+                .ToArray();
+            if (hashMatches.Length > 1)
             {
-                return existing;
+                throw CreateAmbiguousProjectHashException(
+                    trimmed,
+                    hashMatches.Select(item => ProtocolConstants.GetCanonicalPath(item.projectRoot)).ToArray());
+            }
+
+            if (hashMatches.Length == 1)
+            {
+                return hashMatches[0];
             }
         }
 
@@ -136,20 +150,25 @@ public sealed class InstanceRegistryStore
         }
 
         var projectHash = ProtocolConstants.ComputeProjectHash(projectRoot);
-        // Reuse the entry already resolved from the loaded registry before falling back to a hash lookup.
-        var match = resolvedMatch;
-        if (match is null || !string.Equals(match.projectHash, projectHash, StringComparison.OrdinalIgnoreCase))
-        {
-            match = registry.instances.FirstOrDefault(item => string.Equals(item.projectHash, projectHash, StringComparison.OrdinalIgnoreCase));
-        }
+        var match = resolvedMatch
+            ?? registry.instances.FirstOrDefault(item =>
+                string.Equals(item.projectRoot, projectRoot, StringComparison.OrdinalIgnoreCase));
 
         if (match is not null)
         {
             // Intentionally mutate the loaded registry entry in place so callers keep using the same snapshot object.
             match.projectRoot = projectRoot;
             match.projectName = string.IsNullOrWhiteSpace(match.projectName) ? Path.GetFileName(projectRoot) : match.projectName;
-            match.projectHash = projectHash;
-            match.pipeName = string.IsNullOrWhiteSpace(match.pipeName) ? ProtocolConstants.BuildPipeName(projectHash) : match.pipeName;
+            if (string.IsNullOrWhiteSpace(match.projectHash))
+            {
+                match.projectHash = projectHash;
+            }
+
+            if (string.IsNullOrWhiteSpace(match.pipeName))
+            {
+                match.pipeName = ProtocolConstants.BuildPipeName(match.projectHash);
+            }
+
             return match;
         }
 
@@ -181,10 +200,60 @@ public sealed class InstanceRegistryStore
             : throw CreateUnknownProjectOverrideException(trimmed);
     }
 
+    private static bool ContainsDirectorySeparator(string value)
+    {
+        return value.Contains(Path.DirectorySeparatorChar)
+            || value.Contains(Path.AltDirectorySeparatorChar);
+    }
+
+    private static bool IsProjectHashInput(string value)
+    {
+        if (value.Length < 12)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < 12; index++)
+        {
+            if (!IsHexDigit(value[index]))
+            {
+                return false;
+            }
+        }
+
+        if (value.Length == 12)
+        {
+            return true;
+        }
+
+        if (value[12] != '-' || value.Length == 13)
+        {
+            return false;
+        }
+
+        for (var index = 13; index < value.Length; index++)
+        {
+            if (!char.IsDigit(value[index]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsHexDigit(char value)
+    {
+        return value is >= '0' and <= '9'
+            or >= 'a' and <= 'f'
+            or >= 'A' and <= 'F';
+    }
+
     private static InstanceRegistry Sanitize(InstanceRegistry registry)
     {
         var changed = false;
-        var instancesByHash = new Dictionary<string, InstanceRecord>(StringComparer.OrdinalIgnoreCase);
+        registry.instances ??= Array.Empty<InstanceRecord>();
+        var instancesByPath = new Dictionary<string, InstanceRecord>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var instance in registry.instances)
         {
@@ -200,8 +269,10 @@ public sealed class InstanceRegistryStore
             {
                 projectRoot = projectRoot,
                 projectName = string.IsNullOrWhiteSpace(instance.projectName) ? Path.GetFileName(projectRoot) : instance.projectName,
-                projectHash = projectHash,
-                pipeName = string.IsNullOrWhiteSpace(instance.pipeName) ? ProtocolConstants.BuildPipeName(projectHash) : instance.pipeName,
+                projectHash = string.IsNullOrWhiteSpace(instance.projectHash) ? projectHash : instance.projectHash,
+                pipeName = string.IsNullOrWhiteSpace(instance.pipeName)
+                    ? ProtocolConstants.BuildPipeName(string.IsNullOrWhiteSpace(instance.projectHash) ? projectHash : instance.projectHash)
+                    : instance.pipeName,
                 editorProcessId = instance.editorProcessId,
                 unityVersion = instance.unityVersion ?? string.Empty,
                 state = instance.state ?? "offline",
@@ -216,14 +287,14 @@ public sealed class InstanceRegistryStore
                 changed = true;
             }
 
-            if (!instancesByHash.TryGetValue(normalized.projectHash, out var existing)
+            if (!instancesByPath.TryGetValue(normalized.projectRoot, out var existing)
                 || CompareLastSeen(normalized.lastSeenUtc, existing.lastSeenUtc) >= 0)
             {
-                instancesByHash[normalized.projectHash] = normalized;
+                instancesByPath[normalized.projectRoot] = normalized;
             }
         }
 
-        var instances = instancesByHash.Values
+        var instances = instancesByPath.Values
             .OrderBy(item => item.projectName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(item => item.projectRoot, StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -234,14 +305,19 @@ public sealed class InstanceRegistryStore
         }
 
         registry.instances = instances;
-        if (string.IsNullOrWhiteSpace(registry.activeProjectHash)
-            || registry.instances.All(item => !string.Equals(item.projectHash, registry.activeProjectHash, StringComparison.OrdinalIgnoreCase))
-            || registry.instances.FirstOrDefault(item => string.Equals(item.projectHash, registry.activeProjectHash, StringComparison.OrdinalIgnoreCase))?.state == "offline")
+        var active = registry.instances.FirstOrDefault(item =>
+            string.Equals(item.projectRoot, registry.activeProjectRoot, StringComparison.OrdinalIgnoreCase));
+        if (string.IsNullOrWhiteSpace(registry.activeProjectRoot)
+            || active is null
+            || string.Equals(active.state, "offline", StringComparison.OrdinalIgnoreCase))
         {
-            registry.activeProjectHash = registry.instances.FirstOrDefault(item => item.state != "offline")?.projectHash
-                ?? registry.instances.FirstOrDefault()?.projectHash;
+            registry.activeProjectRoot = registry.instances.FirstOrDefault(item => !string.Equals(item.state, "offline", StringComparison.OrdinalIgnoreCase))?.projectRoot
+                ?? registry.instances.FirstOrDefault()?.projectRoot
+                ?? string.Empty;
             changed = true;
         }
+
+        registry.activeProjectHash = null;
 
         if (changed)
         {
@@ -308,5 +384,11 @@ public sealed class InstanceRegistryStore
     {
         return new CliUsageException(
             $"등록된 프로젝트 이름이 중복되어 대상을 결정할 수 없습니다: {projectName}. project path를 사용하세요. 후보: {string.Join(", ", candidatePaths)}");
+    }
+
+    private static CliUsageException CreateAmbiguousProjectHashException(string projectHash, string[] candidatePaths)
+    {
+        return new CliUsageException(
+            $"projectHash '{projectHash}'에 매칭되는 인스턴스가 여러 개입니다. project path 또는 suffixed project hash로 정확히 지정하세요. 후보: {string.Join(", ", candidatePaths)}");
     }
 }

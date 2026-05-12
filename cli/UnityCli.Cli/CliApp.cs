@@ -93,11 +93,14 @@ public static class CliApp
     private static ResponseEnvelope ListInstances(InstanceRegistryStore registryStore, string? projectRoot)
     {
         var registry = registryStore.Load();
-        var activeHash = registry.activeProjectHash;
+        var canonicalCurrent = !string.IsNullOrWhiteSpace(projectRoot)
+            ? ProtocolConstants.GetCanonicalPath(projectRoot)
+            : null;
         var data = new
         {
-            activeProjectHash = activeHash,
-            currentProjectHash = !string.IsNullOrWhiteSpace(projectRoot) ? ProtocolConstants.ComputeProjectHash(projectRoot) : null,
+            activeProjectRoot = registry.activeProjectRoot,
+            currentProjectRoot = canonicalCurrent,
+            currentProjectHash = canonicalCurrent != null ? ProtocolConstants.ComputeProjectHash(canonicalCurrent) : null,
             instances = registry.instances
                 .OrderBy(item => item.projectName, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(item => item.projectRoot, StringComparer.OrdinalIgnoreCase)
@@ -121,14 +124,16 @@ public static class CliApp
 
         var registry = registryStore.Load();
         var target = registryStore.ResolveOrCreateTarget(registry, parsed.InstanceTarget!);
-        registry.activeProjectHash = target.projectHash;
+        registry.activeProjectRoot = target.projectRoot;
+        registry.activeProjectHash = null;
         registryStore.Save(registry);
 
         var data = new
         {
-            activeProjectHash = target.projectHash,
+            activeProjectRoot = target.projectRoot,
             target.projectName,
             target.projectRoot,
+            target.projectHash,
             target.pipeName,
             target.state,
         };
@@ -170,7 +175,7 @@ public static class CliApp
         {
             projectRoot,
             projectHash = !string.IsNullOrWhiteSpace(projectRoot) ? ProtocolConstants.ComputeProjectHash(projectRoot) : null,
-            activeProjectHash = registry.activeProjectHash,
+            activeProjectRoot = registry.activeProjectRoot,
             liveReachable = false,
             unityPath = !string.IsNullOrWhiteSpace(projectRoot) ? UnityEditorLocator.TryResolve(projectRoot) : null,
             registryPath = RegistryPathUtility.GetRegistryFilePath(),
@@ -197,6 +202,8 @@ public static class CliApp
             : null;
 
         var liveReachable = false;
+        string? liveErrorCode = null;
+        string? liveErrorMessage = null;
         if (target is not null)
         {
             try
@@ -211,6 +218,11 @@ public static class CliApp
                 };
                 var response = await ipcClient.SendAsync(target, ping, 5_000, cts.Token);
                 liveReachable = response.status == "success";
+                if (!liveReachable && response.error is not null)
+                {
+                    liveErrorCode = response.error.code;
+                    liveErrorMessage = response.error.message;
+                }
             }
             catch
             {
@@ -224,10 +236,13 @@ public static class CliApp
             workingDirectory = Environment.CurrentDirectory,
             projectRoot,
             projectDetectedFromChildren = string.IsNullOrWhiteSpace(projectRoot) ? locator.TryFindProjectRoot(Environment.CurrentDirectory) : projectRoot,
+            activeProjectRoot = registry.activeProjectRoot,
             targetProjectHash = target?.projectHash,
             targetProjectName = target?.projectName,
             pipeName = target?.pipeName,
             liveReachable,
+            liveErrorCode,
+            liveErrorMessage,
             unityPath,
             instanceCount = registry.instances.Length,
         };
@@ -321,7 +336,8 @@ public static class CliApp
         {
             var canonicalProjectRoot = ProtocolConstants.GetCanonicalPath(projectRoot);
             var projectHash = ProtocolConstants.ComputeProjectHash(canonicalProjectRoot);
-            var match = registry.instances.FirstOrDefault(item => item.projectHash == projectHash);
+            var match = registry.instances.FirstOrDefault(item =>
+                string.Equals(item.projectRoot, canonicalProjectRoot, StringComparison.OrdinalIgnoreCase));
             if (match is not null)
             {
                 return match;
@@ -339,12 +355,13 @@ public static class CliApp
             };
         }
 
-        if (!string.IsNullOrWhiteSpace(registry.activeProjectHash))
+        if (!string.IsNullOrWhiteSpace(registry.activeProjectRoot))
         {
-            return registry.instances.FirstOrDefault(item => item.projectHash == registry.activeProjectHash);
+            return registry.instances.FirstOrDefault(item =>
+                string.Equals(item.projectRoot, registry.activeProjectRoot, StringComparison.OrdinalIgnoreCase));
         }
 
-        return null;
+        return registry.instances.FirstOrDefault();
     }
 
     private static void WriteErrorResponse(OutputMode outputMode, ResponseEnvelope response)

@@ -362,6 +362,21 @@ namespace UnityCli.Protocol
                 registry.instances = Array.Empty<InstanceRecord>();
             }
 
+            if (string.IsNullOrEmpty(registry.activeProjectRoot)
+                && !string.IsNullOrWhiteSpace(registry.activeProjectHash))
+            {
+                string legacyHash = registry.activeProjectHash;
+                var match = Array.Find(
+                    registry.instances,
+                    item => string.Equals(item.projectHash, legacyHash, StringComparison.OrdinalIgnoreCase));
+                if (match != null && !string.IsNullOrWhiteSpace(match.projectRoot))
+                {
+                    registry.activeProjectRoot = match.projectRoot;
+                }
+            }
+
+            registry.activeProjectHash = null;
+
             return registry;
         }
 

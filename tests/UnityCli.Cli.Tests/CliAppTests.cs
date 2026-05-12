@@ -1,4 +1,6 @@
 using System.IO;
+using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using UnityCli.Cli.Services;
 using UnityCli.Protocol;
@@ -268,6 +270,81 @@ public sealed class CliAppTests
     }
 
     [Fact]
+    public async Task RunAsync_JsonInstancesList_ReportsActiveAndCurrentProjectRoot()
+    {
+        using var projects = new TempDirectory();
+        string projectRoot = CreateUnityProject(projects.Path, "SampleProject");
+        string canonicalProjectRoot = ProtocolConstants.GetCanonicalPath(projectRoot);
+        string projectHash = ProtocolConstants.ComputeProjectHash(canonicalProjectRoot);
+        string registryContents =
+            $$"""
+            {"activeProjectRoot":"{{canonicalProjectRoot.Replace("\\", "\\\\")}}","instances":[{"projectRoot":"{{canonicalProjectRoot.Replace("\\", "\\\\")}}","projectName":"SampleProject","projectHash":"{{projectHash}}","pipeName":"{{ProtocolConstants.BuildPipeName(projectHash).Replace("\\", "\\\\")}}","editorProcessId":1234,"unityVersion":"6000.3.10f1","state":"idle","lastSeenUtc":"{{DateTimeOffset.UtcNow.ToString("O")}}","capabilities":[]}]}
+            """;
+
+        var result = await InvokeAsync(["--json", "instances", "list"], registryContents: registryContents, currentDirectory: projectRoot);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(string.Empty, result.Stderr);
+
+        var response = ParseResponse(result.Stdout);
+        Assert.True(response.data.HasValue);
+        JsonElement data = response.data.Value;
+        Assert.Equal(canonicalProjectRoot, data.GetProperty("activeProjectRoot").GetString());
+        Assert.Equal(canonicalProjectRoot, data.GetProperty("currentProjectRoot").GetString());
+        Assert.Equal(projectHash, data.GetProperty("currentProjectHash").GetString());
+        Assert.False(data.TryGetProperty("activeProjectHash", out _));
+    }
+
+    [Fact]
+    public async Task RunAsync_JsonDoctor_WhenProtocolMismatch_ReportsLiveErrorFields()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var projects = new TempDirectory();
+        string projectRoot = CreateUnityProject(projects.Path, "SampleProject");
+        string canonicalProjectRoot = ProtocolConstants.GetCanonicalPath(projectRoot);
+        string projectHash = ProtocolConstants.ComputeProjectHash(canonicalProjectRoot);
+        string socketPath = Path.Combine("/tmp", "ucb-" + Guid.NewGuid().ToString("N") + ".sock");
+        var staleResponse = ResponseEnvelope.Success(
+            "req-1",
+            projectHash,
+            data: null,
+            durationMs: 1,
+            transport: ProtocolConstants.TransportLive);
+        staleResponse.protocolVersion = "3";
+        string registryContents =
+            $$"""
+            {"activeProjectRoot":"{{canonicalProjectRoot.Replace("\\", "\\\\")}}","instances":[{"projectRoot":"{{canonicalProjectRoot.Replace("\\", "\\\\")}}","projectName":"SampleProject","projectHash":"{{projectHash}}","pipeName":"{{socketPath.Replace("\\", "\\\\")}}","editorProcessId":1234,"unityVersion":"6000.3.10f1","state":"idle","lastSeenUtc":"{{DateTimeOffset.UtcNow.ToString("O")}}","capabilities":[]}]}
+            """;
+
+        using var listener = StartUnixSocketResponder(socketPath, ProtocolJson.Serialize(staleResponse));
+
+        try
+        {
+            var result = await InvokeAsync(["--json", "doctor"], registryContents: registryContents, currentDirectory: projectRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal(string.Empty, result.Stderr);
+
+            var response = ParseResponse(result.Stdout);
+            Assert.Equal("success", response.status);
+            Assert.True(response.data.HasValue);
+            JsonElement data = response.data.Value;
+            Assert.False(data.GetProperty("liveReachable").GetBoolean());
+            Assert.Equal(ProtocolConstants.ErrorProtocolMismatch, data.GetProperty("liveErrorCode").GetString());
+            Assert.Contains("incompatible", data.GetProperty("liveErrorMessage").GetString());
+        }
+        finally
+        {
+            listener.Dispose();
+            DeleteSocketFile(socketPath);
+        }
+    }
+
+    [Fact]
     public async Task RunAsync_JsonInstancesUse_ProjectName_WhenRegistryDoesNotMatch_ReturnsUsageError()
     {
         using var temp = new TempDirectory();
@@ -453,6 +530,43 @@ public sealed class CliAppTests
         Directory.CreateDirectory(Path.Combine(projectRoot, "Assets"));
         Directory.CreateDirectory(Path.Combine(projectRoot, "Packages"));
         return projectRoot;
+    }
+
+    private static Socket StartUnixSocketResponder(string socketPath, string responseLine)
+    {
+        var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        listener.Bind(new UnixDomainSocketEndPoint(socketPath));
+        listener.Listen(1);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var client = await listener.AcceptAsync();
+                await using var stream = new NetworkStream(client, ownsSocket: true);
+                using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
+                await using var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true);
+                await reader.ReadLineAsync();
+                await writer.WriteLineAsync(responseLine);
+                await writer.FlushAsync();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (SocketException)
+            {
+            }
+        });
+
+        return listener;
+    }
+
+    private static void DeleteSocketFile(string path)
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
     }
 
     private sealed record CliInvocationResult(int ExitCode, string Stdout, string Stderr);

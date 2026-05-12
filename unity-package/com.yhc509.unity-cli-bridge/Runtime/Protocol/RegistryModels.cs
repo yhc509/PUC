@@ -6,6 +6,7 @@ namespace UnityCli.Protocol
     [Serializable]
     public sealed class InstanceRegistry
     {
+        public string activeProjectRoot = string.Empty;
         public string? activeProjectHash;
         public InstanceRecord[] instances = Array.Empty<InstanceRecord>();
     }
