@@ -121,8 +121,14 @@ public sealed class InstanceRegistryStore
 
         if (!ContainsDirectorySeparator(trimmed) && IsProjectHashInput(trimmed))
         {
+            var isUnsuffixedHash = trimmed.Length == 12;
+            var suffixedHashPrefix = trimmed + "-";
             var hashMatches = registry.instances
-                .Where(item => string.Equals(item.projectHash, trimmed, StringComparison.OrdinalIgnoreCase))
+                .Where(item =>
+                    string.Equals(item.projectHash, trimmed, StringComparison.OrdinalIgnoreCase)
+                    || (isUnsuffixedHash
+                        && !string.IsNullOrWhiteSpace(item.projectHash)
+                        && item.projectHash.StartsWith(suffixedHashPrefix, StringComparison.OrdinalIgnoreCase)))
                 .ToArray();
             if (hashMatches.Length > 1)
             {
@@ -383,6 +389,6 @@ public sealed class InstanceRegistryStore
     private static CliUsageException CreateAmbiguousProjectHashException(string projectHash, string[] candidatePaths)
     {
         return new CliUsageException(
-            $"projectHash '{projectHash}'에 매칭되는 인스턴스가 여러 개입니다. project path로 정확히 지정하세요. 후보: {string.Join(", ", candidatePaths)}");
+            $"projectHash '{projectHash}'에 매칭되는 인스턴스가 여러 개입니다. project path 또는 suffixed project hash로 정확히 지정하세요. 후보: {string.Join(", ", candidatePaths)}");
     }
 }

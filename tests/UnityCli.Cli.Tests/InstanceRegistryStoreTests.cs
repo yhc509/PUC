@@ -240,11 +240,57 @@ public sealed class InstanceRegistryStoreTests
     }
 
     [Fact]
-    public void ResolveOrCreateTarget_SuffixedHash_ReturnsExistingInstance()
+    public void ResolveOrCreateTarget_Base12CharHash_WithSuffixedSiblings_ReturnsAmbiguous()
+    {
+        using var temp = new TempDirectory();
+        var projectA = Path.Combine(temp.Path, "ProjA");
+        var projectB = Path.Combine(temp.Path, "ProjB");
+        Directory.CreateDirectory(projectA);
+        Directory.CreateDirectory(projectB);
+        const string baseHash = "abc123def456";
+
+        var store = new InstanceRegistryStore(Path.Combine(temp.Path, "instances.json"));
+        var registry = new InstanceRegistry
+        {
+            instances =
+            [
+                new InstanceRecord
+                {
+                    projectRoot = projectA,
+                    projectName = "ProjA",
+                    projectHash = baseHash,
+                    pipeName = ProtocolConstants.BuildPipeName(baseHash),
+                    state = "idle",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                },
+                new InstanceRecord
+                {
+                    projectRoot = projectB,
+                    projectName = "ProjB",
+                    projectHash = baseHash + "-1",
+                    pipeName = ProtocolConstants.BuildPipeName(baseHash + "-1"),
+                    state = "idle",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                },
+            ],
+        };
+
+        var exception = Assert.Throws<CliUsageException>(
+            () => store.ResolveOrCreateTarget(registry, baseHash));
+
+        Assert.Contains(baseHash, exception.Message);
+        Assert.Contains("suffixed project hash", exception.Message);
+        Assert.Contains(ProtocolConstants.GetCanonicalPath(projectA), exception.Message);
+        Assert.Contains(ProtocolConstants.GetCanonicalPath(projectB), exception.Message);
+    }
+
+    [Fact]
+    public void ResolveOrCreateTarget_Base12CharHash_WithoutSuffixedSiblings_ReturnsExistingInstance()
     {
         using var temp = new TempDirectory();
         var projectRoot = Path.Combine(temp.Path, "ProjA");
         Directory.CreateDirectory(projectRoot);
+        const string baseHash = "abc123def456";
 
         var store = new InstanceRegistryStore(Path.Combine(temp.Path, "instances.json"));
         var canonicalRoot = ProtocolConstants.GetCanonicalPath(projectRoot);
@@ -256,6 +302,49 @@ public sealed class InstanceRegistryStoreTests
                 {
                     projectRoot = canonicalRoot,
                     projectName = "ProjA",
+                    projectHash = baseHash,
+                    pipeName = ProtocolConstants.BuildPipeName(baseHash),
+                    state = "idle",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                },
+            ],
+        };
+
+        var resolved = store.ResolveOrCreateTarget(registry, baseHash);
+
+        Assert.Equal(canonicalRoot, resolved.projectRoot);
+        Assert.Equal(baseHash, resolved.projectHash);
+        Assert.Single(registry.instances);
+    }
+
+    [Fact]
+    public void ResolveOrCreateTarget_SuffixedHash_ReturnsExistingInstance()
+    {
+        using var temp = new TempDirectory();
+        var projectA = Path.Combine(temp.Path, "ProjA");
+        var projectB = Path.Combine(temp.Path, "ProjB");
+        Directory.CreateDirectory(projectA);
+        Directory.CreateDirectory(projectB);
+
+        var store = new InstanceRegistryStore(Path.Combine(temp.Path, "instances.json"));
+        var canonicalRoot = ProtocolConstants.GetCanonicalPath(projectB);
+        var registry = new InstanceRegistry
+        {
+            instances =
+            [
+                new InstanceRecord
+                {
+                    projectRoot = ProtocolConstants.GetCanonicalPath(projectA),
+                    projectName = "ProjA",
+                    projectHash = "abc123def456",
+                    pipeName = ProtocolConstants.BuildPipeName("abc123def456"),
+                    state = "idle",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                },
+                new InstanceRecord
+                {
+                    projectRoot = canonicalRoot,
+                    projectName = "ProjB",
                     projectHash = "abc123def456-1",
                     pipeName = ProtocolConstants.BuildPipeName("abc123def456-1"),
                     state = "idle",
@@ -268,7 +357,7 @@ public sealed class InstanceRegistryStoreTests
 
         Assert.Equal(canonicalRoot, resolved.projectRoot);
         Assert.Equal("abc123def456-1", resolved.projectHash);
-        Assert.Single(registry.instances);
+        Assert.Equal(2, registry.instances.Length);
     }
 
     [Fact]
