@@ -339,14 +339,9 @@ namespace UnityCliBridge.Bridge.Editor
                         delegate(string hash)
                         {
                             string candidatePipeName = ProtocolConstants.BuildPipeName(hash);
-                            if (string.Equals(hash, _baseProjectHash, StringComparison.Ordinal) && File.Exists(candidatePipeName))
+                            if (!UnixSocketFileUtility.TryCleanupDeadSocketFile(candidatePipeName))
                             {
-                                if (UnixSocketProbe.IsLiveUnixSocket(candidatePipeName))
-                                {
-                                    return null;
-                                }
-
-                                TryCleanupSocketFile(candidatePipeName);
+                                return null;
                             }
 
                             var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
@@ -1118,6 +1113,9 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static void TryCleanupSocketFile(string pipeName)
         {
+#if !UNITY_5_3_OR_NEWER || UNITY_6000_0_OR_NEWER
+            UnixSocketFileUtility.TryCleanupDeadSocketFile(pipeName, LogLiveSocketCleanupSkipped);
+#else
             if (Path.DirectorySeparatorChar != '\\' && !string.IsNullOrWhiteSpace(pipeName) && File.Exists(pipeName))
             {
                 try
@@ -1128,6 +1126,13 @@ namespace UnityCliBridge.Bridge.Editor
                 {
                 }
             }
+#endif
+        }
+
+        private static void LogLiveSocketCleanupSkipped(string pipeName)
+        {
+            UnityEngine.Debug.LogWarning(
+                string.Format("Unity CLI bridge skipped cleanup for live Unix socket: {0}", pipeName));
         }
 
         private void DisposeNamedPipeOwnershipLock()
