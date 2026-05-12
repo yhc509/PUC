@@ -6,11 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-05-13
+
 ### Added
 - `unity-cli execute --timeout <초>` cooperative cancellation token. Wrapper exposes `__pucToken` for user code to check; timeouts surface as `EXECUTE_TIMEOUT` errors. Default 30s, max 600s. Non-cooperative code still occupies the Editor main thread (force-user responsibility).
+- `unity-cli doctor` now reports the live-side error code and message when it cannot reach the Editor, so protocol mismatches (`PROTOCOL_MISMATCH`) are distinguishable from a simple unreachable instance.
 
 ### Changed
-- `instances list`/`status` responses now use `activeProjectRoot` (canonical project root) instead of `activeProjectHash`. Instances stay separated safely in multi-worktree setups even if their 12-character hashes collide.
+- `instances list`/`status` responses now use `activeProjectRoot` (canonical project root) instead of `activeProjectHash`. Instances stay separated safely in multi-worktree setups even if their 12-character hashes collide. Hash-only target resolution rejects an unsuffixed 12-character hash as ambiguous when a suffixed sibling exists, so accidental routing to the wrong Editor is no longer silent.
+
+### Fixed
+- Windows named-pipe listener now takes an OS-level ownership lock per pipe name, preventing two Editors that share the same 12-character hash from both binding the same pipe through a probe race.
+- Unix socket cleanup probes the path for a live listener before unlinking, so a freshly bound socket from another Editor is no longer accidentally deleted by a late teardown from the previous owner. Stale suffixed socket files (`hash-1`...`hash-15`) are also reclaimed at acquire time.
+- `UnixSocketProbe.IsLive` now uses a 50 ms connect timeout, matching the named-pipe probe and avoiding a startup stall when an old socket file points at a process that no longer accepts connections.
 
 ### Compatibility
 - Wire protocol bumped from 3 to 4 for the registry identity migration. Upgrade the CLI binary and Unity package together; mixed versions return `PROTOCOL_MISMATCH`. Existing `registry.json` files with `activeProjectHash` are migrated in memory on first load and persisted on the next registry write.
