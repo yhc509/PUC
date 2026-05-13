@@ -268,8 +268,16 @@ public static class CliApp
         {
             try
             {
-                using var cts = new CancellationTokenSource(parsed.TimeoutMs);
-                return await new LocalIpcClient().SendAsync(target, command, parsed.TimeoutMs, cts.Token);
+                int liveTimeoutMs = ResolveLiveTimeoutMs(parsed);
+                using var cts = new CancellationTokenSource(liveTimeoutMs);
+                var ipcClient = new LocalIpcClient();
+                var response = await ipcClient.SendAsync(target, command, liveTimeoutMs, cts.Token);
+                if (ShouldPollTestResults(parsed, response))
+                {
+                    return await PollTestResultsAsync(parsed, target, ipcClient, response, cts.Token);
+                }
+
+                return response;
             }
             catch (Exception ex)
             {
@@ -294,6 +302,106 @@ public static class CliApp
             retryable: false,
             transport: "cli",
             details: "Unity 프로젝트 루트에서 실행하거나 `unity-cli instances use <projectHash|projectPath|projectName>`로 대상을 고정하세요.");
+    }
+
+    private static int ResolveLiveTimeoutMs(ParsedCommand parsed)
+    {
+        if (parsed.Kind != CommandKind.TestRun)
+        {
+            return parsed.TimeoutMs;
+        }
+
+        int timeoutSeconds = parsed.TestTimeoutSeconds ?? ProtocolConstants.DefaultTestRunTimeoutSeconds;
+        int testTimeoutMs = ((timeoutSeconds + ProtocolConstants.TestRunCancelGraceSeconds) * 1000)
+            + ProtocolConstants.DefaultLiveTimeoutMs;
+        return Math.Max(parsed.TimeoutMs, testTimeoutMs);
+    }
+
+    private static bool ShouldPollTestResults(ParsedCommand parsed, ResponseEnvelope response)
+    {
+        return parsed.Kind == CommandKind.TestRun
+            && parsed.TestWait
+            && string.Equals(parsed.TestMode, "play", StringComparison.Ordinal)
+            && string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal);
+    }
+
+    private static async Task<ResponseEnvelope> PollTestResultsAsync(
+        ParsedCommand original,
+        InstanceRecord target,
+        LocalIpcClient ipcClient,
+        ResponseEnvelope startedResponse,
+        CancellationToken cancellationToken)
+    {
+        var started = DeserializeData<TestRunStartedPayload>(startedResponse);
+        if (started is null || string.IsNullOrWhiteSpace(started.runId))
+        {
+            return startedResponse;
+        }
+
+        int timeoutSeconds = original.TestTimeoutSeconds ?? ProtocolConstants.DefaultTestRunTimeoutSeconds;
+        DateTime deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds + ProtocolConstants.TestRunCancelGraceSeconds);
+        while (DateTime.UtcNow < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+
+            var poll = await SendTestResultsPollAsync(target, ipcClient, started.runId, cancellationToken);
+            if (!string.Equals(poll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+            {
+                return poll;
+            }
+
+            var result = DeserializeData<TestRunResultPayload>(poll);
+            if (result is null || !string.Equals(result.status, "Running", StringComparison.Ordinal))
+            {
+                return poll;
+            }
+
+            if (!original.JsonOutput)
+            {
+                Console.Error.WriteLine($"progress: {result.summary.completed}/{result.summary.total}");
+            }
+        }
+
+        return await SendTestResultsPollAsync(target, ipcClient, started.runId, cancellationToken);
+    }
+
+    private static async Task<ResponseEnvelope> SendTestResultsPollAsync(
+        InstanceRecord target,
+        LocalIpcClient ipcClient,
+        string runId,
+        CancellationToken cancellationToken)
+    {
+        var command = new ParsedCommand(CommandKind.TestResults)
+        {
+            TestRunId = runId,
+        }.ToEnvelope();
+
+        return await ipcClient.SendAsync(target, command, ProtocolConstants.DefaultLiveTimeoutMs, cancellationToken);
+    }
+
+    private static T? DeserializeData<T>(ResponseEnvelope response)
+    {
+        if (!response.data.HasValue)
+        {
+            return default;
+        }
+
+        JsonElement data = response.data.Value;
+        if (data.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return default;
+        }
+
+        if (data.ValueKind == JsonValueKind.String)
+        {
+            string? json = data.GetString();
+            return string.IsNullOrWhiteSpace(json)
+                ? default
+                : ProtocolJson.Deserialize<T>(json);
+        }
+
+        return JsonSerializer.Deserialize<T>(data.GetRawText(), ProtocolJson.Default);
     }
 
     private static async Task<ResponseEnvelope> RunQaWait(ParsedCommand parsed)
