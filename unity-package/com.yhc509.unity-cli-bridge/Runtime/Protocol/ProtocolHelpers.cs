@@ -1,3 +1,5 @@
+using System;
+
 namespace UnityCli.Protocol
 {
     public static class ProtocolHelpers
@@ -35,6 +37,18 @@ namespace UnityCli.Protocol
         public static bool IsDeferredPackageCommand(string command)
         {
             return IsPackageCommand(command);
+        }
+
+        public static bool IsTestCommand(string command)
+        {
+            return string.Equals(command, ProtocolConstants.CommandTestList, StringComparison.Ordinal)
+                || string.Equals(command, ProtocolConstants.CommandTestRun, StringComparison.Ordinal)
+                || string.Equals(command, ProtocolConstants.CommandTestResults, StringComparison.Ordinal);
+        }
+
+        public static bool IsDeferredTestCommand(string command)
+        {
+            return string.Equals(command, ProtocolConstants.CommandTestRun, StringComparison.Ordinal);
         }
     }
 }
