@@ -115,6 +115,18 @@ public static partial class CliArgumentParser
         return normalized;
     }
 
+    private static string RequireTestMode(string value, bool allowAll)
+    {
+        string normalized = value.ToLowerInvariant();
+        if (normalized is "edit" or "play" || (allowAll && normalized == "all"))
+        {
+            return normalized;
+        }
+
+        string allowed = allowAll ? "edit, play, all" : "edit, play";
+        throw new CliUsageException($"--mode 값은 {allowed} 중 하나여야 합니다.");
+    }
+
     private static string RequireSubcommand(Queue<string> tokens, string command)
     {
         if (tokens.Count == 0)
@@ -304,6 +316,17 @@ public static partial class CliArgumentParser
                 throw new CliUsageException("`package remove`는 `--force`가 필요합니다.");
             case CommandKind.PackageSearch when string.IsNullOrWhiteSpace(parsed.PackageQuery):
                 throw new CliUsageException("`package search`에는 `--query`가 필요합니다.");
+        }
+    }
+
+    private static void ValidateTestOptions(ParsedCommand parsed)
+    {
+        switch (parsed.Kind)
+        {
+            case CommandKind.TestRun when string.IsNullOrWhiteSpace(parsed.TestMode):
+                throw new CliUsageException("`test run`에는 `--mode <edit|play>`가 필요합니다.");
+            case CommandKind.TestRun when parsed.TestTimeoutSeconds > ProtocolConstants.MaxTestRunTimeoutSeconds:
+                throw new CliUsageException($"--timeout 값은 {ProtocolConstants.MaxTestRunTimeoutSeconds}초를 초과할 수 없습니다.");
         }
     }
 
@@ -508,6 +531,9 @@ public static partial class CliArgumentParser
             CommandKind.PrefabAddComponent => "prefab add-component",
             CommandKind.PrefabRemoveComponent => "prefab remove-component",
             CommandKind.PrefabListComponents => "prefab list-components",
+            CommandKind.TestList => "test list",
+            CommandKind.TestRun => "test run",
+            CommandKind.TestResults => "test results",
             CommandKind.PackageList => "package list",
             CommandKind.PackageAdd => "package add",
             CommandKind.PackageRemove => "package remove",

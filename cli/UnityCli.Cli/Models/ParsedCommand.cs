@@ -41,6 +41,9 @@ public enum CommandKind
     PrefabAddComponent,
     PrefabRemoveComponent,
     PrefabListComponents,
+    TestList,
+    TestRun,
+    TestResults,
     InstancesList,
     InstancesUse,
     Doctor,
@@ -91,6 +94,14 @@ public sealed class ParsedCommand
     public string? PackageName { get; set; }
     public string? PackageVersion { get; set; }
     public string? PackageQuery { get; set; }
+    public string? TestMode { get; set; }
+    public string? TestFilter { get; set; }
+    public string? TestCategory { get; set; }
+    public string? TestAssembly { get; set; }
+    public bool TestNoDomainReload { get; set; }
+    public int? TestTimeoutSeconds { get; set; }
+    public bool TestWait { get; set; }
+    public string? TestRunId { get; set; }
     public string? ExecuteCodeSnippet { get; set; }
     public string? ExecuteCodeFile { get; set; }
     public string? ExecuteCodeArgsJson { get; set; }
@@ -241,6 +252,9 @@ public sealed class ParsedCommand
                 CommandKind.PrefabAddComponent => ProtocolConstants.CommandPrefabPatch,
                 CommandKind.PrefabRemoveComponent => ProtocolConstants.CommandPrefabPatch,
                 CommandKind.PrefabListComponents => ProtocolConstants.CommandPrefabListComponents,
+                CommandKind.TestList => ProtocolConstants.CommandTestList,
+                CommandKind.TestRun => ProtocolConstants.CommandTestRun,
+                CommandKind.TestResults => ProtocolConstants.CommandTestResults,
                 _ => throw new CliUsageException($"지원하지 않는 live 명령입니다: {Kind}"),
             },
             argumentsJson = BuildArgumentsJson(),
@@ -286,6 +300,23 @@ public sealed class ParsedCommand
             CommandKind.PackageSearch => new PackageSearchArgs
             {
                 query = PackageQuery ?? string.Empty,
+            },
+            CommandKind.TestList => new TestListArgs
+            {
+                mode = TestMode ?? "all",
+            },
+            CommandKind.TestRun => new TestRunArgs
+            {
+                mode = TestMode ?? string.Empty,
+                filter = TestFilter ?? string.Empty,
+                category = TestCategory ?? string.Empty,
+                assembly = TestAssembly ?? string.Empty,
+                noDomainReload = TestNoDomainReload,
+                timeoutSeconds = TestTimeoutSeconds ?? 0,
+            },
+            CommandKind.TestResults => new TestResultsArgs
+            {
+                runId = TestRunId ?? string.Empty,
             },
             CommandKind.ExecuteCode => new ExecuteCodeArgs
             {

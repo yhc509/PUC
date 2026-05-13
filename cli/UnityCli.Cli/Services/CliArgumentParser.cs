@@ -69,6 +69,7 @@ public static partial class CliArgumentParser
             "asset" => ParseAsset(tokens),
             "scene" => ParseScene(tokens),
             "prefab" => ParsePrefab(tokens),
+            "test" => ParseTestCommand(tokens),
             "package" => ParsePackage(tokens),
             "material" => ParseMaterial(tokens),
             "qa" => ParseQa(tokens),
@@ -294,6 +295,41 @@ public static partial class CliArgumentParser
         };
     }
 
+    private static ParsedCommand ParseTestCommand(Queue<string> tokens)
+    {
+        if (tokens.Count == 0)
+        {
+            throw new CliUsageException("`test` 다음에는 `list`, `run`, `results` 중 하나가 필요합니다.");
+        }
+
+        var subCommand = tokens.Dequeue().ToLowerInvariant();
+        return subCommand switch
+        {
+            "list" => ParseTestList(),
+            "run" => ParseTestRun(),
+            "results" => ParseTestResults(),
+            _ => throw new CliUsageException($"알 수 없는 test 하위 명령입니다: {subCommand}"),
+        };
+    }
+
+    private static ParsedCommand ParseTestList()
+    {
+        return new ParsedCommand(CommandKind.TestList)
+        {
+            TestMode = "all",
+        };
+    }
+
+    private static ParsedCommand ParseTestRun()
+    {
+        return new ParsedCommand(CommandKind.TestRun);
+    }
+
+    private static ParsedCommand ParseTestResults()
+    {
+        return new ParsedCommand(CommandKind.TestResults);
+    }
+
     private static ParsedCommand ParseMaterial(Queue<string> tokens)
     {
         if (tokens.Count == 0)
@@ -436,6 +472,33 @@ public static partial class CliArgumentParser
                     break;
                 case CommandKind.PackageSearch when token == "--query":
                     parsed.PackageQuery = RequireValue(tokens, "--query");
+                    break;
+                case CommandKind.TestList when token == "--mode":
+                    parsed.TestMode = RequireTestMode(RequireValue(tokens, "--mode"), allowAll: true);
+                    break;
+                case CommandKind.TestRun when token == "--mode":
+                    parsed.TestMode = RequireTestMode(RequireValue(tokens, "--mode"), allowAll: false);
+                    break;
+                case CommandKind.TestRun when token == "--filter":
+                    parsed.TestFilter = RequireValue(tokens, "--filter");
+                    break;
+                case CommandKind.TestRun when token == "--category":
+                    parsed.TestCategory = RequireValue(tokens, "--category");
+                    break;
+                case CommandKind.TestRun when token == "--assembly":
+                    parsed.TestAssembly = RequireValue(tokens, "--assembly");
+                    break;
+                case CommandKind.TestRun when token == "--no-domain-reload":
+                    parsed.TestNoDomainReload = true;
+                    break;
+                case CommandKind.TestRun when token == "--timeout":
+                    parsed.TestTimeoutSeconds = RequireInt(RequireValue(tokens, "--timeout"), "--timeout");
+                    break;
+                case CommandKind.TestRun when token == "--wait":
+                    parsed.TestWait = true;
+                    break;
+                case CommandKind.TestResults when token == "--run-id":
+                    parsed.TestRunId = RequireValue(tokens, "--run-id");
                     break;
                 case CommandKind.MaterialInfo when token == "--path":
                 case CommandKind.MaterialSet when token == "--path":
@@ -718,6 +781,7 @@ public static partial class CliArgumentParser
         ValidateSceneOptions(parsed);
         ValidateScreenshotOptions(parsed);
         ValidatePackageOptions(parsed);
+        ValidateTestOptions(parsed);
         ValidateMaterialOptions(parsed);
         ValidateQaOptions(parsed);
         ValidateExecuteOptions(parsed);
