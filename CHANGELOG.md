@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-16
+
 ### Added
 - `test list`, `test run`, and `test results` commands for running Unity Test Runner suites from the CLI. EditMode returns synchronously; PlayMode returns `STARTED` plus a `runId` immediately, then writes results atomically to `Library/com.yhc509.unity-cli-bridge/test-runs/<runId>.json`. Agents can use `--wait` to poll from the CLI and build a repair loop around failing tests.
 - `test run --mode play --no-domain-reload` as an opt-in speed path that can save 30-120 seconds of domain reload overhead when the suite is safe from static state leakage; responses warn about the risk.
