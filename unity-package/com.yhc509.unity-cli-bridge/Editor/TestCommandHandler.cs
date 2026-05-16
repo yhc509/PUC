@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using UnityCli.Protocol;
@@ -14,6 +15,7 @@ namespace UnityCliBridge.Bridge.Editor
     {
         private static readonly object _activeLock = new object();
         private static bool _hasActiveRun;
+        private const int TestListTimeoutSeconds = 30;
 
         public bool CanHandle(string command)
         {
@@ -29,7 +31,7 @@ namespace UnityCliBridge.Bridge.Editor
         {
             if (string.Equals(command, ProtocolConstants.CommandTestList, StringComparison.Ordinal))
             {
-                return HandleList(argumentsJson);
+                throw new InvalidOperationException("Deferred test command must be started through StartDeferred: " + command);
             }
 
             if (string.Equals(command, ProtocolConstants.CommandTestResults, StringComparison.Ordinal))
@@ -52,6 +54,17 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             string requestId = GetRequestId(completion);
+            if (string.Equals(command, ProtocolConstants.CommandTestList, StringComparison.Ordinal))
+            {
+                StartDeferredList(argumentsJson, completion, projectHash, requestId);
+                return;
+            }
+
+            if (!string.Equals(command, ProtocolConstants.CommandTestRun, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Unsupported deferred test command: " + command);
+            }
+
             if (!TryBeginRun_Internal(out string activeRunId, out string activeMode))
             {
                 completion.TrySetResult(ResponseEnvelope.Failure(
@@ -99,45 +112,187 @@ namespace UnityCliBridge.Bridge.Editor
             }
         }
 
-        private static string HandleList(string argumentsJson)
+        private static void StartDeferredList(
+            string argumentsJson,
+            TaskCompletionSource<ResponseEnvelope> completion,
+            string projectHash,
+            string requestId)
         {
             TestListArgs args = ProtocolJson.Deserialize<TestListArgs>(argumentsJson) ?? new TestListArgs();
-            var api = ScriptableObject.CreateInstance<TestRunnerApi>();
-            try
+            bool includeEditMode = string.Equals(args.mode, "edit", StringComparison.Ordinal)
+                || string.Equals(args.mode, "all", StringComparison.Ordinal);
+            bool includePlayMode = string.Equals(args.mode, "play", StringComparison.Ordinal)
+                || string.Equals(args.mode, "all", StringComparison.Ordinal);
+
+            if (!includeEditMode && !includePlayMode)
             {
-                var entries = new List<TestListEntry>();
-                if (string.Equals(args.mode, "edit", StringComparison.Ordinal)
-                    || string.Equals(args.mode, "all", StringComparison.Ordinal))
+                completion.TrySetResult(ResponseEnvelope.Failure(
+                    requestId,
+                    projectHash,
+                    ProtocolConstants.ErrorTestInvalidMode,
+                    "test list --mode는 edit, play, all 중 하나여야 합니다: '" + args.mode + "'",
+                    false,
+                    0,
+                    ProtocolConstants.TransportLive,
+                    null));
+                return;
+            }
+
+            var editEntries = new List<TestListEntry>();
+            var playEntries = new List<TestListEntry>();
+            var api = ScriptableObject.CreateInstance<TestRunnerApi>();
+            var stopwatch = Stopwatch.StartNew();
+            int expectedCallbacks = (includeEditMode ? 1 : 0) + (includePlayMode ? 1 : 0);
+            int receivedCallbacks = 0;
+            bool completed = false;
+            bool pollRegistered = false;
+
+            void Cleanup()
+            {
+                if (pollRegistered)
                 {
-                    AppendListForMode(api, TestMode.EditMode, "edit", entries);
+                    EditorApplication.update -= Poll;
+                    pollRegistered = false;
                 }
 
-                if (string.Equals(args.mode, "play", StringComparison.Ordinal)
-                    || string.Equals(args.mode, "all", StringComparison.Ordinal))
+                UnityEngine.Object.DestroyImmediate(api);
+            }
+
+            void Complete(ResponseEnvelope response)
+            {
+                if (completed)
                 {
-                    AppendListForMode(api, TestMode.PlayMode, "play", entries);
+                    return;
                 }
 
-                return ProtocolJson.Serialize(new TestListPayload
+                completed = true;
+                Cleanup();
+                completion.TrySetResult(response);
+            }
+
+            void CompleteSuccess()
+            {
+                if (completed)
                 {
-                    mode = args.mode,
-                    tests = entries.ToArray(),
+                    return;
+                }
+
+                stopwatch.Stop();
+                var tests = new List<TestListEntry>();
+                if (includeEditMode)
+                {
+                    tests.AddRange(editEntries);
+                }
+
+                if (includePlayMode)
+                {
+                    tests.AddRange(playEntries);
+                }
+
+                Complete(ResponseEnvelope.Success(
+                    requestId,
+                    projectHash,
+                    ProtocolJson.Serialize(new TestListPayload
+                    {
+                        mode = args.mode,
+                        tests = tests.ToArray(),
+                    }),
+                    stopwatch.ElapsedMilliseconds,
+                    ProtocolConstants.TransportLive));
+            }
+
+            void CompleteTimeout()
+            {
+                if (completed)
+                {
+                    return;
+                }
+
+                stopwatch.Stop();
+                Complete(ResponseEnvelope.Failure(
+                    requestId,
+                    projectHash,
+                    ProtocolConstants.ErrorTestListTimeout,
+                    "test list가 " + TestListTimeoutSeconds + "초 내 완료되지 않았습니다.",
+                    false,
+                    stopwatch.ElapsedMilliseconds,
+                    ProtocolConstants.TransportLive,
+                    null));
+            }
+
+            void Poll()
+            {
+                if (completion.Task.IsCompleted)
+                {
+                    if (!completed)
+                    {
+                        completed = true;
+                        Cleanup();
+                    }
+
+                    return;
+                }
+
+                if (receivedCallbacks >= expectedCallbacks)
+                {
+                    CompleteSuccess();
+                    return;
+                }
+
+                if (stopwatch.Elapsed.TotalSeconds > TestListTimeoutSeconds)
+                {
+                    CompleteTimeout();
+                }
+            }
+
+            void RequestList(TestMode mode, string modeLabel, List<TestListEntry> targetEntries)
+            {
+                api.RetrieveTestList(mode, adaptor =>
+                {
+                    if (completed)
+                    {
+                        return;
+                    }
+
+                    AppendListForMode(adaptor, modeLabel, targetEntries);
+                    receivedCallbacks++;
                 });
             }
-            finally
+
+            try
             {
-                UnityEngine.Object.DestroyImmediate(api);
+                EditorApplication.update += Poll;
+                pollRegistered = true;
+
+                if (includeEditMode)
+                {
+                    RequestList(TestMode.EditMode, "edit", editEntries);
+                }
+
+                if (includePlayMode)
+                {
+                    RequestList(TestMode.PlayMode, "play", playEntries);
+                }
+
+                Poll();
+            }
+            catch
+            {
+                if (!completed)
+                {
+                    completed = true;
+                    Cleanup();
+                }
+
+                throw;
             }
         }
 
         private static void AppendListForMode(
-            TestRunnerApi api,
-            TestMode mode,
+            ITestAdaptor? root,
             string modeLabel,
             List<TestListEntry> entries)
         {
-            ITestAdaptor? root = null;
-            api.RetrieveTestList(mode, adaptor => root = adaptor);
             if (root == null)
             {
                 return;

@@ -653,7 +653,11 @@ namespace UnityCliBridge.Bridge.Editor
             }
             catch (CommandFailureException exception)
             {
-                TestCommandHandler.EndRun();
+                if (string.Equals(command.command, ProtocolConstants.CommandTestRun, StringComparison.Ordinal))
+                {
+                    TestCommandHandler.EndRun();
+                }
+
                 stopwatch.Stop();
                 pending.Completion.TrySetResult(ResponseEnvelope.Failure(
                     command.requestId,
@@ -667,7 +671,11 @@ namespace UnityCliBridge.Bridge.Editor
             }
             catch (Exception exception)
             {
-                TestCommandHandler.EndRun();
+                if (string.Equals(command.command, ProtocolConstants.CommandTestRun, StringComparison.Ordinal))
+                {
+                    TestCommandHandler.EndRun();
+                }
+
                 stopwatch.Stop();
                 pending.Completion.TrySetResult(ResponseEnvelope.Failure(
                     command.requestId,

@@ -34,6 +34,7 @@ namespace UnityCli.Protocol
         public const string ErrorPackageTimeout = "PACKAGE_TIMEOUT";
         public const string ErrorTestBusy = "TEST_RUN_IN_PROGRESS";
         public const string ErrorTestTimeout = "TEST_RUN_TIMEOUT";
+        public const string ErrorTestListTimeout = "TEST_LIST_TIMEOUT";
         public const string ErrorTestRunNotFound = "TEST_RUN_NOT_FOUND";
         public const string ErrorTestInvalidMode = "TEST_INVALID_MODE";
         public const string ErrorSceneForceRequired = "SCENE_FORCE_REQUIRED";
