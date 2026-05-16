@@ -134,6 +134,9 @@ Low-level commands for environment inspection and raw protocol debugging.
 
 | Command | Synopsis | Modes | Force Rule | Summary |
 | --- | --- | --- | --- | --- |
+| `test list` | `test list [--mode <edit\|play\|all>]` | live | `None` | Lists EditMode and/or PlayMode test cases discovered in the running editor. |
+| `test run` | `test run --mode <edit\|play> [--filter <substring>] [--category <name>] [--assembly <name>] [--no-domain-reload] [--timeout <seconds>] [--wait]` | live | `None` | Executes EditMode or PlayMode tests. EditMode returns synchronously; PlayMode returns runId immediately and persists results to Library/com.yhc509.unity-cli-bridge/test-runs/<runId>.json. |
+| `test results` | `test results [--run-id <id>]` | live | `None` | Retrieves cached test run result (or in-progress status). Without --run-id, returns the last run. |
 | `doctor` | `doctor` | local | `None` | Shows registry, project detection, Unity path, and live reachability diagnostics. |
 | `raw` | `raw [--force] --json '{"command":"status","arguments":{}}'` | live | `None` | Sends a raw live protocol envelope for low-level debugging. |
 
