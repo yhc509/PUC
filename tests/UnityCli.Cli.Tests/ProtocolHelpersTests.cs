@@ -51,4 +51,24 @@ public sealed class ProtocolHelpersTests
         Assert.Contains(descriptors, descriptor => descriptor.typeId == "scene");
         Assert.Contains(descriptors, descriptor => descriptor.typeId == "prefab");
     }
+
+    [Fact]
+    public void TestFullNameMatchesFilter_MatchesCaseInsensitiveSubstring()
+    {
+        const string fullName = "UnityCliBridge.Sample.EditMode.Tests.SmokeTests.Smoke_Arithmetic_Passes";
+
+        Assert.True(ProtocolHelpers.TestFullNameMatchesFilter(fullName, "smoke"));
+        Assert.True(ProtocolHelpers.TestFullNameMatchesFilter(fullName, "SMOKE"));
+        Assert.True(ProtocolHelpers.TestFullNameMatchesFilter(fullName, "Smoke_Arithmetic_Passes"));
+    }
+
+    [Fact]
+    public void TestFullNameMatchesFilter_RejectsMissingSubstring()
+    {
+        const string fullName = "UnityCliBridge.Sample.EditMode.Tests.SmokeTests.Smoke_Arithmetic_Passes";
+
+        Assert.False(ProtocolHelpers.TestFullNameMatchesFilter(fullName, "NonExistent"));
+        Assert.False(ProtocolHelpers.TestFullNameMatchesFilter(fullName, string.Empty));
+        Assert.False(ProtocolHelpers.TestFullNameMatchesFilter(string.Empty, "Smoke"));
+    }
 }

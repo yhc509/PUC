@@ -99,7 +99,7 @@ unity-cli does not have dedicated script create/delete commands. Use this combin
 코드 수정 뒤에는 가능한 한 관련 테스트만 먼저 좁혀서 돌린다.
 
 1. `.cs`를 수정했다면 `unity-cli refresh --project <project>`로 AssetDatabase 갱신을 요청한다.
-2. 관련 EditMode 테스트를 동기 실행한다: `unity-cli test run --project <project> --mode edit --filter <related-name> --output compact`
+2. 관련 EditMode 테스트를 동기 실행한다. `--filter`는 test full name의 대소문자 무시 substring이다: `unity-cli test run --project <project> --mode edit --filter <related-name> --output compact`
 3. 실패하면 JSON의 failing test name, message, stack trace를 기준으로 원인을 고치고 같은 filter로 다시 실행한다.
 4. 통과 뒤에는 필요 범위를 넓힌다: category, assembly, 또는 filter 없는 `unity-cli test run --project <project> --mode edit --output compact`.
 5. 실행 뒤에는 평소와 같이 `read-console --type error` / `read-console --type warning`으로 Editor 로그도 확인한다.

@@ -16,6 +16,8 @@ namespace UnityCliBridge.Bridge.Editor
         private static readonly object _activeLock = new object();
         private static bool _hasActiveRun;
         private const int TestListTimeoutSeconds = 30;
+        private const int TestFilterResolutionTimeoutSeconds = 15;
+        private const string NoMatchingTestName = "\u0000unity-cli-bridge-no-matching-test\u0000";
 
         public bool CanHandle(string command)
         {
@@ -323,6 +325,177 @@ namespace UnityCliBridge.Bridge.Editor
                 mode = modeLabel,
                 categories = adaptor.Categories ?? Array.Empty<string>(),
             });
+        }
+
+        private void ResolveFullNamesAsync(
+            TestMode mode,
+            string substringFilter,
+            Action<string[]> onResolved,
+            Action<string> onError)
+        {
+            if (string.IsNullOrEmpty(substringFilter))
+            {
+                onResolved(Array.Empty<string>());
+                return;
+            }
+
+            var api = ScriptableObject.CreateInstance<TestRunnerApi>();
+            ITestAdaptor? root = null;
+            bool completed = false;
+            bool pollRegistered = false;
+            DateTime deadline = DateTime.UtcNow.AddSeconds(TestFilterResolutionTimeoutSeconds);
+
+            void Cleanup()
+            {
+                if (pollRegistered)
+                {
+                    EditorApplication.update -= Poll;
+                    pollRegistered = false;
+                }
+
+                UnityEngine.Object.DestroyImmediate(api);
+            }
+
+            void CompleteResolved(string[] resolvedFullNames)
+            {
+                if (completed)
+                {
+                    return;
+                }
+
+                completed = true;
+                Cleanup();
+                onResolved(resolvedFullNames);
+            }
+
+            void CompleteError(string message)
+            {
+                if (completed)
+                {
+                    return;
+                }
+
+                completed = true;
+                Cleanup();
+                onError(message);
+            }
+
+            void Poll()
+            {
+                if (root != null)
+                {
+                    var matched = new List<string>();
+                    CollectMatchingFullNames(root, substringFilter, matched);
+                    CompleteResolved(matched.ToArray());
+                    return;
+                }
+
+                if (DateTime.UtcNow > deadline)
+                {
+                    CompleteError(
+                        "Filter substring resolution timeout ("
+                        + TestFilterResolutionTimeoutSeconds
+                        + "s).");
+                }
+            }
+
+            try
+            {
+                api.RetrieveTestList(mode, adaptor => root = adaptor);
+                EditorApplication.update += Poll;
+                pollRegistered = true;
+                Poll();
+            }
+            catch (Exception exception)
+            {
+                CompleteError("Filter substring resolution failed: " + exception.Message);
+            }
+        }
+
+        internal static void CollectMatchingFullNames(
+            ITestAdaptor adaptor,
+            string needle,
+            List<string> matched)
+        {
+            if (adaptor.IsSuite)
+            {
+                foreach (ITestAdaptor child in adaptor.Children)
+                {
+                    CollectMatchingFullNames(child, needle, matched);
+                }
+
+                return;
+            }
+
+            string fullName = adaptor.FullName ?? string.Empty;
+            if (ProtocolHelpers.TestFullNameMatchesFilter(fullName, needle))
+            {
+                matched.Add(fullName);
+            }
+        }
+
+        private void ResolveFilterFullNamesThenStart(
+            TestMode mode,
+            TestRunArgs args,
+            TaskCompletionSource<ResponseEnvelope> completion,
+            string projectHash,
+            string requestId,
+            Stopwatch stopwatch,
+            Action<string[]?> start)
+        {
+            if (string.IsNullOrEmpty(args.filter))
+            {
+                TryStartResolvedRun(null);
+                return;
+            }
+
+            ResolveFullNamesAsync(
+                mode,
+                args.filter,
+                resolvedFullNames => TryStartResolvedRun(resolvedFullNames),
+                errorMessage =>
+                {
+                    stopwatch.Stop();
+                    EndRun();
+                    completion.TrySetResult(ResponseEnvelope.Failure(
+                        requestId,
+                        projectHash,
+                        ProtocolConstants.ErrorTestListTimeout,
+                        errorMessage,
+                        false,
+                        stopwatch.ElapsedMilliseconds,
+                        ProtocolConstants.TransportLive,
+                        null));
+                });
+
+            void TryStartResolvedRun(string[]? resolvedFullNames)
+            {
+                if (completion.Task.IsCompleted)
+                {
+                    stopwatch.Stop();
+                    EndRun();
+                    return;
+                }
+
+                try
+                {
+                    start(resolvedFullNames);
+                }
+                catch (Exception exception)
+                {
+                    stopwatch.Stop();
+                    EndRun();
+                    completion.TrySetResult(ResponseEnvelope.Failure(
+                        requestId,
+                        projectHash,
+                        "TEST_RUN_START_FAILED",
+                        "test run을 시작할 수 없습니다: " + exception.Message,
+                        false,
+                        stopwatch.ElapsedMilliseconds,
+                        ProtocolConstants.TransportLive,
+                        null));
+                }
+            }
         }
 
         private static string HandleResults(string argumentsJson)

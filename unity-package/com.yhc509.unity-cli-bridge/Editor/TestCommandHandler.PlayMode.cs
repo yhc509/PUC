@@ -21,6 +21,29 @@ namespace UnityCliBridge.Bridge.Editor
             string projectHash,
             string requestId)
         {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            ResolveFilterFullNamesThenStart(
+                TestMode.PlayMode,
+                args,
+                completion,
+                projectHash,
+                requestId,
+                stopwatch,
+                resolvedTestNames => StartPlayModeRunResolved(
+                    args,
+                    completion,
+                    projectHash,
+                    requestId,
+                    resolvedTestNames));
+        }
+
+        private void StartPlayModeRunResolved(
+            TestRunArgs args,
+            TaskCompletionSource<ResponseEnvelope> completion,
+            string projectHash,
+            string requestId,
+            string[]? resolvedTestNames)
+        {
             string runId = Guid.NewGuid().ToString("N");
             int timeoutSec = ResolveTestTimeoutSeconds(args);
             BeginRun_PersistSession(runId, "play", timeoutSec, args.noDomainReload);
@@ -37,7 +60,7 @@ namespace UnityCliBridge.Bridge.Editor
 
             try
             {
-                string runGuid = _playModeApi!.Execute(new ExecutionSettings(BuildFilter(args, TestMode.PlayMode)));
+                string runGuid = _playModeApi!.Execute(new ExecutionSettings(BuildFilter(args, TestMode.PlayMode, resolvedTestNames)));
                 StoreActiveRunGuid(runGuid);
             }
             catch (Exception exception)

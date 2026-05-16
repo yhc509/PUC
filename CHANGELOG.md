@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The legacy `run-tests` parser path is no longer present. Use `test run` for the structured Test Runner workflow.
 
 ### Fixed
+- `test run --filter` now matches test full names by case-insensitive substring instead of passing the substring to Unity Test Framework as an exact full-name match.
 - PlayMode test runs now keep a watchdog after the initial `STARTED` response, cancel and mark timed-out runs after the configured timeout plus grace period, and restore callback registration after PlayMode domain reloads so results are flushed instead of leaving the single-flight lock stuck.
 - `test run --mode play` now fails with `TEST_PLAYMODE_ENTRY_FAILED` if Unity does not begin entering Play Mode shortly after `TestRunnerApi.Execute`.
 

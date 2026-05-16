@@ -17,6 +17,31 @@ namespace UnityCliBridge.Bridge.Editor
             string projectHash,
             string requestId)
         {
+            var stopwatch = Stopwatch.StartNew();
+            ResolveFilterFullNamesThenStart(
+                TestMode.EditMode,
+                args,
+                completion,
+                projectHash,
+                requestId,
+                stopwatch,
+                resolvedTestNames => StartEditModeRunResolved(
+                    args,
+                    completion,
+                    projectHash,
+                    requestId,
+                    stopwatch,
+                    resolvedTestNames));
+        }
+
+        private void StartEditModeRunResolved(
+            TestRunArgs args,
+            TaskCompletionSource<ResponseEnvelope> completion,
+            string projectHash,
+            string requestId,
+            Stopwatch stopwatch,
+            string[]? resolvedTestNames)
+        {
             string runId = Guid.NewGuid().ToString("N");
             int timeoutSec = ResolveTestTimeoutSeconds(args);
             BeginRun_PersistSession(runId, "edit", timeoutSec, false);
@@ -41,11 +66,10 @@ namespace UnityCliBridge.Bridge.Editor
                 UnityEngine.Object.DestroyImmediate(callbacks);
             }
 
-            var stopwatch = Stopwatch.StartNew();
             string runGuid;
             try
             {
-                runGuid = api.Execute(new ExecutionSettings(BuildFilter(args, TestMode.EditMode)));
+                runGuid = api.Execute(new ExecutionSettings(BuildFilter(args, TestMode.EditMode, resolvedTestNames)));
                 StoreActiveRunGuid(runGuid);
             }
             catch
@@ -148,12 +172,15 @@ namespace UnityCliBridge.Bridge.Editor
             return false;
         }
 
-        internal static Filter BuildFilter(TestRunArgs args, TestMode mode)
+        internal static Filter BuildFilter(TestRunArgs args, TestMode mode, string[]? resolvedTestNames = null)
         {
             var filter = new Filter { testMode = mode };
-            if (!string.IsNullOrEmpty(args.filter))
+            if (resolvedTestNames != null)
             {
-                filter.testNames = new[] { args.filter };
+                // Unity treats an empty testNames array the same as no name filter.
+                filter.testNames = resolvedTestNames.Length > 0
+                    ? resolvedTestNames
+                    : new[] { NoMatchingTestName };
             }
 
             if (!string.IsNullOrEmpty(args.category))

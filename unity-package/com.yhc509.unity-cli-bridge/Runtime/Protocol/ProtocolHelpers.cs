@@ -51,5 +51,15 @@ namespace UnityCli.Protocol
             return string.Equals(command, ProtocolConstants.CommandTestList, StringComparison.Ordinal)
                 || string.Equals(command, ProtocolConstants.CommandTestRun, StringComparison.Ordinal);
         }
+
+        public static bool TestFullNameMatchesFilter(string fullName, string substringFilter)
+        {
+            if (string.IsNullOrEmpty(fullName) || string.IsNullOrEmpty(substringFilter))
+            {
+                return false;
+            }
+
+            return fullName.IndexOf(substringFilter, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
     }
 }
