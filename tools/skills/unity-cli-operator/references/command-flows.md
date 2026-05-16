@@ -196,6 +196,45 @@ ucli screenshot --project "$PROJECT_ROOT" --path /tmp/capture.png --output compa
 ucli screenshot --project "$PROJECT_ROOT" --path /tmp/scene.png --view scene --output compact
 ```
 
+## 테스트 러너
+
+`test list` / `test run` / `test results`로 Editor 재시작 없이 Test Runner를 트리거한다.
+
+기본 조회와 실행:
+
+```bash
+ucli test list --project "$PROJECT_ROOT" --mode all --output compact
+ucli test run --project "$PROJECT_ROOT" --mode edit --filter PlayerControllerTests --output compact
+ucli test run --project "$PROJECT_ROOT" --mode play --filter Smoke --wait --output compact
+ucli test results --project "$PROJECT_ROOT" --run-id <runId> --output compact
+```
+
+- `test list --mode all`은 EditMode와 PlayMode 테스트를 같이 나열한다
+- `test run --mode edit`은 동기 응답으로 결과 payload를 바로 반환한다
+- `test run --mode play`는 기본적으로 `STARTED`와 `runId`를 즉시 반환한다
+- PlayMode 결과까지 한 번에 기다려야 하면 `--wait`를 붙여 CLI가 폴링하게 한다
+- `--filter`는 test full name의 대소문자 무시 substring이다
+- `test results --run-id <runId>`는 이미 시작된 run의 디스크 캐시나 진행 상태를 다시 읽는다
+
+PlayMode domain reload를 생략할 수 있는 경우:
+
+```bash
+ucli test run --project "$PROJECT_ROOT" --mode play --filter Smoke --wait --no-domain-reload --output compact
+```
+
+- `--no-domain-reload`는 PlayMode 전용 속도 옵션이다
+- static state leakage 위험이 있으므로 테스트가 자체 reset을 보장할 때만 쓴다
+- EditMode와 함께 쓰면 usage error다
+
+AI repair loop는 짧게 유지한다:
+
+```bash
+ucli refresh --project "$PROJECT_ROOT" --output compact
+ucli test run --project "$PROJECT_ROOT" --mode edit --filter <related-name> --output compact
+```
+
+실패하면 failing test name, message, stack trace를 기준으로 수정하고 같은 filter로 재실행한다. non-`Completed` 결과는 envelope `status: error`와 CLI exit code 1로 반환된다.
+
 ## 검증 루틴
 
 live 작업 뒤 기본 검증:

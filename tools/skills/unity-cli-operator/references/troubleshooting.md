@@ -27,3 +27,14 @@
 - 성공 응답만 보고 닫지 않는다.
 - live 작업 뒤에는 항상 `read-console --type error`와 `--type warning`을 같이 본다.
 - 새 에러나 경고가 있으면 먼저 그 원인을 설명하고, 성공으로 보고하지 않는다.
+
+## Test Runner 에러 코드
+
+- `TEST_RUN_IN_PROGRESS` — single-flight 락 충돌. 진행 중인 `runId`가 동봉되므로 기다리거나 watchdog deadline 만료 뒤 다시 확인한다.
+- `TEST_RUN_TIMEOUT` — `--timeout` 초과. result payload `status: TimedOut`이며 CLI exit code 1로 반환된다.
+- `TEST_PLAYMODE_ENTRY_FAILED` — `TestRunnerApi.Execute` 뒤 15초 안에 `isPlaying = true`로 전환되지 않았다. dirty scene, 컴파일 중, asmdef 인식 실패를 먼저 본다.
+- `TEST_LIST_TIMEOUT` — `RetrieveTestList` 콜백이 30초 내 도착하지 않았다. Editor가 compile 또는 asset import 중일 수 있다.
+- `TEST_RUN_NOT_FOUND` — `test results --run-id <id>`의 디스크 캐시가 없다. 먼저 `last-run.json`이 가리키는 ID를 확인한다.
+- `TEST_INVALID_MODE` — `--mode` 값이 허용 범위를 벗어났다. `test run`은 `edit`/`play`, `test list`는 `edit`/`play`/`all`을 쓴다.
+- `TEST_RUN_FAILED` / `TEST_RUN_CANCELLED` / `TEST_RUN_INTERRUPTED` — 비-`Completed` 종료 상태. envelope error로 변환되어 CLI exit code 1이 된다.
+- `CLI_USAGE` — `--mode edit --no-domain-reload` 같은 금지 조합. 메시지에 맞춰 옵션을 수정한다.
