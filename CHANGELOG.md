@@ -17,6 +17,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `test run --filter` now matches test full names by case-insensitive substring instead of passing the substring to Unity Test Framework as an exact full-name match.
 - PlayMode test runs now keep a watchdog after the initial `STARTED` response, cancel and mark timed-out runs after the configured timeout plus grace period, and restore callback registration after PlayMode domain reloads so results are flushed instead of leaving the single-flight lock stuck.
 - `test run --mode play` now fails with `TEST_PLAYMODE_ENTRY_FAILED` if Unity does not begin entering Play Mode shortly after `TestRunnerApi.Execute`.
+- Non-`Completed` test run results now return an error envelope and CLI exit code 1; interrupted EditMode runs after domain reload are marked `Failed` instead of leaving the run lock stuck.
+- `test run --mode edit --no-domain-reload` is now rejected as a usage error because the option only applies to PlayMode.
 
 ## [0.1.13] - 2026-05-13
 

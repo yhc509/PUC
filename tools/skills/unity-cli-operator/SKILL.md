@@ -111,7 +111,7 @@ unity-cli test run --project <project> --mode play --filter <related-name> --wai
 unity-cli test run --project <project> --mode play --filter <related-name> --wait --no-domain-reload --output compact
 ```
 
-`--no-domain-reload`는 속도 옵션이다. static state leakage 위험이 있으므로 테스트가 자체 reset을 보장하거나, 같은 조건에서 재실행해도 결과가 흔들리지 않는 경우에만 사용한다. 이미 시작된 PlayMode run의 결과를 다시 확인해야 하면 응답의 `runId`로 `unity-cli test results --project <project> --run-id <runId> --output compact`를 호출한다.
+`--no-domain-reload`는 PlayMode 전용 속도 옵션이다. static state leakage 위험이 있으므로 테스트가 자체 reset을 보장하거나, 같은 조건에서 재실행해도 결과가 흔들리지 않는 경우에만 사용한다. 이미 시작된 PlayMode run의 결과를 다시 확인해야 하면 응답의 `runId`로 `unity-cli test results --project <project> --run-id <runId> --output compact`를 호출한다. non-`Completed` 결과는 error envelope와 CLI exit code 1로 반환된다.
 
 ### Component Operations
 

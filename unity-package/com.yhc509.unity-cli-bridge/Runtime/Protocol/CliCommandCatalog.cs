@@ -465,7 +465,7 @@ namespace UnityCli.Protocol
                     "EditMode: synchronous response with full TestRunResult JSON.",
                     "PlayMode: asynchronous. STARTED+runId response; poll with `test results` or use --wait.",
                     "--no-domain-reload speeds up PlayMode runs but risks static state leakage (warning emitted in response).",
-                    "Default timeout 300s, max 1800s. Timeout triggers TestRunnerApi.CancelAllTestRuns().",
+                    "Default timeout 300s, max 1800s. Timeout triggers TestRunnerApi.CancelTestRun(runGuid).",
                 },
                 forceRule: ForceRule.None,
                 defaultLiveTimeoutMs: ProtocolConstants.DefaultTestRunTimeoutSeconds * 1000),
