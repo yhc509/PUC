@@ -544,4 +544,88 @@ namespace UnityCli.Protocol
         public int elapsedMs;
         public string? reason;
     }
+
+    [Serializable]
+    public sealed class TestListArgs
+    {
+        public string mode = "all";
+    }
+
+    [Serializable]
+    public sealed class TestListPayload
+    {
+        public string mode = string.Empty;
+        public TestListEntry[] tests = Array.Empty<TestListEntry>();
+    }
+
+    [Serializable]
+    public sealed class TestListEntry
+    {
+        public string fullName = string.Empty;
+        public string assembly = string.Empty;
+        public string mode = string.Empty;
+        public string[] categories = Array.Empty<string>();
+    }
+
+    [Serializable]
+    public sealed class TestRunArgs
+    {
+        public string mode = string.Empty;
+        public string filter = string.Empty;
+        public string category = string.Empty;
+        public string assembly = string.Empty;
+        public bool noDomainReload;
+        public int timeoutSeconds;
+    }
+
+    [Serializable]
+    public sealed class TestRunStartedPayload
+    {
+        public string runId = string.Empty;
+        public string mode = string.Empty;
+        public string status = "STARTED";
+        public string startedAt = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class TestResultsArgs
+    {
+        public string runId = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class TestRunResultPayload
+    {
+        public string runId = string.Empty;
+        public string mode = string.Empty;
+        public string status = string.Empty;
+        public string startedAt = string.Empty;
+        public long durationMs;
+        public TestRunSummary summary = new TestRunSummary();
+        public TestResultEntry[] tests = Array.Empty<TestResultEntry>();
+        public string[] warnings = Array.Empty<string>();
+    }
+
+    [Serializable]
+    public sealed class TestRunSummary
+    {
+        public int total;
+        public int passed;
+        public int failed;
+        public int skipped;
+        public int inconclusive;
+        public int completed;
+    }
+
+    [Serializable]
+    public sealed class TestResultEntry
+    {
+        public string fullName = string.Empty;
+        public string assembly = string.Empty;
+        public string[] categories = Array.Empty<string>();
+        public string outcome = string.Empty;
+        public long durationMs;
+        public string message = string.Empty;
+        public string stackTrace = string.Empty;
+    }
 }

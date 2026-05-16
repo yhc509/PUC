@@ -94,6 +94,25 @@ unity-cli does not have dedicated script create/delete commands. Use this combin
 - `unity-cli asset delete --path Assets/Scripts/MyScript.cs --force`
   (handles .meta cleanup and refresh automatically)
 
+### Test Runner Workflow
+
+코드 수정 뒤에는 가능한 한 관련 테스트만 먼저 좁혀서 돌린다.
+
+1. `.cs`를 수정했다면 `unity-cli refresh --project <project>`로 AssetDatabase 갱신을 요청한다.
+2. 관련 EditMode 테스트를 동기 실행한다. `--filter`는 test full name의 대소문자 무시 substring이다: `unity-cli test run --project <project> --mode edit --filter <related-name> --output compact`
+3. 실패하면 JSON의 failing test name, message, stack trace를 기준으로 원인을 고치고 같은 filter로 다시 실행한다.
+4. 통과 뒤에는 필요 범위를 넓힌다: category, assembly, 또는 filter 없는 `unity-cli test run --project <project> --mode edit --output compact`.
+5. 실행 뒤에는 평소와 같이 `read-console --type error` / `read-console --type warning`으로 Editor 로그도 확인한다.
+
+PlayMode 자동화는 비동기 시작이 기본이다. 에이전트가 한 번에 결과까지 기다려야 하면 `--wait`를 붙인다.
+
+```bash
+unity-cli test run --project <project> --mode play --filter <related-name> --wait --output compact
+unity-cli test run --project <project> --mode play --filter <related-name> --wait --no-domain-reload --output compact
+```
+
+`--no-domain-reload`는 PlayMode 전용 속도 옵션이다. static state leakage 위험이 있으므로 테스트가 자체 reset을 보장하거나, 같은 조건에서 재실행해도 결과가 흔들리지 않는 경우에만 사용한다. 이미 시작된 PlayMode run의 결과를 다시 확인해야 하면 응답의 `runId`로 `unity-cli test results --project <project> --run-id <runId> --output compact`를 호출한다. non-`Completed` 결과는 error envelope와 CLI exit code 1로 반환된다.
+
 ### Component Operations
 
 **List components on a node:**

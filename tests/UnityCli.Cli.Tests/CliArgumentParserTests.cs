@@ -8,11 +8,99 @@ namespace UnityCli.Cli.Tests;
 public sealed class CliArgumentParserTests
 {
     [Fact]
-    public void Parse_RunTestsIsRejected()
+    public void Parse_TestList_DefaultsToAllMode()
     {
-        var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["run-tests", "--mode", "play"]));
+        var parsed = CliArgumentParser.Parse(["test", "list"]);
 
-        Assert.Contains("알 수 없는 명령", ex.Message);
+        Assert.Equal(CommandKind.TestList, parsed.Kind);
+        Assert.Equal("all", parsed.TestMode);
+    }
+
+    [Fact]
+    public void Parse_TestList_AcceptsExplicitMode()
+    {
+        var parsed = CliArgumentParser.Parse(["test", "list", "--mode", "edit"]);
+
+        Assert.Equal(CommandKind.TestList, parsed.Kind);
+        Assert.Equal("edit", parsed.TestMode);
+    }
+
+    [Fact]
+    public void Parse_TestList_RejectsInvalidMode()
+    {
+        var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["test", "list", "--mode", "bogus"]));
+
+        Assert.Contains("--mode", ex.Message);
+    }
+
+    [Fact]
+    public void Parse_TestRun_RequiresMode()
+    {
+        var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["test", "run"]));
+
+        Assert.Contains("--mode", ex.Message);
+    }
+
+    [Fact]
+    public void Parse_TestRun_AcceptsAllOptions()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "test", "run",
+            "--mode", "play",
+            "--filter", "Foo.Bar",
+            "--category", "Smoke",
+            "--assembly", "UnityCliBridge.Bridge.Editor.Tests",
+            "--no-domain-reload",
+            "--timeout", "600",
+            "--wait",
+        ]);
+
+        Assert.Equal(CommandKind.TestRun, parsed.Kind);
+        Assert.Equal("play", parsed.TestMode);
+        Assert.Equal("Foo.Bar", parsed.TestFilter);
+        Assert.Equal("Smoke", parsed.TestCategory);
+        Assert.Equal("UnityCliBridge.Bridge.Editor.Tests", parsed.TestAssembly);
+        Assert.True(parsed.TestNoDomainReload);
+        Assert.Equal(600, parsed.TestTimeoutSeconds);
+        Assert.True(parsed.TestWait);
+    }
+
+    [Fact]
+    public void Parse_TestRun_RejectsNoDomainReloadForEditMode()
+    {
+        var ex = Assert.Throws<CliUsageException>(() =>
+            CliArgumentParser.Parse(["test", "run", "--mode", "edit", "--no-domain-reload"]));
+
+        Assert.Equal("--no-domain-reload는 --mode play에서만 사용 가능합니다.", ex.Message);
+    }
+
+    [Fact]
+    public void Parse_TestRun_RejectsModeAll()
+    {
+        var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["test", "run", "--mode", "all"]));
+
+        Assert.Contains("--mode", ex.Message);
+    }
+
+    [Fact]
+    public void Parse_TestRun_RejectsTimeoutAboveMax()
+    {
+        var ex = Assert.Throws<CliUsageException>(
+            () => CliArgumentParser.Parse(["test", "run", "--mode", "edit", "--timeout", "9999"]));
+
+        Assert.Contains("--timeout", ex.Message);
+    }
+
+    [Fact]
+    public void Parse_TestResults_AcceptsRunIdOptional()
+    {
+        var noId = CliArgumentParser.Parse(["test", "results"]);
+        Assert.Equal(CommandKind.TestResults, noId.Kind);
+        Assert.Null(noId.TestRunId);
+
+        var withId = CliArgumentParser.Parse(["test", "results", "--run-id", "abc123"]);
+        Assert.Equal(CommandKind.TestResults, withId.Kind);
+        Assert.Equal("abc123", withId.TestRunId);
     }
 
     [Fact]

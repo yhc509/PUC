@@ -48,6 +48,7 @@ namespace UnityCliBridge.Bridge.Editor
         private readonly ExecuteCodeHandler _executeCodeHandler;
         private readonly CustomCommandHandler _customCommandHandler;
         private readonly PackageCommandHandler _packageCommandHandler;
+        private readonly TestCommandHandler _testCommandHandler;
         private readonly MaterialCommandHandler _materialCommandHandler;
         private readonly QaCommandHandler _qaCommandHandler;
         private NamedPipeOwnershipLock? _namedPipeOwnershipLock;
@@ -81,8 +82,12 @@ namespace UnityCliBridge.Bridge.Editor
             _executeCodeHandler = new ExecuteCodeHandler();
             _customCommandHandler = new CustomCommandHandler();
             _packageCommandHandler = new PackageCommandHandler();
+            _testCommandHandler = new TestCommandHandler();
             _materialCommandHandler = new MaterialCommandHandler();
             _qaCommandHandler = new QaCommandHandler();
+
+            TestCommandHandler.RestoreLockFromSession();
+            DomainReloadDisableScope.RestoreIfOrphaned();
         }
 
         public void Start()
@@ -613,6 +618,12 @@ namespace UnityCliBridge.Bridge.Editor
                     continue;
                 }
 
+                if (_testCommandHandler.CanHandle(pending.Command.command) && _testCommandHandler.IsDeferred(pending.Command.command, pending.Command.argumentsJson))
+                {
+                    StartDeferredTestRequest(pending);
+                    continue;
+                }
+
                 if (_packageCommandHandler.CanHandle(pending.Command.command) && _packageCommandHandler.IsDeferred(pending.Command.command, pending.Command.argumentsJson))
                 {
                     StartDeferredPackageRequest(pending);
@@ -621,6 +632,60 @@ namespace UnityCliBridge.Bridge.Editor
 
                 ResponseEnvelope response = HandleCommand(pending.Command);
                 pending.Completion.TrySetResult(response);
+            }
+        }
+
+        private void StartDeferredTestRequest(PendingRequest pending)
+        {
+            CommandEnvelope command = pending.Command;
+            var stopwatch = Stopwatch.StartNew();
+
+            try
+            {
+                if (IsBusyEditorCommand(command.command))
+                {
+                    stopwatch.Stop();
+                    pending.Completion.TrySetResult(BuildBusyResponse(command, stopwatch.ElapsedMilliseconds));
+                    return;
+                }
+
+                _testCommandHandler.StartDeferred(command.command, command.argumentsJson, pending.Completion, _projectHash);
+            }
+            catch (CommandFailureException exception)
+            {
+                if (string.Equals(command.command, ProtocolConstants.CommandTestRun, StringComparison.Ordinal))
+                {
+                    TestCommandHandler.EndRun();
+                }
+
+                stopwatch.Stop();
+                pending.Completion.TrySetResult(ResponseEnvelope.Failure(
+                    command.requestId,
+                    _projectHash,
+                    exception.ErrorCode,
+                    exception.Message,
+                    exception.IsRetryable,
+                    stopwatch.ElapsedMilliseconds,
+                    ProtocolConstants.TransportLive,
+                    exception.Details));
+            }
+            catch (Exception exception)
+            {
+                if (string.Equals(command.command, ProtocolConstants.CommandTestRun, StringComparison.Ordinal))
+                {
+                    TestCommandHandler.EndRun();
+                }
+
+                stopwatch.Stop();
+                pending.Completion.TrySetResult(ResponseEnvelope.Failure(
+                    command.requestId,
+                    _projectHash,
+                    "TEST_RUN_START_FAILED",
+                    exception.Message,
+                    false,
+                    stopwatch.ElapsedMilliseconds,
+                    ProtocolConstants.TransportLive,
+                    ProtocolErrorDetails.FromString(exception.ToString())));
             }
         }
 
@@ -767,6 +832,10 @@ namespace UnityCliBridge.Bridge.Editor
                 {
                     data = _qaCommandHandler.Handle(command.command, command.argumentsJson);
                 }
+                else if (_testCommandHandler.CanHandle(command.command))
+                {
+                    data = _testCommandHandler.Handle(command.command, command.argumentsJson);
+                }
                 else if (_packageCommandHandler.CanHandle(command.command))
                 {
                     data = _packageCommandHandler.Handle(command.command, command.argumentsJson);
@@ -826,6 +895,15 @@ namespace UnityCliBridge.Bridge.Editor
                 }
 
                 stopwatch.Stop();
+                if (string.Equals(command.command, ProtocolConstants.CommandTestResults, StringComparison.Ordinal))
+                {
+                    return TestCommandHandler.BuildTestRunResultEnvelope(
+                        command.requestId,
+                        _projectHash,
+                        data,
+                        stopwatch.ElapsedMilliseconds);
+                }
+
                 return ResponseEnvelope.Success(
                     command.requestId,
                     _projectHash,

@@ -19,6 +19,9 @@ namespace UnityCli.Protocol
         public const int DefaultAssetFindLimit = 50;
         public const int DefaultPackageRequestTimeoutSeconds = 300;
         public const int DefaultPackageLiveTimeoutMs = 360_000;
+        public const int DefaultTestRunTimeoutSeconds = 300;
+        public const int MaxTestRunTimeoutSeconds = 1800;
+        public const int TestRunCancelGraceSeconds = 30;
         public const int RegistryHeartbeatSeconds = 2;
         public const string BusyErrorCode = "BUSY";
         public const string ErrorAssetForceRequired = "ASSET_FORCE_REQUIRED";
@@ -29,6 +32,15 @@ namespace UnityCli.Protocol
         public const string ErrorPackageBusy = "PACKAGE_BUSY";
         public const string PackageBusyMessage = "다른 패키지 명령이 진행 중입니다. 완료 후 다시 시도하세요.";
         public const string ErrorPackageTimeout = "PACKAGE_TIMEOUT";
+        public const string ErrorTestBusy = "TEST_RUN_IN_PROGRESS";
+        public const string ErrorTestTimeout = "TEST_RUN_TIMEOUT";
+        public const string ErrorTestCancelled = "TEST_RUN_CANCELLED";
+        public const string ErrorTestRunFailed = "TEST_RUN_FAILED";
+        public const string ErrorTestInterrupted = "TEST_RUN_INTERRUPTED";
+        public const string ErrorTestListTimeout = "TEST_LIST_TIMEOUT";
+        public const string ErrorTestRunNotFound = "TEST_RUN_NOT_FOUND";
+        public const string ErrorTestInvalidMode = "TEST_INVALID_MODE";
+        public const string ErrorTestPlayModeEntryFailed = "TEST_PLAYMODE_ENTRY_FAILED";
         public const string ErrorSceneForceRequired = "SCENE_FORCE_REQUIRED";
         public const string ErrorBackupFailed = "BACKUP_FAILED";
         public const string ErrorBackupRestoreFailed = "BACKUP_RESTORE_FAILED";
@@ -49,6 +61,9 @@ namespace UnityCli.Protocol
         public const string CommandScreenshot = "screenshot";
         public const string CommandExecuteCode = "execute-code";
         public const string CommandCustom = "custom";
+        public const string CommandTestList = "test-list";
+        public const string CommandTestRun = "test-run";
+        public const string CommandTestResults = "test-results";
         public const string CommandPackageList = "package-list";
         public const string CommandPackageAdd = "package-add";
         public const string CommandPackageRemove = "package-remove";
@@ -82,6 +97,24 @@ namespace UnityCli.Protocol
         public const string CommandQaWaitUntil = "qa-wait-until";
         public const int DefaultQaWaitUntilTimeoutMs = 10_000;
         public const int DefaultQaSwipeDurationMs = 300;
+        public const int TestPlayModeEntryTimeoutSeconds = 15;
+        public const string TestSessionKeyActiveRunId = "UCB.Test.activeRunId";
+        public const string TestSessionKeyActiveMode = "UCB.Test.activeMode";
+        public const string TestSessionKeyActiveStartedAt = "UCB.Test.activeStartedAt";
+        public const string TestSessionKeyActiveTimeoutSeconds = "UCB.Test.activeTimeoutSeconds";
+        public const string TestSessionKeyActiveRunGuid = "UCB.Test.activeRunGuid";
+        public const string TestSessionKeyActiveNoDomainReload = "UCB.Test.activeNoDomainReload";
+        public const string TestSessionKeyProgressCompleted = "UCB.Test.progress.completed";
+        public const string TestSessionKeyProgressTotal = "UCB.Test.progress.total";
+        public const string TestSessionKeyInlineResultRunId = "UCB.Test.inlineResult.runId";
+        public const string TestSessionKeyInlineResultJson = "UCB.Test.inlineResult.json";
+        public const string TestSessionKeyScopeActive = "UCB.Test.scope.active";
+        public const string TestSessionKeyScopeWasEnabled = "UCB.Test.scope.wasEnabled";
+        public const string TestSessionKeyScopePreviousFlags = "UCB.Test.scope.previousFlags";
+        public const string TestSessionKeyCallbacksInstanceId = "UCB.Test.callbacks.instanceId";
+        public const string TestRunsDirectoryRelative = "Library/com.yhc509.unity-cli-bridge/test-runs";
+        public const string TestLastRunFileRelative = "Library/com.yhc509.unity-cli-bridge/last-run.json";
+        public const string TestRunInterruptedMessage = "EditMode run interrupted by domain reload — no result available";
         public static readonly string[] SupportedScenePrimitiveNames =
         {
             "Cube",
