@@ -37,6 +37,7 @@ namespace UnityCli.Protocol
         public const string ErrorTestListTimeout = "TEST_LIST_TIMEOUT";
         public const string ErrorTestRunNotFound = "TEST_RUN_NOT_FOUND";
         public const string ErrorTestInvalidMode = "TEST_INVALID_MODE";
+        public const string ErrorTestPlayModeEntryFailed = "TEST_PLAYMODE_ENTRY_FAILED";
         public const string ErrorSceneForceRequired = "SCENE_FORCE_REQUIRED";
         public const string ErrorBackupFailed = "BACKUP_FAILED";
         public const string ErrorBackupRestoreFailed = "BACKUP_RESTORE_FAILED";
@@ -93,9 +94,13 @@ namespace UnityCli.Protocol
         public const string CommandQaWaitUntil = "qa-wait-until";
         public const int DefaultQaWaitUntilTimeoutMs = 10_000;
         public const int DefaultQaSwipeDurationMs = 300;
+        public const int TestPlayModeEntryTimeoutSeconds = 15;
         public const string TestSessionKeyActiveRunId = "UCB.Test.activeRunId";
         public const string TestSessionKeyActiveMode = "UCB.Test.activeMode";
         public const string TestSessionKeyActiveStartedAt = "UCB.Test.activeStartedAt";
+        public const string TestSessionKeyActiveTimeoutSeconds = "UCB.Test.activeTimeoutSeconds";
+        public const string TestSessionKeyActiveRunGuid = "UCB.Test.activeRunGuid";
+        public const string TestSessionKeyActiveNoDomainReload = "UCB.Test.activeNoDomainReload";
         public const string TestSessionKeyProgressCompleted = "UCB.Test.progress.completed";
         public const string TestSessionKeyProgressTotal = "UCB.Test.progress.total";
         public const string TestSessionKeyScopeActive = "UCB.Test.scope.active";

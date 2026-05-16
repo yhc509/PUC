@@ -433,11 +433,29 @@ namespace UnityCliBridge.Bridge.Editor
             }
         }
 
-        internal static void BeginRun_PersistSession(string runId, string mode)
+        internal static int ResolveTestTimeoutSeconds(TestRunArgs args)
+        {
+            return args.timeoutSeconds > 0
+                ? Math.Min(args.timeoutSeconds, ProtocolConstants.MaxTestRunTimeoutSeconds)
+                : ProtocolConstants.DefaultTestRunTimeoutSeconds;
+        }
+
+        internal static void BeginRun_PersistSession(
+            string runId,
+            string mode,
+            int timeoutSeconds,
+            bool noDomainReload)
         {
             SessionState.SetString(ProtocolConstants.TestSessionKeyActiveRunId, runId);
             SessionState.SetString(ProtocolConstants.TestSessionKeyActiveMode, mode);
             SessionState.SetString(ProtocolConstants.TestSessionKeyActiveStartedAt, DateTime.UtcNow.ToString("O"));
+            SessionState.SetInt(ProtocolConstants.TestSessionKeyActiveTimeoutSeconds, timeoutSeconds);
+            SessionState.SetBool(ProtocolConstants.TestSessionKeyActiveNoDomainReload, noDomainReload);
+        }
+
+        internal static void StoreActiveRunGuid(string runGuid)
+        {
+            SessionState.SetString(ProtocolConstants.TestSessionKeyActiveRunGuid, runGuid);
         }
 
         internal static void EndRun()
@@ -448,6 +466,9 @@ namespace UnityCliBridge.Bridge.Editor
                 SessionState.EraseString(ProtocolConstants.TestSessionKeyActiveRunId);
                 SessionState.EraseString(ProtocolConstants.TestSessionKeyActiveMode);
                 SessionState.EraseString(ProtocolConstants.TestSessionKeyActiveStartedAt);
+                SessionState.EraseInt(ProtocolConstants.TestSessionKeyActiveTimeoutSeconds);
+                SessionState.EraseString(ProtocolConstants.TestSessionKeyActiveRunGuid);
+                SessionState.EraseBool(ProtocolConstants.TestSessionKeyActiveNoDomainReload);
                 SessionState.EraseInt(ProtocolConstants.TestSessionKeyProgressCompleted);
                 SessionState.EraseInt(ProtocolConstants.TestSessionKeyProgressTotal);
                 SessionState.EraseInt(ProtocolConstants.TestSessionKeyCallbacksInstanceId);
@@ -457,13 +478,69 @@ namespace UnityCliBridge.Bridge.Editor
         internal static void RestoreLockFromSession()
         {
             string activeRunId = SessionState.GetString(ProtocolConstants.TestSessionKeyActiveRunId, string.Empty);
-            if (!string.IsNullOrEmpty(activeRunId))
+            if (string.IsNullOrEmpty(activeRunId))
             {
-                lock (_activeLock)
-                {
-                    _hasActiveRun = true;
-                }
+                return;
             }
+
+            string activeMode = SessionState.GetString(ProtocolConstants.TestSessionKeyActiveMode, string.Empty);
+            int timeoutSeconds = GetActiveTimeoutSeconds();
+            if (string.Equals(activeMode, "play", StringComparison.Ordinal)
+                && IsActiveRunPastDeadline(timeoutSeconds))
+            {
+                MarkRestoredPlayModeRunTimedOut(activeRunId);
+                return;
+            }
+
+            lock (_activeLock)
+            {
+                _hasActiveRun = true;
+            }
+
+            if (string.Equals(activeMode, "play", StringComparison.Ordinal))
+            {
+                RestorePlayModeRunFromSession(activeRunId, timeoutSeconds);
+            }
+        }
+
+        internal static int GetActiveTimeoutSeconds()
+        {
+            int timeoutSeconds = SessionState.GetInt(
+                ProtocolConstants.TestSessionKeyActiveTimeoutSeconds,
+                ProtocolConstants.DefaultTestRunTimeoutSeconds);
+            return timeoutSeconds > 0
+                ? Math.Min(timeoutSeconds, ProtocolConstants.MaxTestRunTimeoutSeconds)
+                : ProtocolConstants.DefaultTestRunTimeoutSeconds;
+        }
+
+        internal static bool TryGetActiveStartedAtUtc(out DateTime startedAtUtc)
+        {
+            string startedAtValue = SessionState.GetString(
+                ProtocolConstants.TestSessionKeyActiveStartedAt,
+                string.Empty);
+            if (DateTime.TryParse(
+                startedAtValue,
+                null,
+                System.Globalization.DateTimeStyles.RoundtripKind,
+                out DateTime parsed))
+            {
+                startedAtUtc = parsed.ToUniversalTime();
+                return true;
+            }
+
+            startedAtUtc = DateTime.UtcNow;
+            return false;
+        }
+
+        private static bool IsActiveRunPastDeadline(int timeoutSeconds)
+        {
+            if (!TryGetActiveStartedAtUtc(out DateTime startedAtUtc))
+            {
+                return false;
+            }
+
+            DateTime deadline = startedAtUtc.AddSeconds(timeoutSeconds + ProtocolConstants.TestRunCancelGraceSeconds);
+            return DateTime.UtcNow >= deadline;
         }
 
         [Serializable]

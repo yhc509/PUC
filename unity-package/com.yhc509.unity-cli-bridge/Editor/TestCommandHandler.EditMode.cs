@@ -18,11 +18,8 @@ namespace UnityCliBridge.Bridge.Editor
             string requestId)
         {
             string runId = Guid.NewGuid().ToString("N");
-            BeginRun_PersistSession(runId, "edit");
-
-            int timeoutSec = args.timeoutSeconds > 0
-                ? Math.Min(args.timeoutSeconds, ProtocolConstants.MaxTestRunTimeoutSeconds)
-                : ProtocolConstants.DefaultTestRunTimeoutSeconds;
+            int timeoutSec = ResolveTestTimeoutSeconds(args);
+            BeginRun_PersistSession(runId, "edit", timeoutSec, false);
 
             var callbacks = TestRunnerCallbacks.Create(runId, "edit", false);
             callbacks.StoreInstanceIdToSession();
@@ -49,6 +46,7 @@ namespace UnityCliBridge.Bridge.Editor
             try
             {
                 runGuid = api.Execute(new ExecutionSettings(BuildFilter(args, TestMode.EditMode)));
+                StoreActiveRunGuid(runGuid);
             }
             catch
             {

@@ -29,11 +29,20 @@ namespace UnityCliBridge.Bridge.Editor
 
         public static TestRunnerCallbacks Create(string runId, string mode, bool domainReloadDisabled)
         {
+            return Create(runId, mode, domainReloadDisabled, DateTime.UtcNow);
+        }
+
+        public static TestRunnerCallbacks Create(
+            string runId,
+            string mode,
+            bool domainReloadDisabled,
+            DateTime startedAtUtc)
+        {
             var instance = CreateInstance<TestRunnerCallbacks>();
             instance.hideFlags = HideFlags.HideAndDontSave;
             instance._runId = runId;
             instance._mode = mode;
-            instance._startedAtUtcTicks = DateTime.UtcNow.Ticks;
+            instance._startedAtUtcTicks = startedAtUtc.ToUniversalTime().Ticks;
             instance._domainReloadDisabled = domainReloadDisabled;
             return instance;
         }
@@ -67,46 +76,13 @@ namespace UnityCliBridge.Bridge.Editor
 
         public void TestFinished(ITestResultAdaptor result)
         {
-            if (result.Test == null || result.Test.IsSuite)
-            {
-                return;
-            }
-
-            var entry = new TestResultEntry
-            {
-                fullName = result.Test.FullName ?? string.Empty,
-                assembly = GetAssemblyName(result.Test),
-                categories = result.Test.Categories ?? Array.Empty<string>(),
-                outcome = result.TestStatus.ToString(),
-                durationMs = (long)(result.Duration * 1000),
-                message = result.Message ?? string.Empty,
-                stackTrace = result.StackTrace ?? string.Empty,
-            };
-            _results.Add(entry);
-            _completedCount++;
-
-            switch (result.TestStatus)
-            {
-                case TestStatus.Passed:
-                    _passedCount++;
-                    break;
-                case TestStatus.Failed:
-                    _failedCount++;
-                    break;
-                case TestStatus.Skipped:
-                    _skippedCount++;
-                    break;
-                case TestStatus.Inconclusive:
-                    _inconclusiveCount++;
-                    break;
-            }
-
-            SessionState.SetInt(ProtocolConstants.TestSessionKeyProgressCompleted, _completedCount);
+            AppendLeafResult(result);
         }
 
         public void RunFinished(ITestResultAdaptor result)
         {
             _runFinished = true;
+            AppendLeafResults(result);
             CompleteRun("Completed");
         }
 
@@ -159,6 +135,85 @@ namespace UnityCliBridge.Bridge.Editor
             return commaIndex >= 0
                 ? fullName.Substring(0, commaIndex).Trim()
                 : fullName;
+        }
+
+        private void AppendLeafResults(ITestResultAdaptor result)
+        {
+            if (result.Test == null)
+            {
+                return;
+            }
+
+            if (!result.Test.IsSuite)
+            {
+                AppendLeafResult(result);
+                return;
+            }
+
+            foreach (ITestResultAdaptor child in result.Children)
+            {
+                AppendLeafResults(child);
+            }
+
+            if (_totalCount < _completedCount)
+            {
+                _totalCount = _completedCount;
+                SessionState.SetInt(ProtocolConstants.TestSessionKeyProgressTotal, _totalCount);
+            }
+        }
+
+        private void AppendLeafResult(ITestResultAdaptor result)
+        {
+            if (result.Test == null || result.Test.IsSuite)
+            {
+                return;
+            }
+
+            string fullName = result.Test.FullName ?? string.Empty;
+            for (int index = 0; index < _results.Count; index++)
+            {
+                if (string.Equals(_results[index].fullName, fullName, StringComparison.Ordinal))
+                {
+                    return;
+                }
+            }
+
+            var entry = new TestResultEntry
+            {
+                fullName = fullName,
+                assembly = GetAssemblyName(result.Test),
+                categories = result.Test.Categories ?? Array.Empty<string>(),
+                outcome = result.TestStatus.ToString(),
+                durationMs = (long)(result.Duration * 1000),
+                message = result.Message ?? string.Empty,
+                stackTrace = result.StackTrace ?? string.Empty,
+            };
+            _results.Add(entry);
+            _completedCount++;
+
+            switch (result.TestStatus)
+            {
+                case TestStatus.Passed:
+                    _passedCount++;
+                    break;
+                case TestStatus.Failed:
+                    _failedCount++;
+                    break;
+                case TestStatus.Skipped:
+                    _skippedCount++;
+                    break;
+                case TestStatus.Inconclusive:
+                    _inconclusiveCount++;
+                    break;
+            }
+
+            if (_totalCount < _completedCount)
+            {
+                _totalCount = _completedCount;
+                SessionState.SetInt(ProtocolConstants.TestSessionKeyProgressTotal, _totalCount);
+            }
+
+            SessionState.SetInt(ProtocolConstants.TestSessionKeyProgressCompleted, _completedCount);
         }
 
         private void FlushToDisk(string status, string[]? extraWarnings = null)
