@@ -103,13 +103,39 @@ namespace UnityCliBridge.Bridge.Editor
 
         private void CompleteRun(string status, string[]? extraWarnings = null)
         {
-            FlushToDisk(status, extraWarnings);
-            if (_domainReloadDisabled)
-            {
-                DomainReloadDisableScope.Deactivate();
-            }
+            List<string> warnings = BuildWarnings(extraWarnings);
+            TestRunResultPayload payload = BuildPayload(status, warnings);
 
-            TestCommandHandler.EndRun();
+            try
+            {
+                FlushToDisk(payload);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("[unity-cli-bridge] Failed to flush test run " + _runId + ": " + exception);
+
+                warnings.Add("Failed to write result cache: " + exception.Message);
+                TestRunResultPayload failedPayload = BuildPayload("Failed", warnings);
+                StoreInlineResult(failedPayload);
+
+                try
+                {
+                    FlushToDisk(failedPayload);
+                }
+                catch (Exception retryException)
+                {
+                    Debug.LogError("[unity-cli-bridge] Failed to flush fallback test run " + _runId + ": " + retryException);
+                }
+            }
+            finally
+            {
+                if (_domainReloadDisabled)
+                {
+                    DomainReloadDisableScope.Deactivate();
+                }
+
+                TestCommandHandler.EndRun();
+            }
         }
 
         private static int CountLeafTests(ITestAdaptor adaptor)
@@ -216,76 +242,60 @@ namespace UnityCliBridge.Bridge.Editor
             SessionState.SetInt(ProtocolConstants.TestSessionKeyProgressCompleted, _completedCount);
         }
 
-        private void FlushToDisk(string status, string[]? extraWarnings = null)
+        private List<string> BuildWarnings(string[]? extraWarnings)
         {
-            try
+            var warnings = new List<string>();
+            if (_domainReloadDisabled)
             {
-                var warnings = new List<string>();
-                if (_domainReloadDisabled)
-                {
-                    warnings.Add("domain reload disabled; static state may persist between runs");
-                }
-
-                if (extraWarnings != null)
-                {
-                    warnings.AddRange(extraWarnings);
-                }
-
-                var payload = new TestRunResultPayload
-                {
-                    runId = _runId,
-                    mode = _mode,
-                    status = status,
-                    startedAt = new DateTime(_startedAtUtcTicks, DateTimeKind.Utc).ToString("O"),
-                    durationMs = (long)((DateTime.UtcNow.Ticks - _startedAtUtcTicks) / TimeSpan.TicksPerMillisecond),
-                    summary = new TestRunSummary
-                    {
-                        total = _totalCount,
-                        passed = _passedCount,
-                        failed = _failedCount,
-                        skipped = _skippedCount,
-                        inconclusive = _inconclusiveCount,
-                        completed = _completedCount,
-                    },
-                    tests = _results.ToArray(),
-                    warnings = warnings.ToArray(),
-                };
-
-                string projectRoot = Path.Combine(Application.dataPath, "..");
-                string runsDir = Path.Combine(projectRoot, ProtocolConstants.TestRunsDirectoryRelative);
-                Directory.CreateDirectory(runsDir);
-
-                string finalPath = Path.Combine(runsDir, _runId + ".json");
-                string tempPath = finalPath + ".tmp";
-
-                File.WriteAllText(tempPath, ProtocolJson.Serialize(payload));
-                if (File.Exists(finalPath))
-                {
-                    File.Delete(finalPath);
-                }
-
-                File.Move(tempPath, finalPath);
-
-                string lastRunPath = Path.Combine(projectRoot, ProtocolConstants.TestLastRunFileRelative);
-                string? lastRunDir = Path.GetDirectoryName(lastRunPath);
-                if (!string.IsNullOrEmpty(lastRunDir))
-                {
-                    Directory.CreateDirectory(lastRunDir);
-                }
-
-                string lastRunTemp = lastRunPath + ".tmp";
-                File.WriteAllText(lastRunTemp, ProtocolJson.Serialize(new TestLastRunPointer { lastRunId = _runId }));
-                if (File.Exists(lastRunPath))
-                {
-                    File.Delete(lastRunPath);
-                }
-
-                File.Move(lastRunTemp, lastRunPath);
+                warnings.Add("domain reload disabled; static state may persist between runs");
             }
-            catch (Exception exception)
+
+            if (extraWarnings != null)
             {
-                Debug.LogError("[unity-cli-bridge] Failed to flush test run " + _runId + ": " + exception);
+                warnings.AddRange(extraWarnings);
             }
+
+            return warnings;
+        }
+
+        private TestRunResultPayload BuildPayload(string status, List<string> warnings)
+        {
+            return new TestRunResultPayload
+            {
+                runId = _runId,
+                mode = _mode,
+                status = status,
+                startedAt = new DateTime(_startedAtUtcTicks, DateTimeKind.Utc).ToString("O"),
+                durationMs = (long)((DateTime.UtcNow.Ticks - _startedAtUtcTicks) / TimeSpan.TicksPerMillisecond),
+                summary = new TestRunSummary
+                {
+                    total = _totalCount,
+                    passed = _passedCount,
+                    failed = _failedCount,
+                    skipped = _skippedCount,
+                    inconclusive = _inconclusiveCount,
+                    completed = _completedCount,
+                },
+                tests = _results.ToArray(),
+                warnings = warnings.ToArray(),
+            };
+        }
+
+        private static void StoreInlineResult(TestRunResultPayload payload)
+        {
+            SessionState.SetString(ProtocolConstants.TestSessionKeyInlineResultRunId, payload.runId);
+            SessionState.SetString(ProtocolConstants.TestSessionKeyInlineResultJson, ProtocolJson.Serialize(payload));
+        }
+
+        private void FlushToDisk(TestRunResultPayload payload)
+        {
+            string projectRoot = Path.Combine(Application.dataPath, "..");
+            string runsDir = Path.Combine(projectRoot, ProtocolConstants.TestRunsDirectoryRelative);
+            string finalPath = Path.Combine(runsDir, _runId + ".json");
+            AtomicFileUtility.WriteAllText(finalPath, ProtocolJson.Serialize(payload));
+
+            string lastRunPath = Path.Combine(projectRoot, ProtocolConstants.TestLastRunFileRelative);
+            AtomicFileUtility.WriteAllText(lastRunPath, ProtocolJson.Serialize(new TestLastRunPointer { lastRunId = _runId }));
         }
 
         [Serializable]

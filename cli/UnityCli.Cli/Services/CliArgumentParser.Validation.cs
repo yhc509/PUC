@@ -325,6 +325,10 @@ public static partial class CliArgumentParser
         {
             case CommandKind.TestRun when string.IsNullOrWhiteSpace(parsed.TestMode):
                 throw new CliUsageException("`test run`에는 `--mode <edit|play>`가 필요합니다.");
+            case CommandKind.TestRun
+                when string.Equals(parsed.TestMode, "edit", StringComparison.Ordinal)
+                && parsed.TestNoDomainReload:
+                throw new CliUsageException("--no-domain-reload는 --mode play에서만 사용 가능합니다.");
             case CommandKind.TestRun when parsed.TestTimeoutSeconds > ProtocolConstants.MaxTestRunTimeoutSeconds:
                 throw new CliUsageException($"--timeout 값은 {ProtocolConstants.MaxTestRunTimeoutSeconds}초를 초과할 수 없습니다.");
         }

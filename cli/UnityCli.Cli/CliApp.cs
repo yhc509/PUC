@@ -277,7 +277,7 @@ public static class CliApp
                     return await PollTestResultsAsync(parsed, target, ipcClient, response, cts.Token);
                 }
 
-                return response;
+                return NormalizeTestResultEnvelope(response);
             }
             catch (Exception ex)
             {
@@ -351,6 +351,12 @@ public static class CliApp
                 return poll;
             }
 
+            poll = NormalizeTestResultEnvelope(poll);
+            if (!string.Equals(poll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+            {
+                return poll;
+            }
+
             var result = DeserializeData<TestRunResultPayload>(poll);
             if (result is null || !string.Equals(result.status, "Running", StringComparison.Ordinal))
             {
@@ -363,7 +369,26 @@ public static class CliApp
             }
         }
 
-        return await SendTestResultsPollAsync(target, ipcClient, started.runId, cancellationToken);
+        var finalPoll = await SendTestResultsPollAsync(target, ipcClient, started.runId, cancellationToken);
+        finalPoll = NormalizeTestResultEnvelope(finalPoll);
+        if (!string.Equals(finalPoll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+        {
+            return finalPoll;
+        }
+
+        var finalResult = DeserializeData<TestRunResultPayload>(finalPoll);
+        if (finalResult is not null && string.Equals(finalResult.status, "Running", StringComparison.Ordinal))
+        {
+            return BuildTestResultFailureEnvelope(
+                finalPoll,
+                finalResult,
+                ProtocolConstants.ErrorTestTimeout,
+                string.IsNullOrWhiteSpace(finalResult.runId)
+                    ? "Test run timed out."
+                    : "Test run " + finalResult.runId + " timed out.");
+        }
+
+        return finalPoll;
     }
 
     private static async Task<ResponseEnvelope> SendTestResultsPollAsync(
@@ -402,6 +427,62 @@ public static class CliApp
         }
 
         return JsonSerializer.Deserialize<T>(data.GetRawText(), ProtocolJson.Default);
+    }
+
+    internal static ResponseEnvelope NormalizeTestResultEnvelope(ResponseEnvelope response)
+    {
+        if (!string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+        {
+            return response;
+        }
+
+        var result = DeserializeData<TestRunResultPayload>(response);
+        if (result is null || !ProtocolHelpers.IsTestRunResultStatusError(result.status))
+        {
+            return response;
+        }
+
+        return BuildTestResultFailureEnvelope(
+            response,
+            result,
+            ProtocolHelpers.GetTestRunResultErrorCode(result.status, result.warnings),
+            ProtocolHelpers.BuildTestRunResultErrorMessage(result));
+    }
+
+    private static ResponseEnvelope BuildTestResultFailureEnvelope(
+        ResponseEnvelope source,
+        TestRunResultPayload result,
+        string errorCode,
+        string message)
+    {
+        return ResponseEnvelope.Failure(
+            source.requestId,
+            source.target,
+            errorCode,
+            message,
+            retryable: false,
+            source.durationMs,
+            source.transport,
+            GetDataDetailsJson(source, result));
+    }
+
+    private static string GetDataDetailsJson(ResponseEnvelope source, TestRunResultPayload fallback)
+    {
+        if (!source.data.HasValue)
+        {
+            return ProtocolJson.Serialize(fallback);
+        }
+
+        JsonElement data = source.data.Value;
+        if (data.ValueKind == JsonValueKind.String)
+        {
+            string? json = data.GetString();
+            return string.IsNullOrWhiteSpace(json)
+                ? ProtocolJson.Serialize(fallback)
+                : json;
+        }
+
+        return data.GetRawText();
     }
 
     private static async Task<ResponseEnvelope> RunQaWait(ParsedCommand parsed)

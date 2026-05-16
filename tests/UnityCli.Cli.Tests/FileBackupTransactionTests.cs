@@ -291,6 +291,49 @@ public sealed class FileBackupTransactionTests
         Assert.False(File.Exists(metaPath));
     }
 
+    [Fact]
+    public void AtomicFileUtility_ReplaceTempFile_ReplacesExistingDestination()
+    {
+        using var temp = new TempDirectory();
+        string destinationPath = Path.Combine(temp.Path, "last-run.json");
+        string tempPath = destinationPath + ".tmp";
+        File.WriteAllText(destinationPath, "old");
+        File.WriteAllText(tempPath, "new");
+
+        AtomicFileUtility.ReplaceTempFile(tempPath, destinationPath);
+
+        Assert.Equal("new", File.ReadAllText(destinationPath));
+        Assert.False(File.Exists(tempPath));
+    }
+
+    [Fact]
+    public void AtomicFileUtility_WriteAllText_CreatesDestinationAndCleansTempFile()
+    {
+        using var temp = new TempDirectory();
+        string destinationPath = Path.Combine(temp.Path, "Library", "last-run.json");
+
+        AtomicFileUtility.WriteAllText(destinationPath, "{\"lastRunId\":\"abc\"}");
+
+        Assert.Equal("{\"lastRunId\":\"abc\"}", File.ReadAllText(destinationPath));
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(destinationPath)!, "*.tmp"));
+    }
+
+    [Fact]
+    public void AtomicFileUtility_CleanupTempFiles_RemovesStaleTmpFilesOnly()
+    {
+        using var temp = new TempDirectory();
+        string staleTempPath = Path.Combine(temp.Path, "run.json.tmp");
+        string resultPath = Path.Combine(temp.Path, "run.json");
+        File.WriteAllText(staleTempPath, "stale");
+        File.WriteAllText(resultPath, "result");
+
+        int deleted = AtomicFileUtility.CleanupTempFiles(temp.Path);
+
+        Assert.Equal(1, deleted);
+        Assert.False(File.Exists(staleTempPath));
+        Assert.True(File.Exists(resultPath));
+    }
+
     private static FileBackupTransactionOptions CreateOptions(TempDirectory temp, string backupId)
     {
         return new FileBackupTransactionOptions

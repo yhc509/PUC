@@ -61,5 +61,94 @@ namespace UnityCli.Protocol
 
             return fullName.IndexOf(substringFilter, StringComparison.OrdinalIgnoreCase) >= 0;
         }
+
+        public static bool IsTestRunResultStatusError(string status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+            {
+                return false;
+            }
+
+            return !string.Equals(status, "Completed", StringComparison.Ordinal)
+                && !string.Equals(status, "Running", StringComparison.Ordinal)
+                && !string.Equals(status, "STARTED", StringComparison.Ordinal);
+        }
+
+        public static string GetTestRunResultErrorCode(string status, string[] warnings)
+        {
+            if (string.Equals(status, "TimedOut", StringComparison.Ordinal))
+            {
+                return ProtocolConstants.ErrorTestTimeout;
+            }
+
+            if (string.Equals(status, "Cancelled", StringComparison.Ordinal))
+            {
+                return ProtocolConstants.ErrorTestCancelled;
+            }
+
+            if (string.Equals(status, "Failed", StringComparison.Ordinal)
+                && ContainsWarning(warnings, ProtocolConstants.TestRunInterruptedMessage))
+            {
+                return ProtocolConstants.ErrorTestInterrupted;
+            }
+
+            if (string.Equals(status, "Failed", StringComparison.Ordinal))
+            {
+                return ProtocolConstants.ErrorTestRunFailed;
+            }
+
+            return ProtocolConstants.ErrorTestRunFailed;
+        }
+
+        public static string BuildTestRunResultErrorMessage(TestRunResultPayload result)
+        {
+            string runLabel = string.IsNullOrWhiteSpace(result.runId)
+                ? "Test run"
+                : "Test run " + result.runId;
+
+            if (string.Equals(result.status, "TimedOut", StringComparison.Ordinal))
+            {
+                return runLabel + " timed out.";
+            }
+
+            if (string.Equals(result.status, "Cancelled", StringComparison.Ordinal))
+            {
+                return runLabel + " was cancelled.";
+            }
+
+            string warning = FirstWarning(result.warnings);
+            if (!string.IsNullOrWhiteSpace(warning))
+            {
+                return warning;
+            }
+
+            return runLabel + " ended with status " + result.status + ".";
+        }
+
+        private static bool ContainsWarning(string[] warnings, string expected)
+        {
+            for (int index = 0; index < warnings.Length; index++)
+            {
+                if (string.Equals(warnings[index], expected, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static string FirstWarning(string[] warnings)
+        {
+            for (int index = 0; index < warnings.Length; index++)
+            {
+                if (!string.IsNullOrWhiteSpace(warnings[index]))
+                {
+                    return warnings[index];
+                }
+            }
+
+            return string.Empty;
+        }
     }
 }

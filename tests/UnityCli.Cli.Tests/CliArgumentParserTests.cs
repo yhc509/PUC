@@ -66,6 +66,15 @@ public sealed class CliArgumentParserTests
     }
 
     [Fact]
+    public void Parse_TestRun_RejectsNoDomainReloadForEditMode()
+    {
+        var ex = Assert.Throws<CliUsageException>(() =>
+            CliArgumentParser.Parse(["test", "run", "--mode", "edit", "--no-domain-reload"]));
+
+        Assert.Equal("--no-domain-reload는 --mode play에서만 사용 가능합니다.", ex.Message);
+    }
+
+    [Fact]
     public void Parse_TestRun_RejectsModeAll()
     {
         var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["test", "run", "--mode", "all"]));

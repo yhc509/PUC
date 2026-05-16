@@ -895,6 +895,15 @@ namespace UnityCliBridge.Bridge.Editor
                 }
 
                 stopwatch.Stop();
+                if (string.Equals(command.command, ProtocolConstants.CommandTestResults, StringComparison.Ordinal))
+                {
+                    return TestCommandHandler.BuildTestRunResultEnvelope(
+                        command.requestId,
+                        _projectHash,
+                        data,
+                        stopwatch.ElapsedMilliseconds);
+                }
+
                 return ResponseEnvelope.Success(
                     command.requestId,
                     _projectHash,

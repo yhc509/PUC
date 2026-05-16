@@ -34,6 +34,9 @@ namespace UnityCli.Protocol
         public const string ErrorPackageTimeout = "PACKAGE_TIMEOUT";
         public const string ErrorTestBusy = "TEST_RUN_IN_PROGRESS";
         public const string ErrorTestTimeout = "TEST_RUN_TIMEOUT";
+        public const string ErrorTestCancelled = "TEST_RUN_CANCELLED";
+        public const string ErrorTestRunFailed = "TEST_RUN_FAILED";
+        public const string ErrorTestInterrupted = "TEST_RUN_INTERRUPTED";
         public const string ErrorTestListTimeout = "TEST_LIST_TIMEOUT";
         public const string ErrorTestRunNotFound = "TEST_RUN_NOT_FOUND";
         public const string ErrorTestInvalidMode = "TEST_INVALID_MODE";
@@ -103,12 +106,15 @@ namespace UnityCli.Protocol
         public const string TestSessionKeyActiveNoDomainReload = "UCB.Test.activeNoDomainReload";
         public const string TestSessionKeyProgressCompleted = "UCB.Test.progress.completed";
         public const string TestSessionKeyProgressTotal = "UCB.Test.progress.total";
+        public const string TestSessionKeyInlineResultRunId = "UCB.Test.inlineResult.runId";
+        public const string TestSessionKeyInlineResultJson = "UCB.Test.inlineResult.json";
         public const string TestSessionKeyScopeActive = "UCB.Test.scope.active";
         public const string TestSessionKeyScopeWasEnabled = "UCB.Test.scope.wasEnabled";
         public const string TestSessionKeyScopePreviousFlags = "UCB.Test.scope.previousFlags";
         public const string TestSessionKeyCallbacksInstanceId = "UCB.Test.callbacks.instanceId";
         public const string TestRunsDirectoryRelative = "Library/com.yhc509.unity-cli-bridge/test-runs";
         public const string TestLastRunFileRelative = "Library/com.yhc509.unity-cli-bridge/last-run.json";
+        public const string TestRunInterruptedMessage = "EditMode run interrupted by domain reload — no result available";
         public static readonly string[] SupportedScenePrimitiveNames =
         {
             "Cube",

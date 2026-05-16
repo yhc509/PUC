@@ -26,6 +26,67 @@ namespace UnityCli.Protocol
         public Action? Refresh { get; set; }
     }
 
+    public static class AtomicFileUtility
+    {
+        public static void WriteAllText(string destinationPath, string contents)
+        {
+            if (string.IsNullOrWhiteSpace(destinationPath))
+            {
+                throw new ArgumentException("destination path is empty.", nameof(destinationPath));
+            }
+
+            string fullPath = Path.GetFullPath(destinationPath);
+            string? directory = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            string tempPath = fullPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                File.WriteAllText(tempPath, contents);
+                ReplaceTempFile(tempPath, fullPath);
+            }
+            finally
+            {
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
+        }
+
+        public static int CleanupTempFiles(string directoryPath, string searchPattern = "*.tmp")
+        {
+            if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
+            {
+                return 0;
+            }
+
+            int deleted = 0;
+            foreach (string tempPath in Directory.GetFiles(directoryPath, searchPattern, SearchOption.TopDirectoryOnly))
+            {
+                File.Delete(tempPath);
+                deleted++;
+            }
+
+            return deleted;
+        }
+
+        internal static void ReplaceTempFile(string tempPath, string destinationPath)
+        {
+            if (File.Exists(destinationPath))
+            {
+                File.Replace(tempPath, destinationPath, null);
+            }
+            else
+            {
+                File.Move(tempPath, destinationPath);
+            }
+        }
+    }
+
     public static class FileBackupTransaction
     {
         private const string BackupDirectoryName = "com.yhc509.unity-cli-bridge";

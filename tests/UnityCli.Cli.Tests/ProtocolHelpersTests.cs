@@ -71,4 +71,35 @@ public sealed class ProtocolHelpersTests
         Assert.False(ProtocolHelpers.TestFullNameMatchesFilter(fullName, string.Empty));
         Assert.False(ProtocolHelpers.TestFullNameMatchesFilter(string.Empty, "Smoke"));
     }
+
+    [Theory]
+    [InlineData("Completed", false)]
+    [InlineData("Running", false)]
+    [InlineData("STARTED", false)]
+    [InlineData("TimedOut", true)]
+    [InlineData("Cancelled", true)]
+    [InlineData("Failed", true)]
+    public void IsTestRunResultStatusError_MapsTerminalStatus(string status, bool expected)
+    {
+        Assert.Equal(expected, ProtocolHelpers.IsTestRunResultStatusError(status));
+    }
+
+    [Fact]
+    public void GetTestRunResultErrorCode_MapsKnownStatuses()
+    {
+        Assert.Equal(
+            ProtocolConstants.ErrorTestTimeout,
+            ProtocolHelpers.GetTestRunResultErrorCode("TimedOut", Array.Empty<string>()));
+        Assert.Equal(
+            ProtocolConstants.ErrorTestCancelled,
+            ProtocolHelpers.GetTestRunResultErrorCode("Cancelled", Array.Empty<string>()));
+        Assert.Equal(
+            ProtocolConstants.ErrorTestRunFailed,
+            ProtocolHelpers.GetTestRunResultErrorCode("Failed", Array.Empty<string>()));
+        Assert.Equal(
+            ProtocolConstants.ErrorTestInterrupted,
+            ProtocolHelpers.GetTestRunResultErrorCode(
+                "Failed",
+                [ProtocolConstants.TestRunInterruptedMessage]));
+    }
 }

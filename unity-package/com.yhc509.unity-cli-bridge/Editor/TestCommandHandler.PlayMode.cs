@@ -48,24 +48,38 @@ namespace UnityCliBridge.Bridge.Editor
             int timeoutSec = ResolveTestTimeoutSeconds(args);
             BeginRun_PersistSession(runId, "play", timeoutSec, args.noDomainReload);
 
-            if (args.noDomainReload)
-            {
-                DomainReloadDisableScope.Activate();
-            }
-
-            TryGetActiveStartedAtUtc(out DateTime startedAtUtc);
-            var callbacks = TestRunnerCallbacks.Create(runId, "play", args.noDomainReload, startedAtUtc);
-            callbacks.StoreInstanceIdToSession();
-            RegisterPlayModeCallbacks(callbacks);
-
+            TestRunnerCallbacks? callbacks = null;
             try
             {
+                if (args.noDomainReload)
+                {
+                    DomainReloadDisableScope.Activate();
+                }
+
+                TryGetActiveStartedAtUtc(out DateTime startedAtUtc);
+                callbacks = TestRunnerCallbacks.Create(runId, "play", args.noDomainReload, startedAtUtc);
+                callbacks.StoreInstanceIdToSession();
+                RegisterPlayModeCallbacks(callbacks);
+
                 string runGuid = _playModeApi!.Execute(new ExecutionSettings(BuildFilter(args, TestMode.PlayMode, resolvedTestNames)));
                 StoreActiveRunGuid(runGuid);
             }
             catch (Exception exception)
             {
-                callbacks.MarkFailed("PlayMode 시작 실패: " + exception.Message);
+                if (callbacks != null)
+                {
+                    callbacks.MarkFailed("PlayMode 시작 실패: " + exception.Message);
+                }
+                else
+                {
+                    if (args.noDomainReload)
+                    {
+                        DomainReloadDisableScope.Deactivate();
+                    }
+
+                    EndRun();
+                }
+
                 CleanupPlayModeRegistration();
 
                 completion.TrySetResult(ResponseEnvelope.Failure(
@@ -173,12 +187,11 @@ namespace UnityCliBridge.Bridge.Editor
                 {
                     if (!startResponseSent && TestRunCompletedOnDisk(runId, out string? finalJson))
                     {
-                        completion!.TrySetResult(ResponseEnvelope.Success(
+                        completion!.TrySetResult(BuildTestRunResultEnvelope(
                             requestId!,
                             projectHash,
-                            finalJson,
-                            0,
-                            ProtocolConstants.TransportLive));
+                            finalJson!,
+                            0));
                     }
                     else if (!startResponseSent)
                     {
@@ -200,12 +213,11 @@ namespace UnityCliBridge.Bridge.Editor
                 if (!startResponseSent && TestRunCompletedOnDisk(runId, out string? completedJson))
                 {
                     startResponseSent = true;
-                    completion!.TrySetResult(ResponseEnvelope.Success(
+                    completion!.TrySetResult(BuildTestRunResultEnvelope(
                         requestId!,
                         projectHash,
-                        completedJson,
-                        0,
-                        ProtocolConstants.TransportLive));
+                        completedJson!,
+                        0));
                 }
 
                 if (!startResponseSent

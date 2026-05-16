@@ -95,12 +95,11 @@ namespace UnityCliBridge.Bridge.Editor
                 {
                     EditorApplication.update -= Poll;
                     stopwatch.Stop();
-                    completion.TrySetResult(ResponseEnvelope.Success(
+                    completion.TrySetResult(BuildTestRunResultEnvelope(
                         requestId,
                         projectHash,
-                        resultJson,
-                        stopwatch.ElapsedMilliseconds,
-                        ProtocolConstants.TransportLive));
+                        resultJson!,
+                        stopwatch.ElapsedMilliseconds));
                     Cleanup();
                     return;
                 }
@@ -118,12 +117,11 @@ namespace UnityCliBridge.Bridge.Editor
                     stopwatch.Stop();
                     if (TestRunCompletedOnDisk(runId, out string? finalJson))
                     {
-                        completion.TrySetResult(ResponseEnvelope.Success(
+                        completion.TrySetResult(BuildTestRunResultEnvelope(
                             requestId,
                             projectHash,
-                            finalJson,
-                            stopwatch.ElapsedMilliseconds,
-                            ProtocolConstants.TransportLive));
+                            finalJson!,
+                            stopwatch.ElapsedMilliseconds));
                     }
                     else
                     {

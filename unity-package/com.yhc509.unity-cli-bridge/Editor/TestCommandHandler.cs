@@ -15,6 +15,7 @@ namespace UnityCliBridge.Bridge.Editor
     {
         private static readonly object _activeLock = new object();
         private static bool _hasActiveRun;
+        private static EditorApplication.CallbackFunction? _editModeRestoreWatchdog;
         private const int TestListTimeoutSeconds = 30;
         private const int TestFilterResolutionTimeoutSeconds = 15;
         private const string NoMatchingTestName = "\u0000unity-cli-bridge-no-matching-test\u0000";
@@ -507,6 +508,13 @@ namespace UnityCliBridge.Bridge.Editor
                 runId = TryReadLastRunId();
                 if (string.IsNullOrEmpty(runId))
                 {
+                    runId = SessionState.GetString(
+                        ProtocolConstants.TestSessionKeyInlineResultRunId,
+                        string.Empty);
+                }
+
+                if (string.IsNullOrEmpty(runId))
+                {
                     throw new CommandFailureException(
                         ProtocolConstants.ErrorTestRunNotFound,
                         "조회할 test run이 없습니다 (last-run.json 미존재).");
@@ -520,6 +528,20 @@ namespace UnityCliBridge.Bridge.Editor
             if (File.Exists(filePath))
             {
                 return File.ReadAllText(filePath);
+            }
+
+            string inlineRunId = SessionState.GetString(
+                ProtocolConstants.TestSessionKeyInlineResultRunId,
+                string.Empty);
+            if (string.Equals(inlineRunId, runId, StringComparison.Ordinal))
+            {
+                string inlineJson = SessionState.GetString(
+                    ProtocolConstants.TestSessionKeyInlineResultJson,
+                    string.Empty);
+                if (!string.IsNullOrWhiteSpace(inlineJson))
+                {
+                    return inlineJson;
+                }
             }
 
             string activeRunId = SessionState.GetString(ProtocolConstants.TestSessionKeyActiveRunId, string.Empty);
@@ -619,6 +641,7 @@ namespace UnityCliBridge.Bridge.Editor
             int timeoutSeconds,
             bool noDomainReload)
         {
+            ClearInlineResultFromSession();
             SessionState.SetString(ProtocolConstants.TestSessionKeyActiveRunId, runId);
             SessionState.SetString(ProtocolConstants.TestSessionKeyActiveMode, mode);
             SessionState.SetString(ProtocolConstants.TestSessionKeyActiveStartedAt, DateTime.UtcNow.ToString("O"));
@@ -645,11 +668,14 @@ namespace UnityCliBridge.Bridge.Editor
                 SessionState.EraseInt(ProtocolConstants.TestSessionKeyProgressCompleted);
                 SessionState.EraseInt(ProtocolConstants.TestSessionKeyProgressTotal);
                 SessionState.EraseInt(ProtocolConstants.TestSessionKeyCallbacksInstanceId);
+                StopRestoredEditModeWatchdog();
             }
         }
 
         internal static void RestoreLockFromSession()
         {
+            CleanupStaleTestRunTempFiles();
+
             string activeRunId = SessionState.GetString(ProtocolConstants.TestSessionKeyActiveRunId, string.Empty);
             if (string.IsNullOrEmpty(activeRunId))
             {
@@ -657,12 +683,39 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             string activeMode = SessionState.GetString(ProtocolConstants.TestSessionKeyActiveMode, string.Empty);
-            int timeoutSeconds = GetActiveTimeoutSeconds();
+            bool hasTimeout = TryGetActiveTimeoutSeconds(out int timeoutSeconds);
+            bool hasStartedAt = TryGetActiveStartedAtUtc(out DateTime startedAtUtc);
+            bool hasDeadline = hasTimeout && hasStartedAt;
+
+            if (string.Equals(activeMode, "edit", StringComparison.Ordinal)
+                && (!hasDeadline || IsActiveRunPastDeadline(startedAtUtc, timeoutSeconds)))
+            {
+                MarkRestoredEditModeRunInterrupted(activeRunId);
+                return;
+            }
+
+            if (string.Equals(activeMode, "edit", StringComparison.Ordinal))
+            {
+                lock (_activeLock)
+                {
+                    _hasActiveRun = true;
+                }
+
+                RestoreEditModeInterruptedRunFromSession(activeRunId, startedAtUtc, timeoutSeconds);
+                return;
+            }
+
             if (string.Equals(activeMode, "play", StringComparison.Ordinal)
-                && IsActiveRunPastDeadline(timeoutSeconds))
+                && hasDeadline
+                && IsActiveRunPastDeadline(startedAtUtc, timeoutSeconds))
             {
                 MarkRestoredPlayModeRunTimedOut(activeRunId);
                 return;
+            }
+
+            if (!hasTimeout)
+            {
+                timeoutSeconds = ProtocolConstants.DefaultTestRunTimeoutSeconds;
             }
 
             lock (_activeLock)
@@ -678,12 +731,29 @@ namespace UnityCliBridge.Bridge.Editor
 
         internal static int GetActiveTimeoutSeconds()
         {
-            int timeoutSeconds = SessionState.GetInt(
-                ProtocolConstants.TestSessionKeyActiveTimeoutSeconds,
-                ProtocolConstants.DefaultTestRunTimeoutSeconds);
+            if (!TryGetActiveTimeoutSeconds(out int timeoutSeconds))
+            {
+                return ProtocolConstants.DefaultTestRunTimeoutSeconds;
+            }
+
             return timeoutSeconds > 0
                 ? Math.Min(timeoutSeconds, ProtocolConstants.MaxTestRunTimeoutSeconds)
                 : ProtocolConstants.DefaultTestRunTimeoutSeconds;
+        }
+
+        internal static bool TryGetActiveTimeoutSeconds(out int timeoutSeconds)
+        {
+            int storedTimeoutSeconds = SessionState.GetInt(
+                ProtocolConstants.TestSessionKeyActiveTimeoutSeconds,
+                0);
+            if (storedTimeoutSeconds <= 0)
+            {
+                timeoutSeconds = 0;
+                return false;
+            }
+
+            timeoutSeconds = Math.Min(storedTimeoutSeconds, ProtocolConstants.MaxTestRunTimeoutSeconds);
+            return true;
         }
 
         internal static bool TryGetActiveStartedAtUtc(out DateTime startedAtUtc)
@@ -705,15 +775,127 @@ namespace UnityCliBridge.Bridge.Editor
             return false;
         }
 
-        private static bool IsActiveRunPastDeadline(int timeoutSeconds)
+        private static bool IsActiveRunPastDeadline(DateTime startedAtUtc, int timeoutSeconds)
         {
-            if (!TryGetActiveStartedAtUtc(out DateTime startedAtUtc))
-            {
-                return false;
-            }
-
             DateTime deadline = startedAtUtc.AddSeconds(timeoutSeconds + ProtocolConstants.TestRunCancelGraceSeconds);
             return DateTime.UtcNow >= deadline;
+        }
+
+        private static void MarkRestoredEditModeRunInterrupted(string runId)
+        {
+            TestRunnerCallbacks callbacks = EnsureCallbacksForCompletion(runId, "edit");
+            callbacks.MarkFailed(ProtocolConstants.TestRunInterruptedMessage);
+            DestroyIfNotRegisteredPlayModeCallback(callbacks);
+        }
+
+        private static void RestoreEditModeInterruptedRunFromSession(
+            string runId,
+            DateTime startedAtUtc,
+            int timeoutSeconds)
+        {
+            StopRestoredEditModeWatchdog();
+
+            DateTime deadline = startedAtUtc.AddSeconds(timeoutSeconds + ProtocolConstants.TestRunCancelGraceSeconds);
+            void Poll()
+            {
+                string activeRunId = SessionState.GetString(
+                    ProtocolConstants.TestSessionKeyActiveRunId,
+                    string.Empty);
+                if (!string.Equals(activeRunId, runId, StringComparison.Ordinal))
+                {
+                    StopRestoredEditModeWatchdog();
+                    return;
+                }
+
+                if (DateTime.UtcNow >= deadline)
+                {
+                    MarkRestoredEditModeRunInterrupted(runId);
+                }
+            }
+
+            _editModeRestoreWatchdog = Poll;
+            EditorApplication.update += _editModeRestoreWatchdog;
+            Poll();
+        }
+
+        private static void StopRestoredEditModeWatchdog()
+        {
+            if (_editModeRestoreWatchdog == null)
+            {
+                return;
+            }
+
+            EditorApplication.update -= _editModeRestoreWatchdog;
+            _editModeRestoreWatchdog = null;
+        }
+
+        internal static ResponseEnvelope BuildTestRunResultEnvelope(
+            string requestId,
+            string? projectHash,
+            string resultJson,
+            long durationMs)
+        {
+            if (TryDeserializeTestRunResult(resultJson, out TestRunResultPayload result)
+                && ProtocolHelpers.IsTestRunResultStatusError(result.status))
+            {
+                return ResponseEnvelope.Failure(
+                    requestId,
+                    projectHash,
+                    ProtocolHelpers.GetTestRunResultErrorCode(result.status, result.warnings),
+                    ProtocolHelpers.BuildTestRunResultErrorMessage(result),
+                    false,
+                    durationMs,
+                    ProtocolConstants.TransportLive,
+                    resultJson);
+            }
+
+            return ResponseEnvelope.Success(
+                requestId,
+                projectHash,
+                resultJson,
+                durationMs,
+                ProtocolConstants.TransportLive);
+        }
+
+        private static bool TryDeserializeTestRunResult(string resultJson, out TestRunResultPayload result)
+        {
+            try
+            {
+                TestRunResultPayload? parsed = ProtocolJson.Deserialize<TestRunResultPayload>(resultJson);
+                if (parsed != null)
+                {
+                    result = parsed;
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+
+            result = new TestRunResultPayload();
+            return false;
+        }
+
+        private static void CleanupStaleTestRunTempFiles()
+        {
+            try
+            {
+                string runsDir = Path.Combine(
+                    Application.dataPath,
+                    "..",
+                    ProtocolConstants.TestRunsDirectoryRelative);
+                AtomicFileUtility.CleanupTempFiles(runsDir);
+            }
+            catch (Exception exception)
+            {
+                UnityEngine.Debug.LogWarning("[unity-cli-bridge] Failed to clean stale test run temp files: " + exception.Message);
+            }
+        }
+
+        private static void ClearInlineResultFromSession()
+        {
+            SessionState.EraseString(ProtocolConstants.TestSessionKeyInlineResultRunId);
+            SessionState.EraseString(ProtocolConstants.TestSessionKeyInlineResultJson);
         }
 
         [Serializable]
