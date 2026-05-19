@@ -200,7 +200,7 @@ unity-cli test run --mode play --filter Smoke --wait
 unity-cli test results --run-id <runId>
 ```
 
-`test run --mode edit` returns a synchronous result payload. `test run --mode play` starts the run and returns `STARTED` plus a `runId`; add `--wait` when the CLI should poll until the PlayMode result is ready. `--filter` matches test full names by case-insensitive substring. Cached results are stored under `Library/com.yhc509.unity-cli-bridge/test-runs/<runId>.json` and can be retrieved with `test results`. A non-`Completed` cached run result returns an error envelope and CLI exit code 1.
+`test run --mode edit` returns a synchronous result payload. `test run --mode play` starts the run and returns `STARTED` plus a `runId`; add `--wait` when the CLI should poll until the PlayMode result is ready. `--filter` is a case-insensitive substring match against each test's full name (`Namespace.Class.Method`), so a value like `Smoke` also matches every method on a `SmokeTests` class — when the class and method share a prefix, narrow it with a more specific fragment such as `Smoke_`. Cached results are stored under `Library/com.yhc509.unity-cli-bridge/test-runs/<runId>.json` and can be retrieved with `test results`. A non-`Completed` cached run result returns an error envelope and CLI exit code 1.
 
 `--no-domain-reload` is an opt-in PlayMode-only speed option. It can avoid 30-120 seconds of domain reload overhead, but static state can leak between runs, so only use it for suites that reset their own state:
 
