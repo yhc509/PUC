@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- BUSY error responses now include retry and diagnostic guidance instead of encouraging callers to spawn a new Editor.
+
 ## [0.2.0] - 2026-05-16
 
 ### Added
