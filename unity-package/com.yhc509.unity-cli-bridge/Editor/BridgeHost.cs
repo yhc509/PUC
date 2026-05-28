@@ -951,6 +951,10 @@ namespace UnityCliBridge.Bridge.Editor
 
         private ResponseEnvelope BuildBusyResponse(CommandEnvelope command, long durationMs)
         {
+            var busyDetails = "잠시(약 5~10초) 후 재시도하세요. 새 Unity Editor 인스턴스를 띄우지 마세요.\n" +
+                              "진단: `unity-cli instances list`로 현재 인스턴스를 확인하고, " +
+                              "`unity-cli read-console --type error`로 컴파일 에러를 확인하세요.";
+
             return ResponseEnvelope.Failure(
                 command.requestId,
                 _projectHash,
@@ -959,7 +963,7 @@ namespace UnityCliBridge.Bridge.Editor
                 true,
                 durationMs,
                 ProtocolConstants.TransportLive,
-                null);
+                ProtocolErrorDetails.FromString(busyDetails));
         }
 
         private string BuildStatusJson()
