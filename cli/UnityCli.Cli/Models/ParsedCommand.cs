@@ -79,6 +79,7 @@ public sealed class ParsedCommand
     public OutputMode OutputMode { get; set; }
     public string? ProjectOverride { get; set; }
     public int TimeoutMs { get; set; } = ProtocolConstants.DefaultLiveTimeoutMs;
+    public bool TimeoutMsSpecified { get; set; }
     public int ConsoleLimit { get; set; } = ProtocolConstants.DefaultConsoleLimit;
     public string? ConsoleType { get; set; }
     public string? MenuPath { get; set; }
@@ -101,6 +102,7 @@ public sealed class ParsedCommand
     public bool TestNoDomainReload { get; set; }
     public int? TestTimeoutSeconds { get; set; }
     public bool TestWait { get; set; }
+    public bool Wait { get; set; }
     public string? TestRunId { get; set; }
     public string? ExecuteCodeSnippet { get; set; }
     public string? ExecuteCodeFile { get; set; }

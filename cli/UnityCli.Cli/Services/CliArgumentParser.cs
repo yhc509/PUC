@@ -389,6 +389,7 @@ public static partial class CliArgumentParser
             if (token == "--timeout-ms")
             {
                 parsed.TimeoutMs = RequireInt(RequireValue(tokens, "--timeout-ms"), "--timeout-ms");
+                parsed.TimeoutMsSpecified = true;
                 continue;
             }
 
@@ -411,6 +412,10 @@ public static partial class CliArgumentParser
                     break;
                 case CommandKind.Raw when token == "--force":
                     parsed.Force = true;
+                    break;
+                case CommandKind.Compile when token == "--wait":
+                case CommandKind.Refresh when token == "--wait":
+                    parsed.Wait = true;
                     break;
                 case CommandKind.ReadConsole when token == "--limit":
                     parsed.ConsoleLimit = RequireInt(RequireValue(tokens, "--limit"), "--limit");
