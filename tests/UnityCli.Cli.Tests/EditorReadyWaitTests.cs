@@ -90,12 +90,12 @@ public sealed class EditorReadyWaitTests
         var result = await UnityCli.Cli.CliApp.PollEditorReadyAsync(
             parsed,
             Success(new { message = "started" }),
-            (_, _, _) => Task.FromResult(ResponseEnvelope.Failure(
-                "poll-1",
-                "target-1",
-                "LIVE_UNAVAILABLE",
-                "Bridge unavailable.",
-                retryable: true)),
+            (_, _, _) => Task.FromResult(Success(new StatusPayload
+            {
+                isCompiling = true,
+                isUpdating = false,
+                projectName = "X",
+            })),
             delayAsync: Task.Delay,
             timeout: TimeSpan.FromMilliseconds(120),
             pollInterval: TimeSpan.FromMilliseconds(50));
@@ -103,6 +103,35 @@ public sealed class EditorReadyWaitTests
         Assert.Equal(ProtocolConstants.StatusError, result.status);
         Assert.Equal(ProtocolConstants.ErrorCompileWaitTimeout, result.error?.code);
         Assert.True(result.retryable);
+    }
+
+    [Fact]
+    public async Task PollEditorReadyAsync_ReturnsLiveUnavailableAfterTransientFailureCap()
+    {
+        var parsed = new ParsedCommand(CommandKind.Compile) { Wait = true };
+        int polls = 0;
+
+        var result = await UnityCli.Cli.CliApp.PollEditorReadyAsync(
+            parsed,
+            Success(new { message = "started" }),
+            (_, _, _) =>
+            {
+                polls++;
+                return Task.FromResult(ResponseEnvelope.Failure(
+                    "poll-1",
+                    "target-1",
+                    "LIVE_UNAVAILABLE",
+                    "Bridge unavailable.",
+                    retryable: true));
+            },
+            delayAsync: (_, _) => Task.CompletedTask,
+            timeout: TimeSpan.FromSeconds(30));
+
+        Assert.Equal(6, polls);
+        Assert.Equal(ProtocolConstants.StatusError, result.status);
+        Assert.Equal("LIVE_UNAVAILABLE", result.error?.code);
+        Assert.True(result.retryable);
+        Assert.Contains("6 consecutive transport failures", result.error?.details?.GetString());
     }
 
     [Fact]
