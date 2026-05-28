@@ -270,7 +270,7 @@ public static class CliApp
             try
             {
                 int liveTimeoutMs = ResolveLiveTimeoutMs(parsed);
-                using var cts = new CancellationTokenSource(liveTimeoutMs);
+                using var cts = new CancellationTokenSource(ResolveCommandCancellationTimeoutMs(parsed, liveTimeoutMs));
                 var ipcClient = new LocalIpcClient();
                 var response = await ipcClient.SendAsync(target, command, liveTimeoutMs, cts.Token);
                 if (ShouldPollTestResults(parsed, response))
@@ -280,14 +280,21 @@ public static class CliApp
 
                 if (ShouldPollEditorReady(parsed, response))
                 {
+                    TimeSpan waitTimeout = ResolveEditorReadyWaitTimeout(parsed);
                     return await PollEditorReadyAsync(
                         parsed,
                         response,
                         (statusCommand, timeoutMs, cancellationToken) =>
-                            ipcClient.SendAsync(target, statusCommand, timeoutMs, cancellationToken));
+                            ipcClient.SendAsync(target, statusCommand, timeoutMs, cancellationToken),
+                        cts.Token,
+                        timeout: waitTimeout);
                 }
 
                 return NormalizeTestResultEnvelope(response);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -327,6 +334,17 @@ public static class CliApp
         return Math.Max(parsed.TimeoutMs, testTimeoutMs);
     }
 
+    private static int ResolveCommandCancellationTimeoutMs(ParsedCommand parsed, int liveTimeoutMs)
+    {
+        if (parsed.Wait && parsed.Kind is CommandKind.Compile or CommandKind.Refresh)
+        {
+            double totalMs = liveTimeoutMs + ResolveEditorReadyWaitTimeout(parsed).TotalMilliseconds;
+            return totalMs >= int.MaxValue ? int.MaxValue : Math.Max(1, (int)Math.Ceiling(totalMs));
+        }
+
+        return liveTimeoutMs;
+    }
+
     private static bool ShouldPollTestResults(ParsedCommand parsed, ResponseEnvelope response)
     {
         return parsed.Kind == CommandKind.TestRun
@@ -340,6 +358,13 @@ public static class CliApp
         return parsed.Wait
             && parsed.Kind is CommandKind.Compile or CommandKind.Refresh
             && string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal);
+    }
+
+    private static TimeSpan ResolveEditorReadyWaitTimeout(ParsedCommand parsed)
+    {
+        return parsed.TimeoutMsSpecified
+            ? TimeSpan.FromMilliseconds(parsed.TimeoutMs)
+            : TimeSpan.FromSeconds(ProtocolConstants.DefaultCompileRefreshWaitTimeoutSeconds);
     }
 
     private static async Task<ResponseEnvelope> PollTestResultsAsync(
@@ -426,6 +451,7 @@ public static class CliApp
         ParsedCommand original,
         ResponseEnvelope startedResponse,
         Func<CommandEnvelope, int, CancellationToken, Task<ResponseEnvelope>> sendAsync,
+        CancellationToken cancellationToken = default,
         Func<TimeSpan, CancellationToken, Task>? delayAsync = null,
         TimeSpan? timeout = null,
         TimeSpan? pollInterval = null)
@@ -434,14 +460,18 @@ public static class CliApp
         TimeSpan waitTimeout = timeout ?? TimeSpan.FromSeconds(ProtocolConstants.DefaultCompileRefreshWaitTimeoutSeconds);
         TimeSpan interval = pollInterval ?? TimeSpan.FromSeconds(2);
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        const int maxConsecutiveTransportFailures = 6;
+        int consecutiveTransportFailures = 0;
+        bool hadPermanentTransportFailure = false;
 
         while (stopwatch.Elapsed < waitTimeout)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             TimeSpan remainingBeforeDelay = waitTimeout - stopwatch.Elapsed;
             TimeSpan delay = remainingBeforeDelay < interval ? remainingBeforeDelay : interval;
             if (delay > TimeSpan.Zero)
             {
-                await delayAsync(delay, CancellationToken.None);
+                await delayAsync(delay, cancellationToken);
             }
 
             TimeSpan remaining = waitTimeout - stopwatch.Elapsed;
@@ -452,37 +482,69 @@ public static class CliApp
 
             try
             {
-                using var pollCts = new CancellationTokenSource(remaining);
+                using var pollCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                pollCts.CancelAfter(remaining);
                 int timeoutMs = Math.Max(1, (int)Math.Min(ProtocolConstants.DefaultLiveTimeoutMs, remaining.TotalMilliseconds));
                 var poll = await sendAsync(BuildStatusCommand(), timeoutMs, pollCts.Token);
 
-                if (IsEditorReadyStatus(poll))
+                switch (GetStatusPollResult(poll))
                 {
-                    return BuildEditorReadyResponse(startedResponse, stopwatch.ElapsedMilliseconds);
-                }
+                    case StatusPollResult.Ready:
+                        return BuildEditorReadyResponse(startedResponse, stopwatch.ElapsedMilliseconds);
+                    case StatusPollResult.StillBusy:
+                        consecutiveTransportFailures = 0;
+                        hadPermanentTransportFailure = false;
+                        break;
+                    case StatusPollResult.InvalidStatusPayload:
+                        return BuildInvalidStatusPayloadResponse(startedResponse, stopwatch.ElapsedMilliseconds);
+                    case StatusPollResult.TransientFailure:
+                        consecutiveTransportFailures++;
+                        if (consecutiveTransportFailures >= maxConsecutiveTransportFailures)
+                        {
+                            return BuildStatusUnavailableResponse(
+                                startedResponse,
+                                stopwatch.ElapsedMilliseconds,
+                                "Unity status polling did not receive a valid ready/busy response after "
+                                    + consecutiveTransportFailures
+                                    + " consecutive transport failures.");
+                        }
 
-                if (!IsTransientStatusPollFailure(poll))
-                {
-                    return poll;
+                        break;
+                    case StatusPollResult.NonRetryableFailure:
+                        return poll;
                 }
             }
             catch (OperationCanceledException)
             {
-                if (stopwatch.Elapsed >= waitTimeout)
+                if (cancellationToken.IsCancellationRequested)
                 {
-                    break;
+                    throw;
                 }
+
+                break;
             }
-            catch
+            catch (Exception ex)
             {
-                if (stopwatch.Elapsed >= waitTimeout)
+                if (IsPermanentTransportException(ex))
                 {
-                    break;
+                    if (hadPermanentTransportFailure)
+                    {
+                        return BuildStatusUnavailableResponse(startedResponse, stopwatch.ElapsedMilliseconds, ex.Message);
+                    }
+
+                    hadPermanentTransportFailure = true;
+                    continue;
+                }
+
+                consecutiveTransportFailures++;
+                if (consecutiveTransportFailures >= maxConsecutiveTransportFailures)
+                {
+                    return BuildStatusUnavailableResponse(startedResponse, stopwatch.ElapsedMilliseconds, ex.Message);
                 }
             }
         }
 
-        return BuildEditorReadyTimeoutResponse(original, startedResponse, stopwatch.ElapsedMilliseconds);
+        return BuildEditorReadyTimeoutResponse(original, startedResponse, stopwatch.ElapsedMilliseconds, waitTimeout);
     }
 
     private static CommandEnvelope BuildStatusCommand()
@@ -495,29 +557,56 @@ public static class CliApp
         };
     }
 
-    private static bool IsEditorReadyStatus(ResponseEnvelope response)
+    private enum StatusPollResult
+    {
+        Ready,
+        StillBusy,
+        InvalidStatusPayload,
+        TransientFailure,
+        NonRetryableFailure,
+    }
+
+    private static StatusPollResult GetStatusPollResult(ResponseEnvelope response)
     {
         if (!string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
         {
-            return false;
+            return IsTransientStatusPollFailure(response)
+                ? StatusPollResult.TransientFailure
+                : StatusPollResult.NonRetryableFailure;
         }
 
-        var status = DeserializeData<StatusPayload>(response);
-        return status is not null
-            && !status.isCompiling
-            && !status.isUpdating;
+        StatusPayload? status;
+        try
+        {
+            status = DeserializeData<StatusPayload>(response);
+        }
+        catch (JsonException)
+        {
+            return StatusPollResult.InvalidStatusPayload;
+        }
+
+        if (status is null)
+        {
+            return StatusPollResult.InvalidStatusPayload;
+        }
+
+        return status.isCompiling || status.isUpdating
+            ? StatusPollResult.StillBusy
+            : StatusPollResult.Ready;
     }
 
     private static bool IsTransientStatusPollFailure(ResponseEnvelope response)
     {
-        if (string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
-        {
-            return true;
-        }
-
         string? code = response.error?.code;
         return string.Equals(code, "LIVE_UNAVAILABLE", StringComparison.Ordinal)
             || response.retryable;
+    }
+
+    private static bool IsPermanentTransportException(Exception ex)
+    {
+        return ex is FileNotFoundException
+            or DirectoryNotFoundException
+            || (ex is System.Net.Sockets.SocketException socketException && socketException.NativeErrorCode == 2);
     }
 
     private static ResponseEnvelope BuildEditorReadyResponse(ResponseEnvelope startedResponse, long waitedMs)
@@ -567,18 +656,20 @@ public static class CliApp
     private static ResponseEnvelope BuildEditorReadyTimeoutResponse(
         ParsedCommand original,
         ResponseEnvelope startedResponse,
-        long waitedMs)
+        long waitedMs,
+        TimeSpan waitTimeout)
     {
         string code = original.Kind == CommandKind.Compile
             ? ProtocolConstants.ErrorCompileWaitTimeout
             : ProtocolConstants.ErrorRefreshWaitTimeout;
         string command = original.Kind == CommandKind.Compile ? "compile" : "refresh";
+        string timeoutSeconds = FormatSeconds(waitTimeout);
 
         var details = new
         {
             command,
             waitedMs,
-            timeoutSeconds = ProtocolConstants.DefaultCompileRefreshWaitTimeoutSeconds,
+            timeoutSeconds = waitTimeout.TotalSeconds,
         };
 
         return ResponseEnvelope.Failure(
@@ -586,12 +677,44 @@ public static class CliApp
             startedResponse.target,
             code,
             command + " --wait timed out after "
-                + ProtocolConstants.DefaultCompileRefreshWaitTimeoutSeconds
+                + timeoutSeconds
                 + " seconds waiting for the Editor to finish compiling/importing and become reachable.",
             retryable: true,
             durationMs: waitedMs,
             transport: "cli",
             details: ProtocolJson.Serialize(details));
+    }
+
+    private static ResponseEnvelope BuildInvalidStatusPayloadResponse(ResponseEnvelope startedResponse, long waitedMs)
+    {
+        return BuildStatusUnavailableResponse(
+            startedResponse,
+            waitedMs,
+            "Unity status returned success but did not include a valid status payload.");
+    }
+
+    private static ResponseEnvelope BuildStatusUnavailableResponse(
+        ResponseEnvelope startedResponse,
+        long waitedMs,
+        string details)
+    {
+        return ResponseEnvelope.Failure(
+            startedResponse.requestId,
+            startedResponse.target,
+            "LIVE_UNAVAILABLE",
+            "Unity Editor가 실행 중이지 않거나 Bridge가 활성화되지 않았습니다.",
+            retryable: true,
+            durationMs: waitedMs,
+            transport: "cli",
+            details: details);
+    }
+
+    private static string FormatSeconds(TimeSpan value)
+    {
+        double totalSeconds = value.TotalSeconds;
+        return Math.Abs(totalSeconds - Math.Round(totalSeconds)) < 0.001
+            ? ((int)Math.Round(totalSeconds)).ToString()
+            : totalSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private static T? DeserializeData<T>(ResponseEnvelope response)

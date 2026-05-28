@@ -215,6 +215,7 @@ public sealed class CliArgumentParserTests
 
         Assert.Equal(CommandKind.Compile, parsed.Kind);
         Assert.Equal(ProtocolConstants.DefaultLiveTimeoutMs, parsed.TimeoutMs);
+        Assert.False(parsed.TimeoutMsSpecified);
     }
 
     [Theory]
@@ -226,6 +227,15 @@ public sealed class CliArgumentParserTests
 
         Assert.Equal(expectedKind, parsed.Kind);
         Assert.True(parsed.Wait);
+    }
+
+    [Fact]
+    public void Parse_CompileTimeoutMs_MarksExplicitTimeout()
+    {
+        var parsed = CliArgumentParser.Parse(["compile", "--wait", "--timeout-ms", "5000"]);
+
+        Assert.Equal(5_000, parsed.TimeoutMs);
+        Assert.True(parsed.TimeoutMsSpecified);
     }
 
     [Fact]

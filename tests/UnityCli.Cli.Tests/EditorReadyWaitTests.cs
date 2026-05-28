@@ -82,6 +82,101 @@ public sealed class EditorReadyWaitTests
         Assert.True(result.retryable);
     }
 
+    [Fact]
+    public async Task PollEditorReadyAsync_TimesOutAfterPollingLoop()
+    {
+        var parsed = new ParsedCommand(CommandKind.Compile) { Wait = true };
+
+        var result = await UnityCli.Cli.CliApp.PollEditorReadyAsync(
+            parsed,
+            Success(new { message = "started" }),
+            (_, _, _) => Task.FromResult(ResponseEnvelope.Failure(
+                "poll-1",
+                "target-1",
+                "LIVE_UNAVAILABLE",
+                "Bridge unavailable.",
+                retryable: true)),
+            delayAsync: Task.Delay,
+            timeout: TimeSpan.FromMilliseconds(120),
+            pollInterval: TimeSpan.FromMilliseconds(50));
+
+        Assert.Equal(ProtocolConstants.StatusError, result.status);
+        Assert.Equal(ProtocolConstants.ErrorCompileWaitTimeout, result.error?.code);
+        Assert.True(result.retryable);
+    }
+
+    [Fact]
+    public async Task PollEditorReadyAsync_ReturnsNonRetryablePollFailureImmediately()
+    {
+        var parsed = new ParsedCommand(CommandKind.Refresh) { Wait = true };
+        int polls = 0;
+
+        var result = await UnityCli.Cli.CliApp.PollEditorReadyAsync(
+            parsed,
+            Success(new { message = "started" }),
+            (_, _, _) =>
+            {
+                polls++;
+                return Task.FromResult(ResponseEnvelope.Failure(
+                    "poll-1",
+                    "target-1",
+                    "STATUS_FAILED",
+                    "Status failed.",
+                    retryable: false));
+            },
+            delayAsync: (_, _) => Task.CompletedTask,
+            timeout: TimeSpan.FromSeconds(5));
+
+        Assert.Equal(1, polls);
+        Assert.Equal(ProtocolConstants.StatusError, result.status);
+        Assert.Equal("STATUS_FAILED", result.error?.code);
+        Assert.False(result.retryable);
+    }
+
+    [Fact]
+    public async Task PollEditorReadyAsync_PropagatesCallerCancellation()
+    {
+        var parsed = new ParsedCommand(CommandKind.Compile) { Wait = true };
+        using var cts = new CancellationTokenSource();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            UnityCli.Cli.CliApp.PollEditorReadyAsync(
+                parsed,
+                Success(new { message = "started" }),
+                (_, _, _) =>
+                {
+                    cts.Cancel();
+                    throw new OperationCanceledException(cts.Token);
+                },
+                cts.Token,
+                delayAsync: (_, _) => Task.CompletedTask,
+                timeout: TimeSpan.FromSeconds(5)));
+    }
+
+    [Fact]
+    public async Task PollEditorReadyAsync_FailsFastWhenStatusPayloadIsInvalid()
+    {
+        var parsed = new ParsedCommand(CommandKind.Refresh) { Wait = true };
+        int polls = 0;
+
+        var result = await UnityCli.Cli.CliApp.PollEditorReadyAsync(
+            parsed,
+            Success(new { message = "started" }),
+            (_, _, _) =>
+            {
+                polls++;
+                return Task.FromResult(Success("not-json"));
+            },
+            delayAsync: (_, _) => Task.CompletedTask,
+            timeout: TimeSpan.FromSeconds(5));
+
+        Assert.Equal(1, polls);
+        Assert.Equal(ProtocolConstants.StatusError, result.status);
+        Assert.Equal("LIVE_UNAVAILABLE", result.error?.code);
+        Assert.True(result.retryable);
+        Assert.Contains("valid status payload", result.error?.details?.GetString());
+    }
+
     private static ResponseEnvelope Success<T>(T data)
     {
         return ResponseEnvelope.Success(

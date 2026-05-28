@@ -389,6 +389,7 @@ public static partial class CliArgumentParser
             if (token == "--timeout-ms")
             {
                 parsed.TimeoutMs = RequireInt(RequireValue(tokens, "--timeout-ms"), "--timeout-ms");
+                parsed.TimeoutMsSpecified = true;
                 continue;
             }
 
