@@ -101,6 +101,7 @@ public sealed class ParsedCommand
     public bool TestNoDomainReload { get; set; }
     public int? TestTimeoutSeconds { get; set; }
     public bool TestWait { get; set; }
+    public bool Wait { get; set; }
     public string? TestRunId { get; set; }
     public string? ExecuteCodeSnippet { get; set; }
     public string? ExecuteCodeFile { get; set; }

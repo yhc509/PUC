@@ -412,6 +412,10 @@ public static partial class CliArgumentParser
                 case CommandKind.Raw when token == "--force":
                     parsed.Force = true;
                     break;
+                case CommandKind.Compile when token == "--wait":
+                case CommandKind.Refresh when token == "--wait":
+                    parsed.Wait = true;
+                    break;
                 case CommandKind.ReadConsole when token == "--limit":
                     parsed.ConsoleLimit = RequireInt(RequireValue(tokens, "--limit"), "--limit");
                     break;

@@ -19,6 +19,7 @@ namespace UnityCli.Protocol
         public const int DefaultAssetFindLimit = 50;
         public const int DefaultPackageRequestTimeoutSeconds = 300;
         public const int DefaultPackageLiveTimeoutMs = 360_000;
+        public const int DefaultCompileRefreshWaitTimeoutSeconds = 120;
         public const int DefaultTestRunTimeoutSeconds = 300;
         public const int MaxTestRunTimeoutSeconds = 1800;
         public const int TestRunCancelGraceSeconds = 30;
@@ -41,6 +42,8 @@ namespace UnityCli.Protocol
         public const string ErrorTestRunNotFound = "TEST_RUN_NOT_FOUND";
         public const string ErrorTestInvalidMode = "TEST_INVALID_MODE";
         public const string ErrorTestPlayModeEntryFailed = "TEST_PLAYMODE_ENTRY_FAILED";
+        public const string ErrorCompileWaitTimeout = "COMPILE_WAIT_TIMEOUT";
+        public const string ErrorRefreshWaitTimeout = "REFRESH_WAIT_TIMEOUT";
         public const string ErrorSceneForceRequired = "SCENE_FORCE_REQUIRED";
         public const string ErrorBackupFailed = "BACKUP_FAILED";
         public const string ErrorBackupRestoreFailed = "BACKUP_RESTORE_FAILED";

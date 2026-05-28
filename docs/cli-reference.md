@@ -30,8 +30,8 @@ Commands for editor state, compilation, play state, menus, arbitrary code execut
 | Command | Synopsis | Modes | Force Rule | Summary |
 | --- | --- | --- | --- | --- |
 | `status` | `status` | local, live | `None` | Reports the selected project and live editor state when a running bridge is reachable, with a local fallback when it is not. |
-| `compile` | `compile` | live | `None` | Triggers a script compile in the running editor. |
-| `refresh` | `refresh` | live | `None` | Refreshes the AssetDatabase in the running editor. |
+| `compile` | `compile [--wait]` | live | `None` | Triggers a script compile in the running editor. Add --wait to block until compiling/importing finishes and the bridge is reachable again. |
+| `refresh` | `refresh [--wait]` | live | `None` | Refreshes the AssetDatabase in the running editor. Add --wait to block until compiling/importing finishes and the bridge is reachable again. |
 | `read-console` | `read-console [--limit N] [--type log\|warning\|error]` | live | `None` | Reads recent editor console entries from a running editor. |
 | `play` | `play` | live | `None` | Starts Play Mode in a running editor. |
 | `pause` | `pause` | live | `None` | Pauses Play Mode in a running editor. |

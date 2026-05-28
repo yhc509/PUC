@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using UnityCli.Cli.Models;
 using UnityCli.Cli.Services;
 using UnityCli.Protocol;
@@ -277,6 +278,15 @@ public static class CliApp
                     return await PollTestResultsAsync(parsed, target, ipcClient, response, cts.Token);
                 }
 
+                if (ShouldPollEditorReady(parsed, response))
+                {
+                    return await PollEditorReadyAsync(
+                        parsed,
+                        response,
+                        (statusCommand, timeoutMs, cancellationToken) =>
+                            ipcClient.SendAsync(target, statusCommand, timeoutMs, cancellationToken));
+                }
+
                 return NormalizeTestResultEnvelope(response);
             }
             catch (Exception ex)
@@ -322,6 +332,13 @@ public static class CliApp
         return parsed.Kind == CommandKind.TestRun
             && parsed.TestWait
             && string.Equals(parsed.TestMode, "play", StringComparison.Ordinal)
+            && string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal);
+    }
+
+    private static bool ShouldPollEditorReady(ParsedCommand parsed, ResponseEnvelope response)
+    {
+        return parsed.Wait
+            && parsed.Kind is CommandKind.Compile or CommandKind.Refresh
             && string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal);
     }
 
@@ -403,6 +420,178 @@ public static class CliApp
         }.ToEnvelope();
 
         return await ipcClient.SendAsync(target, command, ProtocolConstants.DefaultLiveTimeoutMs, cancellationToken);
+    }
+
+    internal static async Task<ResponseEnvelope> PollEditorReadyAsync(
+        ParsedCommand original,
+        ResponseEnvelope startedResponse,
+        Func<CommandEnvelope, int, CancellationToken, Task<ResponseEnvelope>> sendAsync,
+        Func<TimeSpan, CancellationToken, Task>? delayAsync = null,
+        TimeSpan? timeout = null,
+        TimeSpan? pollInterval = null)
+    {
+        delayAsync ??= Task.Delay;
+        TimeSpan waitTimeout = timeout ?? TimeSpan.FromSeconds(ProtocolConstants.DefaultCompileRefreshWaitTimeoutSeconds);
+        TimeSpan interval = pollInterval ?? TimeSpan.FromSeconds(2);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        while (stopwatch.Elapsed < waitTimeout)
+        {
+            TimeSpan remainingBeforeDelay = waitTimeout - stopwatch.Elapsed;
+            TimeSpan delay = remainingBeforeDelay < interval ? remainingBeforeDelay : interval;
+            if (delay > TimeSpan.Zero)
+            {
+                await delayAsync(delay, CancellationToken.None);
+            }
+
+            TimeSpan remaining = waitTimeout - stopwatch.Elapsed;
+            if (remaining <= TimeSpan.Zero)
+            {
+                break;
+            }
+
+            try
+            {
+                using var pollCts = new CancellationTokenSource(remaining);
+                int timeoutMs = Math.Max(1, (int)Math.Min(ProtocolConstants.DefaultLiveTimeoutMs, remaining.TotalMilliseconds));
+                var poll = await sendAsync(BuildStatusCommand(), timeoutMs, pollCts.Token);
+
+                if (IsEditorReadyStatus(poll))
+                {
+                    return BuildEditorReadyResponse(startedResponse, stopwatch.ElapsedMilliseconds);
+                }
+
+                if (!IsTransientStatusPollFailure(poll))
+                {
+                    return poll;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                if (stopwatch.Elapsed >= waitTimeout)
+                {
+                    break;
+                }
+            }
+            catch
+            {
+                if (stopwatch.Elapsed >= waitTimeout)
+                {
+                    break;
+                }
+            }
+        }
+
+        return BuildEditorReadyTimeoutResponse(original, startedResponse, stopwatch.ElapsedMilliseconds);
+    }
+
+    private static CommandEnvelope BuildStatusCommand()
+    {
+        return new CommandEnvelope
+        {
+            requestId = Guid.NewGuid().ToString("N"),
+            command = ProtocolConstants.CommandStatus,
+            argumentsJson = "{}",
+        };
+    }
+
+    private static bool IsEditorReadyStatus(ResponseEnvelope response)
+    {
+        if (!string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var status = DeserializeData<StatusPayload>(response);
+        return status is not null
+            && !status.isCompiling
+            && !status.isUpdating;
+    }
+
+    private static bool IsTransientStatusPollFailure(ResponseEnvelope response)
+    {
+        if (string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        string? code = response.error?.code;
+        return string.Equals(code, "LIVE_UNAVAILABLE", StringComparison.Ordinal)
+            || response.retryable;
+    }
+
+    private static ResponseEnvelope BuildEditorReadyResponse(ResponseEnvelope startedResponse, long waitedMs)
+    {
+        JsonObject data = CloneDataObject(startedResponse.data);
+        data["ready"] = true;
+        data["readyMessage"] = "ready";
+        data["waitedMs"] = waitedMs;
+
+        return ResponseEnvelope.Success(
+            startedResponse.requestId,
+            startedResponse.target,
+            CreateDataElement(data),
+            startedResponse.durationMs + waitedMs,
+            startedResponse.transport);
+    }
+
+    private static JsonObject CloneDataObject(JsonElement? data)
+    {
+        if (!data.HasValue)
+        {
+            return new JsonObject();
+        }
+
+        JsonElement element = data.Value;
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            string? json = element.GetString();
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return new JsonObject();
+            }
+
+            var node = JsonNode.Parse(json);
+            return node as JsonObject ?? new JsonObject();
+        }
+
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return new JsonObject();
+        }
+
+        var clone = JsonNode.Parse(element.GetRawText());
+        return clone as JsonObject ?? new JsonObject();
+    }
+
+    private static ResponseEnvelope BuildEditorReadyTimeoutResponse(
+        ParsedCommand original,
+        ResponseEnvelope startedResponse,
+        long waitedMs)
+    {
+        string code = original.Kind == CommandKind.Compile
+            ? ProtocolConstants.ErrorCompileWaitTimeout
+            : ProtocolConstants.ErrorRefreshWaitTimeout;
+        string command = original.Kind == CommandKind.Compile ? "compile" : "refresh";
+
+        var details = new
+        {
+            command,
+            waitedMs,
+            timeoutSeconds = ProtocolConstants.DefaultCompileRefreshWaitTimeoutSeconds,
+        };
+
+        return ResponseEnvelope.Failure(
+            startedResponse.requestId,
+            startedResponse.target,
+            code,
+            command + " --wait timed out after "
+                + ProtocolConstants.DefaultCompileRefreshWaitTimeoutSeconds
+                + " seconds waiting for the Editor to finish compiling/importing and become reachable.",
+            retryable: true,
+            durationMs: waitedMs,
+            transport: "cli",
+            details: ProtocolJson.Serialize(details));
     }
 
     private static T? DeserializeData<T>(ResponseEnvelope response)

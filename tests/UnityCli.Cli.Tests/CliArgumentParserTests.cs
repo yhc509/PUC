@@ -217,6 +217,17 @@ public sealed class CliArgumentParserTests
         Assert.Equal(ProtocolConstants.DefaultLiveTimeoutMs, parsed.TimeoutMs);
     }
 
+    [Theory]
+    [InlineData("compile", CommandKind.Compile)]
+    [InlineData("refresh", CommandKind.Refresh)]
+    public void Parse_CompileAndRefresh_AcceptWait(string command, CommandKind expectedKind)
+    {
+        var parsed = CliArgumentParser.Parse([command, "--wait"]);
+
+        Assert.Equal(expectedKind, parsed.Kind);
+        Assert.True(parsed.Wait);
+    }
+
     [Fact]
     public void Parse_AssetDeleteRequiresForce()
     {

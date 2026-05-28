@@ -99,6 +99,8 @@ unity-cli status --project /path/to/your-project --json
 unity-cli status --project MyGame          # Editor state, Unity version, current scene
 unity-cli play / pause / stop              # Play Mode control
 unity-cli compile                          # Trigger recompile
+unity-cli compile --wait                   # Wait until compile/import finishes and bridge is reachable
+unity-cli refresh --wait                   # Refresh assets and wait for Editor readiness
 unity-cli screenshot --path /tmp/shot.png  # Game View capture (default), or --view scene
 unity-cli read-console --type error        # Check for errors after any operation
 unity-cli execute-menu --list "GameObject" # Browse Unity menus
