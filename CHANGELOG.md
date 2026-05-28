@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-05-29
+
 ### Added
 - `unity-cli compile --wait` and `unity-cli refresh --wait` flags that block until the Editor finishes compiling, importing, and the bridge is reachable again, so callers don't have to poll status manually.
 
