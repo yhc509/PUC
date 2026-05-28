@@ -256,10 +256,11 @@ public static class CliApp
             transport: "cli");
     }
 
-    private static async Task<ResponseEnvelope> ExecuteUnityCommandAsync(
+    internal static async Task<ResponseEnvelope> ExecuteUnityCommandAsync(
         ParsedCommand parsed,
         InstanceRegistryStore registryStore,
-        string? projectRoot)
+        string? projectRoot,
+        Func<InstanceRecord, CommandEnvelope, int, CancellationToken, Task<ResponseEnvelope>>? sendAsync = null)
     {
         var command = parsed.ToEnvelope();
         var registry = registryStore.Load();
@@ -272,7 +273,8 @@ public static class CliApp
                 int liveTimeoutMs = ResolveLiveTimeoutMs(parsed);
                 using var cts = new CancellationTokenSource(ResolveCommandCancellationTimeoutMs(parsed, liveTimeoutMs));
                 var ipcClient = new LocalIpcClient();
-                var response = await ipcClient.SendAsync(target, command, liveTimeoutMs, cts.Token);
+                var sendCommandAsync = sendAsync ?? ipcClient.SendAsync;
+                var response = await sendCommandAsync(target, command, liveTimeoutMs, cts.Token);
                 if (ShouldPollTestResults(parsed, response))
                 {
                     return await PollTestResultsAsync(parsed, target, ipcClient, response, cts.Token);
@@ -285,16 +287,12 @@ public static class CliApp
                         parsed,
                         response,
                         (statusCommand, timeoutMs, cancellationToken) =>
-                            ipcClient.SendAsync(target, statusCommand, timeoutMs, cancellationToken),
+                            sendCommandAsync(target, statusCommand, timeoutMs, cancellationToken),
                         cts.Token,
                         timeout: waitTimeout);
                 }
 
                 return NormalizeTestResultEnvelope(response);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
             }
             catch (Exception ex)
             {

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using UnityCli.Cli.Models;
+using UnityCli.Cli.Services;
 using UnityCli.Protocol;
 
 namespace UnityCli.Cli.Tests;
@@ -183,6 +184,28 @@ public sealed class EditorReadyWaitTests
     }
 
     [Fact]
+    public async Task ExecuteUnityCommandAsync_NormalizesOperationCanceledIpcTimeoutToLiveUnavailable()
+    {
+        using var temp = new TempDirectory();
+        string projectRoot = CreateUnityProject(temp.Path, "SampleProject");
+        string expectedProjectHash = ProtocolConstants.ComputeProjectHash(projectRoot);
+        var registryStore = new InstanceRegistryStore(Path.Combine(temp.Path, "instances.json"));
+        var parsed = new ParsedCommand(CommandKind.Compile);
+
+        var result = await UnityCli.Cli.CliApp.ExecuteUnityCommandAsync(
+            parsed,
+            registryStore,
+            projectRoot,
+            (_, _, _, _) => throw new OperationCanceledException("simulated IPC timeout"));
+
+        Assert.Equal(ProtocolConstants.StatusError, result.status);
+        Assert.Equal("LIVE_UNAVAILABLE", result.error?.code);
+        Assert.True(result.retryable);
+        Assert.Equal(expectedProjectHash, result.target);
+        Assert.Contains("simulated IPC timeout", result.error?.details?.GetString());
+    }
+
+    [Fact]
     public async Task PollEditorReadyAsync_FailsFastWhenStatusPayloadIsInvalid()
     {
         var parsed = new ParsedCommand(CommandKind.Refresh) { Wait = true };
@@ -214,5 +237,13 @@ public sealed class EditorReadyWaitTests
             JsonSerializer.SerializeToElement(data, ProtocolJson.Default),
             durationMs: 1,
             transport: ProtocolConstants.TransportLive);
+    }
+
+    private static string CreateUnityProject(string root, string name)
+    {
+        string projectRoot = Path.Combine(root, name);
+        Directory.CreateDirectory(Path.Combine(projectRoot, "Assets"));
+        Directory.CreateDirectory(Path.Combine(projectRoot, "Packages"));
+        return projectRoot;
     }
 }
