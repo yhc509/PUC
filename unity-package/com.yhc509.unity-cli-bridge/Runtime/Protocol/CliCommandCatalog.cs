@@ -174,7 +174,7 @@ namespace UnityCli.Protocol
             new CliCommandDescriptor(
                 "execute",
                 "execute (--code <csharp> | --file <path>) [--args <json>] [--timeout <초>] --force",
-                "Executes arbitrary C# code in the running editor context with optional JSON arguments and an optional cooperative timeout; always requires --force.",
+                "Executes arbitrary C# code in the running editor context with optional JSON arguments, structured __pucResult return values, and an optional cooperative timeout; always requires --force.",
                 CliCommandGroup.EditorControl,
                 ProtocolConstants.CommandExecuteCode,
                 canUseLocal: false,
@@ -185,8 +185,9 @@ namespace UnityCli.Protocol
                     "Live-only.",
                     "Always requires --force as a safety gate.",
                     "--args JSON은 사용자 코드에서 __pucArgsJson 문자열 변수로 읽을 수 있습니다.",
+                    "__pucResult에 값을 담으면 응답 result에 타입 보존 JSON이 반환됩니다. float는 G9, double은 G17 round-trip 포맷을 사용합니다.",
                     "--timeout (default 30초, 상한 600초)은 협력적 cancel입니다. 사용자 코드가 __pucToken (System.Threading.CancellationToken)을 직접 체크해야 강제 종료됩니다 — 체크하지 않으면 main thread를 계속 점유하므로 force 사용자 책임입니다.",
-                    "wrapper 예약 prefix `__puc_internal_*` 변수와 `__pucToken` 변수는 사용자 코드에서 선언하지 마세요.",
+                    "wrapper 예약 prefix `__puc_internal_*` 변수와 `__pucToken`, `__pucResult` 변수는 사용자 코드에서 선언하지 마세요.",
                     "--args 값에는 secret/credential을 넣지 마세요. CodeDOM 컴파일 중 OS temp에 .cs 파일이 잠시 생성될 수 있습니다.",
                     "C# 5.0 이하 문법만 지원합니다 (CodeDOM 제한).",
                 },
@@ -200,7 +201,12 @@ namespace UnityCli.Protocol
                 canUseLocal: false,
                 canUseLive: true,
                 isAllowedWhileBusy: false,
-                notes: new[] { "Live-only.", "Custom commands are registered via [PucCommand(\"name\")] attribute on static methods." }),
+                notes: new[]
+                {
+                    "Live-only.",
+                    "Custom commands are registered via [PucCommand(\"name\")] attribute on static methods.",
+                    "Return ExecuteValueSerializer.Serialize(obj) from custom commands for precise structured JSON.",
+                }),
             new CliCommandDescriptor(
                 "asset find",
                 "asset find [--name <term>] [--type <type>] [--folder <Assets/...>] [--limit N]",
