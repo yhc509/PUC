@@ -28,8 +28,8 @@ namespace UnityCliBridge.Bridge.Editor
                 case bool b: sb.Append(b ? "true" : "false"); return;
                 case string s: WriteString(sb, s); return;
                 case char c: WriteString(sb, c.ToString()); return;
-                case float f: sb.Append(f.ToString("G9", CultureInfo.InvariantCulture)); return;
-                case double d: sb.Append(d.ToString("G17", CultureInfo.InvariantCulture)); return;
+                case float f: sb.Append(F(f)); return;
+                case double d: sb.Append(F(d)); return;
                 case decimal m: sb.Append(m.ToString(CultureInfo.InvariantCulture)); return;
                 case sbyte or byte or short or ushort or int or uint or long or ulong:
                     sb.Append(Convert.ToString(value, CultureInfo.InvariantCulture)); return;
@@ -82,7 +82,22 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static string F(float value)
         {
+            if (float.IsNaN(value) || float.IsInfinity(value))
+            {
+                return "null";
+            }
+
             return value.ToString("G9", CultureInfo.InvariantCulture);
+        }
+
+        private static string F(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+            {
+                return "null";
+            }
+
+            return value.ToString("G17", CultureInfo.InvariantCulture);
         }
 
         private static void WriteArray(StringBuilder sb, IEnumerable enumerable, int depth, HashSet<object> seen)
