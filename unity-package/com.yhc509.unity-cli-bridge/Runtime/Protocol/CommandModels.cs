@@ -105,6 +105,8 @@ namespace UnityCli.Protocol
         public string output = string.Empty;
         public bool success;
         public string? error;
+        public string? result;
+        public bool hasResult;
     }
 
     [Serializable]
