@@ -106,11 +106,14 @@ unity-cli read-console --type error        # Check for errors after any operatio
 unity-cli execute-menu --list "GameObject" # Browse Unity menus
 unity-cli execute --code "Debug.Log(1);" --force  # Run arbitrary C# (escape hatch)
 unity-cli execute --code "Debug.Log(__pucArgsJson);" --args '{"k":"v"}' --force
+unity-cli execute --code "__pucResult = new Vector3(1.5f, 0f, 3.25f);" --force
 # 협력적 timeout — 사용자 코드는 __pucToken 체크 필요
 unity-cli execute --file my-script.cs --force --timeout 60
 ```
 
 `execute --args` exposes the supplied JSON as `__pucArgsJson`; do not declare variables with the reserved `__puc_internal_*` prefix in user code. Avoid putting secrets or credentials in `--args`, because CodeDOM compilation can briefly create temporary `.cs` files under the OS temp directory.
+
+Assign a value to `__pucResult` when the caller needs a structured return value. The response includes `hasResult: true` and `result` as type-preserving JSON, with `float` formatted using G9 and `double` using G17 for round-trip precision. Editor-assembly custom `[PucCommand]` methods can return `ExecuteValueSerializer.Serialize(obj)`; runtime-assembly commands must serialize precise JSON themselves.
 
 `--timeout`(기본 30초, 상한 600초)은 **협력적** cancel입니다. 사용자 코드가 `__pucToken.ThrowIfCancellationRequested()`(또는 다른 token API)를 호출해야 강제 종료됩니다. 호출하지 않으면 main thread를 계속 점유하므로 `--force`를 쓰는 사용자가 책임집니다.
 

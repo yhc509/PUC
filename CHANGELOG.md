@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- `execute` now returns structured values: assign to `__pucResult` to receive a type-preserving JSON result (float G9 / double G17 round-trip). `ExecuteValueSerializer` is public for use in `custom` commands.
+
 ## [0.2.2] - 2026-05-29
 
 ### Added

@@ -27,10 +27,13 @@ using UnityEditor;
 public static class PucExecuteWrapper
 {
     internal static CancellationToken __pucToken;
+    internal static readonly object __pucNoResult = new object();
+    internal static object __pucResult = __pucNoResult;
 
     public static string Execute(CancellationToken token)
     {
         __pucToken = token;
+        __pucResult = __pucNoResult;
         var __puc_internal_sb = new System.Text.StringBuilder();
         var __puc_internal_origOut = System.Console.Out;
         var __puc_internal_writer = new System.IO.StringWriter(__puc_internal_sb);
@@ -101,10 +104,20 @@ public static class PucExecuteWrapper
                 {
                     string consoleOutput = (string)(executeMethod.Invoke(null, new object[] { cts.Token }) ?? string.Empty);
                     string output = MergeOutput(consoleOutput, logEntries);
+                    object? noResult = wrapperType
+                        .GetField("__pucNoResult", BindingFlags.NonPublic | BindingFlags.Static)
+                        ?.GetValue(null);
+                    object? rawResult = wrapperType
+                        .GetField("__pucResult", BindingFlags.NonPublic | BindingFlags.Static)
+                        ?.GetValue(null);
+                    bool hasResult = !ReferenceEquals(rawResult, noResult);
+
                     return ProtocolJson.Serialize(new ExecuteCodePayload
                     {
                         output = output,
                         success = true,
+                        hasResult = hasResult,
+                        result = hasResult ? ExecuteValueSerializer.Serialize(rawResult, cts.Token) : null,
                     });
                 }
                 finally
@@ -117,6 +130,12 @@ public static class PucExecuteWrapper
                 throw;
             }
             catch (TargetInvocationException ex) when (ex.InnerException is OperationCanceledException)
+            {
+                throw new CommandFailureException(
+                    ProtocolConstants.ErrorExecuteTimeout,
+                    $"코드 실행이 {effectiveTimeoutMs}ms 안에 완료되지 않아 cancel 되었습니다.");
+            }
+            catch (OperationCanceledException)
             {
                 throw new CommandFailureException(
                     ProtocolConstants.ErrorExecuteTimeout,
