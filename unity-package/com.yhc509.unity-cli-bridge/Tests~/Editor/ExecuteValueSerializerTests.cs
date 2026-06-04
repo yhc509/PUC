@@ -1,5 +1,8 @@
 #nullable enable
+using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Threading;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -78,6 +81,34 @@ namespace UnityCliBridge.Bridge.Editor.Tests
             Assert.DoesNotThrow(() => ExecuteValueSerializer.Serialize(a));
         }
 
+        [Test] public void CancelledToken_StopsSerialization()
+        {
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+            Assert.Throws<OperationCanceledException>(() => ExecuteValueSerializer.Serialize(new[] { 1 }, cts.Token));
+        }
+
+        [Test] public void NodeCap_StopsUnboundedSequences()
+        {
+            Assert.Throws<OperationCanceledException>(() => ExecuteValueSerializer.Serialize(new InfiniteSequence()));
+        }
+
         private sealed class Node { public Node? Self; }
+
+        private sealed class InfiniteSequence : IEnumerable<object?>
+        {
+            public IEnumerator<object?> GetEnumerator()
+            {
+                while (true)
+                {
+                    yield return null;
+                }
+            }
+
+            IEnumerator IEnumerable.GetEnumerator()
+            {
+                return GetEnumerator();
+            }
+        }
     }
 }

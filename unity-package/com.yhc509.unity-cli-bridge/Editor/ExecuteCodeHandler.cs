@@ -117,7 +117,7 @@ public static class PucExecuteWrapper
                         output = output,
                         success = true,
                         hasResult = hasResult,
-                        result = hasResult ? ExecuteValueSerializer.Serialize(rawResult) : null,
+                        result = hasResult ? ExecuteValueSerializer.Serialize(rawResult, cts.Token) : null,
                     });
                 }
                 finally
@@ -130,6 +130,12 @@ public static class PucExecuteWrapper
                 throw;
             }
             catch (TargetInvocationException ex) when (ex.InnerException is OperationCanceledException)
+            {
+                throw new CommandFailureException(
+                    ProtocolConstants.ErrorExecuteTimeout,
+                    $"코드 실행이 {effectiveTimeoutMs}ms 안에 완료되지 않아 cancel 되었습니다.");
+            }
+            catch (OperationCanceledException)
             {
                 throw new CommandFailureException(
                     ProtocolConstants.ErrorExecuteTimeout,

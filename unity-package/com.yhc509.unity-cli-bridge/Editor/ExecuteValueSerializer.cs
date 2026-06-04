@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using System.Threading;
 using UnityEngine;
 
 namespace UnityCliBridge.Bridge.Editor
@@ -12,16 +13,30 @@ namespace UnityCliBridge.Bridge.Editor
     public static class ExecuteValueSerializer
     {
         private const int MaxDepth = 32;
+        private const int MaxNodeCount = 1_000_000;
 
         public static string Serialize(object? value)
         {
+            return Serialize(value, CancellationToken.None);
+        }
+
+        public static string Serialize(object? value, CancellationToken cancellationToken)
+        {
             var sb = new StringBuilder();
-            Write(sb, value, 0, new HashSet<object>(ReferenceEqualityComparer.Instance));
+            var context = new SerializationContext(cancellationToken);
+            Write(sb, value, 0, new HashSet<object>(ReferenceEqualityComparer.Instance), context);
             return sb.ToString();
         }
 
-        private static void Write(StringBuilder sb, object? value, int depth, HashSet<object> seen)
+        private static void Write(
+            StringBuilder sb,
+            object? value,
+            int depth,
+            HashSet<object> seen,
+            SerializationContext context)
         {
+            context.EnterNode();
+
             switch (value)
             {
                 case null: sb.Append("null"); return;
@@ -69,9 +84,9 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 switch (value)
                 {
-                    case IDictionary dict: WriteDictionary(sb, dict, depth, seen); return;
-                    case IEnumerable enumerable: WriteArray(sb, enumerable, depth, seen); return;
-                    default: WriteObject(sb, value, depth, seen); return;
+                    case IDictionary dict: WriteDictionary(sb, dict, depth, seen, context); return;
+                    case IEnumerable enumerable: WriteArray(sb, enumerable, depth, seen, context); return;
+                    default: WriteObject(sb, value, depth, seen, context); return;
                 }
             }
             finally
@@ -100,29 +115,43 @@ namespace UnityCliBridge.Bridge.Editor
             return value.ToString("G17", CultureInfo.InvariantCulture);
         }
 
-        private static void WriteArray(StringBuilder sb, IEnumerable enumerable, int depth, HashSet<object> seen)
+        private static void WriteArray(
+            StringBuilder sb,
+            IEnumerable enumerable,
+            int depth,
+            HashSet<object> seen,
+            SerializationContext context)
         {
             sb.Append('[');
             bool first = true;
             foreach (object? item in enumerable)
             {
+                context.CheckCancellation();
+
                 if (!first)
                 {
                     sb.Append(',');
                 }
 
-                Write(sb, item, depth + 1, seen);
+                Write(sb, item, depth + 1, seen, context);
                 first = false;
             }
             sb.Append(']');
         }
 
-        private static void WriteDictionary(StringBuilder sb, IDictionary dict, int depth, HashSet<object> seen)
+        private static void WriteDictionary(
+            StringBuilder sb,
+            IDictionary dict,
+            int depth,
+            HashSet<object> seen,
+            SerializationContext context)
         {
             sb.Append('{');
             bool first = true;
             foreach (DictionaryEntry entry in dict)
             {
+                context.CheckCancellation();
+
                 if (!first)
                 {
                     sb.Append(',');
@@ -130,13 +159,18 @@ namespace UnityCliBridge.Bridge.Editor
 
                 WriteString(sb, entry.Key?.ToString() ?? "null");
                 sb.Append(':');
-                Write(sb, entry.Value, depth + 1, seen);
+                Write(sb, entry.Value, depth + 1, seen, context);
                 first = false;
             }
             sb.Append('}');
         }
 
-        private static void WriteObject(StringBuilder sb, object value, int depth, HashSet<object> seen)
+        private static void WriteObject(
+            StringBuilder sb,
+            object value,
+            int depth,
+            HashSet<object> seen,
+            SerializationContext context)
         {
             sb.Append('{');
             bool first = true;
@@ -144,17 +178,20 @@ namespace UnityCliBridge.Bridge.Editor
 
             foreach (FieldInfo field in type.GetFields(BindingFlags.Public | BindingFlags.Instance))
             {
-                first = WriteMember(sb, field.Name, SafeGet(() => field.GetValue(value)), depth, seen, first);
+                context.CheckCancellation();
+                first = WriteMember(sb, field.Name, SafeGet(() => field.GetValue(value)), depth, seen, context, first);
             }
 
             foreach (PropertyInfo property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
+                context.CheckCancellation();
+
                 if (!property.CanRead || property.GetIndexParameters().Length > 0)
                 {
                     continue;
                 }
 
-                first = WriteMember(sb, property.Name, SafeGet(() => property.GetValue(value)), depth, seen, first);
+                first = WriteMember(sb, property.Name, SafeGet(() => property.GetValue(value)), depth, seen, context, first);
             }
 
             sb.Append('}');
@@ -166,6 +203,7 @@ namespace UnityCliBridge.Bridge.Editor
             object? value,
             int depth,
             HashSet<object> seen,
+            SerializationContext context,
             bool first)
         {
             if (!first)
@@ -175,7 +213,7 @@ namespace UnityCliBridge.Bridge.Editor
 
             WriteString(sb, name);
             sb.Append(':');
-            Write(sb, value, depth + 1, seen);
+            Write(sb, value, depth + 1, seen, context);
             return false;
         }
 
@@ -216,6 +254,33 @@ namespace UnityCliBridge.Bridge.Editor
                 }
             }
             sb.Append('"');
+        }
+
+        private sealed class SerializationContext
+        {
+            private readonly CancellationToken _cancellationToken;
+            private int _nodeCount;
+
+            public SerializationContext(CancellationToken cancellationToken)
+            {
+                _cancellationToken = cancellationToken;
+            }
+
+            public void CheckCancellation()
+            {
+                _cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            public void EnterNode()
+            {
+                CheckCancellation();
+                _nodeCount++;
+                if (_nodeCount > MaxNodeCount)
+                {
+                    throw new OperationCanceledException(
+                        $"Serialized result exceeded the maximum node count of {MaxNodeCount.ToString(CultureInfo.InvariantCulture)}.");
+                }
+            }
         }
 
         private sealed class ReferenceEqualityComparer : IEqualityComparer<object>
