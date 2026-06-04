@@ -205,7 +205,7 @@ namespace UnityCli.Protocol
                 {
                     "Live-only.",
                     "Custom commands are registered via [PucCommand(\"name\")] attribute on static methods.",
-                    "Return ExecuteValueSerializer.Serialize(obj) from custom commands for precise structured JSON.",
+                    "Editor-assembly custom commands can return ExecuteValueSerializer.Serialize(obj); runtime-assembly commands must serialize precise JSON themselves.",
                 }),
             new CliCommandDescriptor(
                 "asset find",

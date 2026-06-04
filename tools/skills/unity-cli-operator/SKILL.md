@@ -53,7 +53,7 @@ description: "Unity Editor 외부 제어 1차 진입점. 씬/프리팹/에셋/�
 - `execute`/`execute-code`는 임의 C# 실행이므로 항상 `--force`가 필요하다.
 - `execute --code 'Debug.Log(__pucArgsJson);' --args '{"k":"v"}' --force`로 넘긴 JSON은 사용자 코드에서 `__pucArgsJson` 문자열 변수로 읽는다.
 - 값을 회수해야 하면 사용자 코드에서 `__pucResult = <값>;`에 담는다. 응답의 `hasResult`가 `true`가 되고 `result`에는 타입 보존 JSON이 들어온다(float는 G9, double은 G17 round-trip 포맷).
-- `[PucCommand]` custom 명령에서 정밀 JSON을 직접 반환해야 하면 `ExecuteValueSerializer.Serialize(obj)`를 사용한다.
+- Editor 어셈블리의 `[PucCommand]` custom 명령은 `ExecuteValueSerializer.Serialize(obj)`를 반환할 수 있지만, runtime 어셈블리 명령은 정밀 JSON을 직접 직렬화해야 한다.
 - 오래 돌 수 있는 `execute`에는 `--timeout <초>`를 붙인다. 기본 30초, 상한 600초이며 협력적 cancel이라 사용자 코드가 `__pucToken`을 체크해야 멈춘다.
 - 반복문/대기 코드 생성 시 다음 패턴을 우선 사용한다:
 
