@@ -146,6 +146,37 @@ namespace UnityCliBridge.Bridge.Editor
             HashSet<object> seen,
             SerializationContext context)
         {
+            if (HasOnlyStringKeys(dict, context))
+            {
+                WriteStringKeyDictionary(sb, dict, depth, seen, context);
+            }
+            else
+            {
+                WriteKeyValueDictionary(sb, dict, depth, seen, context);
+            }
+        }
+
+        private static bool HasOnlyStringKeys(IDictionary dict, SerializationContext context)
+        {
+            foreach (DictionaryEntry entry in dict)
+            {
+                context.CheckCancellation();
+                if (entry.Key is not string)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static void WriteStringKeyDictionary(
+            StringBuilder sb,
+            IDictionary dict,
+            int depth,
+            HashSet<object> seen,
+            SerializationContext context)
+        {
             sb.Append('{');
             bool first = true;
             foreach (DictionaryEntry entry in dict)
@@ -157,12 +188,40 @@ namespace UnityCliBridge.Bridge.Editor
                     sb.Append(',');
                 }
 
-                WriteString(sb, entry.Key?.ToString() ?? "null");
+                WriteString(sb, (string)entry.Key);
                 sb.Append(':');
                 Write(sb, entry.Value, depth + 1, seen, context);
                 first = false;
             }
             sb.Append('}');
+        }
+
+        private static void WriteKeyValueDictionary(
+            StringBuilder sb,
+            IDictionary dict,
+            int depth,
+            HashSet<object> seen,
+            SerializationContext context)
+        {
+            sb.Append('[');
+            bool first = true;
+            foreach (DictionaryEntry entry in dict)
+            {
+                context.CheckCancellation();
+
+                if (!first)
+                {
+                    sb.Append(',');
+                }
+
+                sb.Append("{\"key\":");
+                Write(sb, entry.Key, depth + 1, seen, context);
+                sb.Append(",\"value\":");
+                Write(sb, entry.Value, depth + 1, seen, context);
+                sb.Append('}');
+                first = false;
+            }
+            sb.Append(']');
         }
 
         private static void WriteObject(

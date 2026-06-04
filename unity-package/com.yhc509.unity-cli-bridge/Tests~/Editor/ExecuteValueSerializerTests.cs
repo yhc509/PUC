@@ -55,6 +55,9 @@ namespace UnityCliBridge.Bridge.Editor.Tests
         [Test] public void Dictionary_Serializes_AsObject()
             => Assert.AreEqual("{\"a\":1}", ExecuteValueSerializer.Serialize(new Dictionary<string, int> { ["a"] = 1 }));
 
+        [Test] public void Dictionary_WithNonStringKeys_Serializes_AsKeyValueArray()
+            => Assert.AreEqual("[{\"key\":1,\"value\":\"a\"}]", ExecuteValueSerializer.Serialize(new Dictionary<int, string> { [1] = "a" }));
+
         [Test] public void Vector3_Serializes_Fields()
         {
             var json = ExecuteValueSerializer.Serialize(new Vector3(1f, 2f, 3f));
