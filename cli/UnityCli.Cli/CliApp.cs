@@ -126,6 +126,7 @@ public static class CliApp
         var registry = registryStore.Load();
         var target = registryStore.ResolveOrCreateTarget(registry, parsed.InstanceTarget!);
         registry.activeProjectRoot = target.projectRoot;
+        registry.activeProjectRootPinned = true;
         registry.activeProjectHash = null;
         registryStore.Save(registry);
 

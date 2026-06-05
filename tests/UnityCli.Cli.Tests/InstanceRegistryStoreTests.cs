@@ -525,4 +525,34 @@ public sealed class InstanceRegistryStoreTests
 
         Assert.False(InstanceRegistryStore.IsStale(record));
     }
+
+    [Fact]
+    public void Save_ThenLoad_PreservesPinnedFlag()
+    {
+        using var temp = new TempDirectory();
+        var projectRoot = Path.Combine(temp.Path, "ProjectA");
+        Directory.CreateDirectory(projectRoot);
+        var store = new InstanceRegistryStore(Path.Combine(temp.Path, "instances.json"));
+        store.Save(new InstanceRegistry
+        {
+            activeProjectRoot = projectRoot,
+            activeProjectRootPinned = true,
+            instances =
+            [
+                new InstanceRecord
+                {
+                    projectRoot = projectRoot,
+                    projectName = "ProjectA",
+                    projectHash = ProtocolConstants.ComputeProjectHash(projectRoot),
+                    pipeName = ProtocolConstants.BuildPipeName(ProtocolConstants.ComputeProjectHash(projectRoot)),
+                    state = "idle",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                },
+            ],
+        });
+
+        var registry = store.Load();
+
+        Assert.True(registry.activeProjectRootPinned);
+    }
 }
