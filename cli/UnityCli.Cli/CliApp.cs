@@ -310,6 +310,15 @@ public static class CliApp
                 "Unity Editor를 열고 Bridge import/compile이 끝난 뒤 다시 시도하세요.");
         }
 
+        var offlineCandidates = registry.instances
+            .OrderBy(item => item.projectName, StringComparer.OrdinalIgnoreCase)
+            .Select(item => $"  - {item.projectName} ({item.state})  {item.projectRoot}")
+            .ToArray();
+        string noTargetDetails = offlineCandidates.Length > 0
+            ? "Unity 프로젝트 루트에서 실행하거나 `unity-cli instances use <projectHash|projectPath|projectName>`로 대상을 고정하세요.\n"
+              + "등록됐으나 실행 중이 아닌 인스턴스:\n" + string.Join("\n", offlineCandidates)
+            : "Unity 프로젝트 루트에서 실행하거나 `unity-cli instances use <projectHash|projectPath|projectName>`로 대상을 고정하세요.";
+
         return ResponseEnvelope.Failure(
             Guid.NewGuid().ToString("N"),
             target?.projectHash,
@@ -317,7 +326,7 @@ public static class CliApp
             "Unity Editor가 실행 중이지 않거나 Bridge가 활성화되지 않았습니다.",
             retryable: false,
             transport: "cli",
-            details: "Unity 프로젝트 루트에서 실행하거나 `unity-cli instances use <projectHash|projectPath|projectName>`로 대상을 고정하세요.");
+            details: noTargetDetails);
     }
 
     private static int ResolveLiveTimeoutMs(ParsedCommand parsed)

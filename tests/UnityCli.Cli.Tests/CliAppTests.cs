@@ -128,6 +128,28 @@ public sealed class CliAppTests
     }
 
     [Fact]
+    public async Task RunAsync_JsonNoTarget_WhenOfflineInstancesExist_ListsThemInDetails()
+    {
+        using var temp = new TempDirectory();
+        string projectRoot = CreateUnityProject(temp.Path, "SampleProject");
+        string projectHash = ProtocolConstants.ComputeProjectHash(projectRoot);
+        string registryContents =
+            $$"""
+            {"activeProjectRoot":"","instances":[{"projectRoot":"{{projectRoot.Replace("\\", "\\\\")}}","projectName":"SampleProject","projectHash":"{{projectHash}}","pipeName":"{{ProtocolConstants.BuildPipeName(projectHash).Replace("\\", "\\\\")}}","editorProcessId":0,"unityVersion":"6000.3.10f1","state":"offline","lastSeenUtc":"2026-04-02T03:19:16.4545650+00:00","capabilities":[]}]}
+            """;
+        string currentDirectory = Path.Combine(temp.Path, "cwd");
+        Directory.CreateDirectory(currentDirectory);
+
+        var result = await InvokeAsync(["--json", "compile"], registryContents: registryContents, currentDirectory: currentDirectory);
+
+        Assert.Equal(1, result.ExitCode);
+        var response = ParseResponse(result.Stdout);
+        Assert.Equal("NO_TARGET", response.error?.code);
+        var details = response.error?.details?.ToString() ?? string.Empty;
+        Assert.Contains("SampleProject", details);
+    }
+
+    [Fact]
     public async Task RunAsync_Help_ExplainsProjectPathPriority()
     {
         var result = await InvokeAsync(["help"]);
