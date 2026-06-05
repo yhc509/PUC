@@ -91,6 +91,8 @@ unity-cli status --project /path/to/your-project --json
 
 > If two worktrees happen to collide on the same 12-character SHA256 prefix, the bridge still listens on separate socket/pipe names. Use `--project <path>` to route by canonical project root.
 
+When `--project` is omitted, the CLI first uses the current Unity project directory, then an explicit default set with `unity-cli instances use <projectPath|projectName>`, then the single live Editor if exactly one is running. If multiple live Editors remain and none is pinned, the command fails with a usage error that lists candidates instead of guessing.
+
 ## What You Can Do
 
 ### Editor Control

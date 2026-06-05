@@ -64,6 +64,7 @@ Tests live in `tests/UnityCli.Cli.Tests/` (xUnit, `.NET`-testable surface only).
 - **Dirty scene patch refusal:** `scene patch` refuses an already-loaded dirty target scene even with `--force`; save or discard first.
 - **macOS paths:** Use real paths (`pwd -P`), not symlinks, for hashing and registry lookups.
 - **Instance primary identity:** Registry and CLI routing use canonical `projectRoot` first. The 12-character hash is only for socket/pipe names and user-input fallback; if a hash matches multiple instances, require a project path.
+- **No-`--project` routing:** With no `--project`, routing resolves CWD → pinned `activeProjectRoot` (set via `instances use`) → the single live instance. If two or more live instances remain and none is pinned, the command fails with a `CLI_USAGE` error listing candidates instead of silently picking one. Auto-promoted `activeProjectRoot` (most-recent live Editor) is not trusted for this fallback; only an explicit `instances use` pin is.
 - **Scene paths:** Format `/Root[0]/Child[0]` with array notation for sibling indexing; `/` is the virtual scene root.
 - **Scene/prefab node flags:** Convenience commands that point at a hierarchy node use `--node`; JSON patch specs still use `target`/`parent`.
 - **Prefab editing:** Based on `SerializedProperty.propertyPath` (run `prefab inspect --with-values` to verify paths before patching).
