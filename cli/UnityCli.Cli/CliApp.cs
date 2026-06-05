@@ -829,7 +829,7 @@ public static class CliApp
             details: details);
     }
 
-    private static InstanceRecord? ResolveTarget(InstanceRegistry registry, string? projectRoot)
+    internal static InstanceRecord? ResolveTarget(InstanceRegistry registry, string? projectRoot)
     {
         if (!string.IsNullOrWhiteSpace(projectRoot))
         {
@@ -854,13 +854,44 @@ public static class CliApp
             };
         }
 
-        if (!string.IsNullOrWhiteSpace(registry.activeProjectRoot))
+        var liveInstances = registry.instances
+            .Where(item => !string.Equals(item.state, "offline", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        if (registry.activeProjectRootPinned
+            && !string.IsNullOrWhiteSpace(registry.activeProjectRoot))
         {
-            return registry.instances.FirstOrDefault(item =>
+            var pinned = liveInstances.FirstOrDefault(item =>
                 string.Equals(item.projectRoot, registry.activeProjectRoot, StringComparison.OrdinalIgnoreCase));
+            if (pinned is not null)
+            {
+                return pinned;
+            }
         }
 
-        return registry.instances.FirstOrDefault();
+        if (liveInstances.Length == 1)
+        {
+            return liveInstances[0];
+        }
+
+        if (liveInstances.Length >= 2)
+        {
+            throw CreateAmbiguousTargetException(liveInstances);
+        }
+
+        return null;
+    }
+
+    private static CliUsageException CreateAmbiguousTargetException(InstanceRecord[] candidates)
+    {
+        var lines = candidates
+            .OrderBy(item => item.projectName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.projectRoot, StringComparer.OrdinalIgnoreCase)
+            .Select(item => $"  - {item.projectName} ({item.state})  {item.projectRoot}");
+        return new CliUsageException(
+            "실행 중인 Unity 인스턴스가 여러 개여서 대상을 결정할 수 없습니다. "
+            + "--project로 지정하거나 `unity-cli instances use <projectPath|projectName>`로 기본 대상을 고정하세요.\n후보:\n"
+            + string.Join("\n", lines));
     }
 
     private static void WriteErrorResponse(OutputMode outputMode, ResponseEnvelope response)
