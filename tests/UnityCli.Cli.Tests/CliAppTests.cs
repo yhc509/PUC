@@ -128,6 +128,72 @@ public sealed class CliAppTests
     }
 
     [Fact]
+    public async Task RunAsync_JsonNoTarget_WhenOfflineInstancesExist_ListsThemInDetails()
+    {
+        using var temp = new TempDirectory();
+        string projectRoot = CreateUnityProject(temp.Path, "SampleProject");
+        string projectHash = ProtocolConstants.ComputeProjectHash(projectRoot);
+        string registryContents =
+            $$"""
+            {"activeProjectRoot":"","instances":[{"projectRoot":"{{projectRoot.Replace("\\", "\\\\")}}","projectName":"SampleProject","projectHash":"{{projectHash}}","pipeName":"{{ProtocolConstants.BuildPipeName(projectHash).Replace("\\", "\\\\")}}","editorProcessId":0,"unityVersion":"6000.3.10f1","state":"offline","lastSeenUtc":"2026-04-02T03:19:16.4545650+00:00","capabilities":[]}]}
+            """;
+        string currentDirectory = Path.Combine(temp.Path, "cwd");
+        Directory.CreateDirectory(currentDirectory);
+
+        var result = await InvokeAsync(["--json", "compile"], registryContents: registryContents, currentDirectory: currentDirectory);
+
+        Assert.Equal(1, result.ExitCode);
+        var response = ParseResponse(result.Stdout);
+        Assert.Equal("NO_TARGET", response.error?.code);
+        var details = response.error?.details?.ToString() ?? string.Empty;
+        Assert.Contains("SampleProject", details);
+    }
+
+    [Fact]
+    public async Task RunAsync_JsonNoProject_TwoLiveInstances_ReturnsAmbiguousUsageError()
+    {
+        await AssertJsonNoProjectTwoLiveInstancesReturnsAmbiguousUsageError(["--json", "compile"]);
+    }
+
+    [Fact]
+    public async Task RunAsync_JsonStatusNoProject_TwoLiveInstances_ReturnsAmbiguousUsageError()
+    {
+        await AssertJsonNoProjectTwoLiveInstancesReturnsAmbiguousUsageError(["--json", "status"]);
+    }
+
+    [Fact]
+    public async Task RunAsync_JsonDoctorNoProject_TwoLiveInstances_ReturnsAmbiguousUsageError()
+    {
+        await AssertJsonNoProjectTwoLiveInstancesReturnsAmbiguousUsageError(["--json", "doctor"]);
+    }
+
+    [Fact]
+    public async Task RunAsync_JsonInstancesUse_SetsPinnedFlagInRegistry()
+    {
+        using var temp = new TempDirectory();
+        string projectRoot = CreateUnityProject(temp.Path, "SampleProject");
+        string projectHash = ProtocolConstants.ComputeProjectHash(projectRoot);
+        string registryPath = Path.Combine(temp.Path, "instances.json");
+        string registryContents =
+            $$"""
+            {"activeProjectRoot":"","instances":[{"projectRoot":"{{projectRoot.Replace("\\", "\\\\")}}","projectName":"SampleProject","projectHash":"{{projectHash}}","pipeName":"{{ProtocolConstants.BuildPipeName(projectHash).Replace("\\", "\\\\")}}","editorProcessId":1234,"unityVersion":"6000.3.10f1","state":"idle","lastSeenUtc":"{{DateTimeOffset.UtcNow.ToString("O")}}","capabilities":[]}]}
+            """;
+        string currentDirectory = Path.Combine(temp.Path, "cwd");
+        Directory.CreateDirectory(currentDirectory);
+
+        var result = await InvokeAsync(
+            ["--json", "instances", "use", projectRoot],
+            registryContents: registryContents,
+            currentDirectory: currentDirectory,
+            registryPath: registryPath);
+
+        Assert.Equal(0, result.ExitCode);
+        var reloaded = new InstanceRegistryStore(result.RegistryPath).Load();
+        Assert.True(reloaded.activeProjectRootPinned);
+        Assert.Equal(ProtocolConstants.GetCanonicalPath(projectRoot), reloaded.activeProjectRoot);
+    }
+
+    [Fact]
     public async Task RunAsync_Help_ExplainsProjectPathPriority()
     {
         var result = await InvokeAsync(["help"]);
@@ -476,17 +542,42 @@ public sealed class CliAppTests
         return JsonSerializer.Deserialize<JsonElement>(json.Trim());
     }
 
+    private static async Task AssertJsonNoProjectTwoLiveInstancesReturnsAmbiguousUsageError(string[] args)
+    {
+        using var temp = new TempDirectory();
+        string projectA = CreateUnityProject(temp.Path, "ProjectA");
+        string projectB = CreateUnityProject(temp.Path, "ProjectB");
+        string hashA = ProtocolConstants.ComputeProjectHash(projectA);
+        string hashB = ProtocolConstants.ComputeProjectHash(projectB);
+        string now = DateTimeOffset.UtcNow.ToString("O");
+        string registryContents =
+            $$"""
+            {"activeProjectRoot":"","instances":[{"projectRoot":"{{projectA.Replace("\\", "\\\\")}}","projectName":"ProjectA","projectHash":"{{hashA}}","pipeName":"{{ProtocolConstants.BuildPipeName(hashA).Replace("\\", "\\\\")}}","editorProcessId":1234,"unityVersion":"6000.3.10f1","state":"idle","lastSeenUtc":"{{now}}","capabilities":[]},{"projectRoot":"{{projectB.Replace("\\", "\\\\")}}","projectName":"ProjectB","projectHash":"{{hashB}}","pipeName":"{{ProtocolConstants.BuildPipeName(hashB).Replace("\\", "\\\\")}}","editorProcessId":1235,"unityVersion":"6000.3.10f1","state":"idle","lastSeenUtc":"{{now}}","capabilities":[]}]}
+            """;
+        string currentDirectory = Path.Combine(temp.Path, "cwd");
+        Directory.CreateDirectory(currentDirectory);
+
+        var result = await InvokeAsync(args, registryContents: registryContents, currentDirectory: currentDirectory);
+
+        Assert.Equal(2, result.ExitCode);
+        var response = ParseResponse(result.Stdout);
+        Assert.Equal("CLI_USAGE", response.error?.code);
+        Assert.Contains("ProjectA", result.Stdout);
+        Assert.Contains("ProjectB", result.Stdout);
+    }
+
     private static async Task<CliInvocationResult> InvokeAsync(
         string[] args,
         string? registryContents = null,
-        string? currentDirectory = null)
+        string? currentDirectory = null,
+        string? registryPath = null)
     {
         await ConsoleLock.WaitAsync();
 
         try
         {
             using var temp = new TempDirectory();
-            string registryPath = Path.Combine(temp.Path, "instances.json");
+            registryPath ??= Path.Combine(temp.Path, "instances.json");
             if (registryContents is not null)
             {
                 File.WriteAllText(registryPath, registryContents);
@@ -508,7 +599,7 @@ public sealed class CliAppTests
                 Console.SetError(stderr);
 
                 int exitCode = await UnityCli.Cli.CliApp.RunAsync(args);
-                return new CliInvocationResult(exitCode, stdout.ToString(), stderr.ToString());
+                return new CliInvocationResult(exitCode, stdout.ToString(), stderr.ToString(), registryPath);
             }
             finally
             {
@@ -569,5 +660,5 @@ public sealed class CliAppTests
         }
     }
 
-    private sealed record CliInvocationResult(int ExitCode, string Stdout, string Stderr);
+    private sealed record CliInvocationResult(int ExitCode, string Stdout, string Stderr, string RegistryPath);
 }

@@ -20,8 +20,9 @@ description: "Unity Editor 외부 제어 1차 진입점. 씬/프리팹/에셋/�
 - `ucli`가 PATH에 있으면 그대로 사용한다. 매 호출마다 변수를 재정의하지 않는다.
 - 셋 다 없으면 repo 루트에서 `./scripts/publish-osx-arm64.sh`로 `dist/unity-cli/unity-cli`를 빌드한 뒤 `ln -s <repo>/dist/unity-cli/unity-cli ~/bin/ucli`로 symlink을 만든다.
 
-2. **대상 프로젝트를 결정하고 `--project`를 항상 명시한다.**
-- CLI는 `--project` 없이 호출하면 아무 live 인스턴스에 연결한다. **의도하지 않은 프로젝트에 명령이 실행될 수 있으므로 반드시 명시한다.**
+2. **대상 프로젝트를 결정한다.**
+- CLI는 `--project` 없이도 현재 작업 디렉터리의 Unity 프로젝트, `instances use`로 고정한 핀, 또는 단일 live 인스턴스로 라우팅할 수 있다.
+- 다중 live 인스턴스에서 핀이 없으면 후보 목록과 함께 `CLI_USAGE`로 실패한다. 그래도 자동화 작업에서는 의도를 기록하기 위해 가능하면 `--project`를 명시한다.
 - 프로젝트 결정 우선순위:
   1. 사용자가 프로젝트를 명시적으로 지정한 경우 → 그대로 사용
   2. 현재 작업 디렉터리(`pwd -P`)가 Unity 프로젝트 내부인 경우 → 해당 프로젝트
@@ -29,7 +30,7 @@ description: "Unity Editor 외부 제어 1차 진입점. 씬/프리팹/에셋/�
   4. 여러 프로젝트가 실행 중이면 `instances list`로 확인 후 사용자에게 물어본다
 - macOS에서는 항상 `pwd -P`로 실제 경로를 사용한다.
 - `--project`는 프로젝트 이름(예: `unity-cli-bridge-sample`)이나 전체 경로 모두 가능하다.
-- 다중 인스턴스 환경에서는 `instances list`로 `projectRoot`를 확인하고 `--project <path>` 또는 `--project <projectName>`으로 라우팅한다. 12자 hash 입력은 충돌 시 ambiguous 에러로 거부된다.
+- 다중 인스턴스 환경에서는 `instances list`로 `projectRoot`를 확인하고 `--project <path>` 또는 `--project <projectName>`으로 라우팅한다. 반복 작업에서 생략하고 싶다면 `instances use <projectPath|projectName>`로 기본 대상을 고정한다. 12자 hash 입력은 충돌 시 ambiguous 에러로 거부된다.
 
 3. 쓰기 작업 전에는 상태를 본다.
 - 먼저 `status --json --project <name>`으로 live 연결, busy 상태, 현재 프로젝트가 맞는지 확인한다.

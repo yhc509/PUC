@@ -29,4 +29,31 @@ public sealed class RegistryModelsTests
         Assert.NotNull(deserialized);
         Assert.Equal("abcdef012345", deserialized!.activeProjectHash);
     }
+
+    [Fact]
+    public void InstanceRegistry_ActiveProjectRootPinned_RoundTripsThroughJson()
+    {
+        var registry = new InstanceRegistry
+        {
+            activeProjectRoot = "/Users/me/projects/foo",
+            activeProjectRootPinned = true,
+            instances = [],
+        };
+
+        string json = ProtocolJson.Serialize(registry);
+        var deserialized = ProtocolJson.Deserialize<InstanceRegistry>(json);
+
+        Assert.NotNull(deserialized);
+        Assert.True(deserialized!.activeProjectRootPinned);
+    }
+
+    [Fact]
+    public void InstanceRegistry_ActiveProjectRootPinned_DefaultsFalse()
+    {
+        string json = "{\"activeProjectRoot\":\"/x\",\"instances\":[]}";
+        var deserialized = ProtocolJson.Deserialize<InstanceRegistry>(json);
+
+        Assert.NotNull(deserialized);
+        Assert.False(deserialized!.activeProjectRootPinned);
+    }
 }

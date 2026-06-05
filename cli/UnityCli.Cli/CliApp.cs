@@ -126,6 +126,7 @@ public static class CliApp
         var registry = registryStore.Load();
         var target = registryStore.ResolveOrCreateTarget(registry, parsed.InstanceTarget!);
         registry.activeProjectRoot = target.projectRoot;
+        registry.activeProjectRootPinned = true;
         registry.activeProjectHash = null;
         registryStore.Save(registry);
 
@@ -309,6 +310,15 @@ public static class CliApp
                 "Unity Editor를 열고 Bridge import/compile이 끝난 뒤 다시 시도하세요.");
         }
 
+        var offlineCandidates = registry.instances
+            .OrderBy(item => item.projectName, StringComparer.OrdinalIgnoreCase)
+            .Select(item => $"  - {item.projectName} ({item.state})  {item.projectRoot}")
+            .ToArray();
+        string noTargetDetails = offlineCandidates.Length > 0
+            ? "Unity 프로젝트 루트에서 실행하거나 `unity-cli instances use <projectHash|projectPath|projectName>`로 대상을 고정하세요.\n"
+              + "등록됐으나 실행 중이 아닌 인스턴스:\n" + string.Join("\n", offlineCandidates)
+            : "Unity 프로젝트 루트에서 실행하거나 `unity-cli instances use <projectHash|projectPath|projectName>`로 대상을 고정하세요.";
+
         return ResponseEnvelope.Failure(
             Guid.NewGuid().ToString("N"),
             target?.projectHash,
@@ -316,7 +326,7 @@ public static class CliApp
             "Unity Editor가 실행 중이지 않거나 Bridge가 활성화되지 않았습니다.",
             retryable: false,
             transport: "cli",
-            details: "Unity 프로젝트 루트에서 실행하거나 `unity-cli instances use <projectHash|projectPath|projectName>`로 대상을 고정하세요.");
+            details: noTargetDetails);
     }
 
     private static int ResolveLiveTimeoutMs(ParsedCommand parsed)
@@ -829,7 +839,7 @@ public static class CliApp
             details: details);
     }
 
-    private static InstanceRecord? ResolveTarget(InstanceRegistry registry, string? projectRoot)
+    internal static InstanceRecord? ResolveTarget(InstanceRegistry registry, string? projectRoot)
     {
         if (!string.IsNullOrWhiteSpace(projectRoot))
         {
@@ -854,13 +864,44 @@ public static class CliApp
             };
         }
 
-        if (!string.IsNullOrWhiteSpace(registry.activeProjectRoot))
+        var liveInstances = registry.instances
+            .Where(item => !string.Equals(item.state, "offline", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        if (registry.activeProjectRootPinned
+            && !string.IsNullOrWhiteSpace(registry.activeProjectRoot))
         {
-            return registry.instances.FirstOrDefault(item =>
+            var pinned = liveInstances.FirstOrDefault(item =>
                 string.Equals(item.projectRoot, registry.activeProjectRoot, StringComparison.OrdinalIgnoreCase));
+            if (pinned is not null)
+            {
+                return pinned;
+            }
         }
 
-        return registry.instances.FirstOrDefault();
+        if (liveInstances.Length == 1)
+        {
+            return liveInstances[0];
+        }
+
+        if (liveInstances.Length >= 2)
+        {
+            throw CreateAmbiguousTargetException(liveInstances);
+        }
+
+        return null;
+    }
+
+    private static CliUsageException CreateAmbiguousTargetException(InstanceRecord[] candidates)
+    {
+        var lines = candidates
+            .OrderBy(item => item.projectName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.projectRoot, StringComparer.OrdinalIgnoreCase)
+            .Select(item => $"  - {item.projectName} ({item.state})  {item.projectRoot}");
+        return new CliUsageException(
+            "실행 중인 Unity 인스턴스가 여러 개여서 대상을 결정할 수 없습니다. "
+            + "--project로 지정하거나 `unity-cli instances use <projectPath|projectName>`로 기본 대상을 고정하세요.\n후보:\n"
+            + string.Join("\n", lines));
     }
 
     private static void WriteErrorResponse(OutputMode outputMode, ResponseEnvelope response)

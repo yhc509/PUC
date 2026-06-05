@@ -9,6 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - `execute` now returns structured values: assign to `__pucResult` to receive a type-preserving JSON result (float G9 / double G17 round-trip). `ExecuteValueSerializer` is public for use in `custom` commands.
 
+### Changed
+- `--project` 미지정 라우팅이 안전해졌습니다. 실행 중인 Unity 인스턴스가 둘 이상이고 `instances use`로 고정된 핀이 없으면, 조용히 첫 번째를 고르는 대신 후보 목록과 함께 에러로 실패합니다. CWD가 프로젝트 디렉토리 안이거나 핀이 있으면 종전처럼 자동 선택됩니다. `instances use`로 고정한 대상은 자동 승격된 `activeProjectRoot`와 구분되어 무지정 fallback으로 신뢰됩니다.
+
 ## [0.2.2] - 2026-05-29
 
 ### Added
