@@ -555,4 +555,93 @@ public sealed class InstanceRegistryStoreTests
 
         Assert.True(registry.activeProjectRootPinned);
     }
+
+    [Fact]
+    public void Load_DoesNotRepointPinnedActiveProjectRoot_EvenWhenOffline()
+    {
+        using var temp = new TempDirectory();
+        var pinnedProject = Path.Combine(temp.Path, "PinnedProject");
+        var liveProject = Path.Combine(temp.Path, "LiveProject");
+        Directory.CreateDirectory(pinnedProject);
+        Directory.CreateDirectory(liveProject);
+
+        var registryPath = Path.Combine(temp.Path, "instances.json");
+        var store = new InstanceRegistryStore(registryPath);
+        store.Save(new InstanceRegistry
+        {
+            activeProjectRoot = pinnedProject,
+            activeProjectRootPinned = true,
+            instances =
+            [
+                new InstanceRecord
+                {
+                    projectRoot = pinnedProject,
+                    projectName = "PinnedProject",
+                    projectHash = ProtocolConstants.ComputeProjectHash(pinnedProject),
+                    pipeName = ProtocolConstants.BuildPipeName(ProtocolConstants.ComputeProjectHash(pinnedProject)),
+                    state = "offline",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                    editorProcessId = 0,
+                },
+                new InstanceRecord
+                {
+                    projectRoot = liveProject,
+                    projectName = "LiveProject",
+                    projectHash = ProtocolConstants.ComputeProjectHash(liveProject),
+                    pipeName = ProtocolConstants.BuildPipeName(ProtocolConstants.ComputeProjectHash(liveProject)),
+                    state = "idle",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                },
+            ],
+        });
+
+        var registry = store.Load();
+
+        Assert.Equal(ProtocolConstants.GetCanonicalPath(pinnedProject), registry.activeProjectRoot);
+        Assert.True(registry.activeProjectRootPinned);
+    }
+
+    [Fact]
+    public void Load_RepointsUnpinnedOfflineActiveProjectRoot_ToLiveInstance()
+    {
+        using var temp = new TempDirectory();
+        var offlineProject = Path.Combine(temp.Path, "OfflineProject");
+        var liveProject = Path.Combine(temp.Path, "LiveProject");
+        Directory.CreateDirectory(offlineProject);
+        Directory.CreateDirectory(liveProject);
+
+        var registryPath = Path.Combine(temp.Path, "instances.json");
+        var store = new InstanceRegistryStore(registryPath);
+        store.Save(new InstanceRegistry
+        {
+            activeProjectRoot = offlineProject,
+            activeProjectRootPinned = false,
+            instances =
+            [
+                new InstanceRecord
+                {
+                    projectRoot = offlineProject,
+                    projectName = "OfflineProject",
+                    projectHash = ProtocolConstants.ComputeProjectHash(offlineProject),
+                    pipeName = ProtocolConstants.BuildPipeName(ProtocolConstants.ComputeProjectHash(offlineProject)),
+                    state = "offline",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                    editorProcessId = 0,
+                },
+                new InstanceRecord
+                {
+                    projectRoot = liveProject,
+                    projectName = "LiveProject",
+                    projectHash = ProtocolConstants.ComputeProjectHash(liveProject),
+                    pipeName = ProtocolConstants.BuildPipeName(ProtocolConstants.ComputeProjectHash(liveProject)),
+                    state = "idle",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                },
+            ],
+        });
+
+        var registry = store.Load();
+
+        Assert.Equal(ProtocolConstants.GetCanonicalPath(liveProject), registry.activeProjectRoot);
+    }
 }

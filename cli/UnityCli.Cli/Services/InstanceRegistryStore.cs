@@ -305,11 +305,22 @@ public sealed class InstanceRegistryStore
         }
 
         registry.instances = instances;
+        if (!string.IsNullOrWhiteSpace(registry.activeProjectRoot))
+        {
+            var activeProjectRoot = ProtocolConstants.GetCanonicalPath(registry.activeProjectRoot);
+            if (!string.Equals(registry.activeProjectRoot, activeProjectRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                registry.activeProjectRoot = activeProjectRoot;
+                changed = true;
+            }
+        }
+
         var active = registry.instances.FirstOrDefault(item =>
             string.Equals(item.projectRoot, registry.activeProjectRoot, StringComparison.OrdinalIgnoreCase));
-        if (string.IsNullOrWhiteSpace(registry.activeProjectRoot)
-            || active is null
-            || string.Equals(active.state, "offline", StringComparison.OrdinalIgnoreCase))
+        if (!registry.activeProjectRootPinned
+            && (string.IsNullOrWhiteSpace(registry.activeProjectRoot)
+                || active is null
+                || string.Equals(active.state, "offline", StringComparison.OrdinalIgnoreCase)))
         {
             registry.activeProjectRoot = registry.instances.FirstOrDefault(item => !string.Equals(item.state, "offline", StringComparison.OrdinalIgnoreCase))?.projectRoot
                 ?? registry.instances.FirstOrDefault()?.projectRoot
