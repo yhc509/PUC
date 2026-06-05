@@ -152,26 +152,19 @@ public sealed class CliAppTests
     [Fact]
     public async Task RunAsync_JsonNoProject_TwoLiveInstances_ReturnsAmbiguousUsageError()
     {
-        using var temp = new TempDirectory();
-        string projectA = CreateUnityProject(temp.Path, "ProjectA");
-        string projectB = CreateUnityProject(temp.Path, "ProjectB");
-        string hashA = ProtocolConstants.ComputeProjectHash(projectA);
-        string hashB = ProtocolConstants.ComputeProjectHash(projectB);
-        string now = DateTimeOffset.UtcNow.ToString("O");
-        string registryContents =
-            $$"""
-            {"activeProjectRoot":"","instances":[{"projectRoot":"{{projectA.Replace("\\", "\\\\")}}","projectName":"ProjectA","projectHash":"{{hashA}}","pipeName":"{{ProtocolConstants.BuildPipeName(hashA).Replace("\\", "\\\\")}}","editorProcessId":1234,"unityVersion":"6000.3.10f1","state":"idle","lastSeenUtc":"{{now}}","capabilities":[]},{"projectRoot":"{{projectB.Replace("\\", "\\\\")}}","projectName":"ProjectB","projectHash":"{{hashB}}","pipeName":"{{ProtocolConstants.BuildPipeName(hashB).Replace("\\", "\\\\")}}","editorProcessId":1235,"unityVersion":"6000.3.10f1","state":"idle","lastSeenUtc":"{{now}}","capabilities":[]}]}
-            """;
-        string currentDirectory = Path.Combine(temp.Path, "cwd");
-        Directory.CreateDirectory(currentDirectory);
+        await AssertJsonNoProjectTwoLiveInstancesReturnsAmbiguousUsageError(["--json", "compile"]);
+    }
 
-        var result = await InvokeAsync(["--json", "compile"], registryContents: registryContents, currentDirectory: currentDirectory);
+    [Fact]
+    public async Task RunAsync_JsonStatusNoProject_TwoLiveInstances_ReturnsAmbiguousUsageError()
+    {
+        await AssertJsonNoProjectTwoLiveInstancesReturnsAmbiguousUsageError(["--json", "status"]);
+    }
 
-        Assert.Equal(2, result.ExitCode);
-        var response = ParseResponse(result.Stdout);
-        Assert.Equal("CLI_USAGE", response.error?.code);
-        Assert.Contains("ProjectA", result.Stdout);
-        Assert.Contains("ProjectB", result.Stdout);
+    [Fact]
+    public async Task RunAsync_JsonDoctorNoProject_TwoLiveInstances_ReturnsAmbiguousUsageError()
+    {
+        await AssertJsonNoProjectTwoLiveInstancesReturnsAmbiguousUsageError(["--json", "doctor"]);
     }
 
     [Fact]
@@ -547,6 +540,30 @@ public sealed class CliAppTests
     {
         Assert.False(string.IsNullOrWhiteSpace(json));
         return JsonSerializer.Deserialize<JsonElement>(json.Trim());
+    }
+
+    private static async Task AssertJsonNoProjectTwoLiveInstancesReturnsAmbiguousUsageError(string[] args)
+    {
+        using var temp = new TempDirectory();
+        string projectA = CreateUnityProject(temp.Path, "ProjectA");
+        string projectB = CreateUnityProject(temp.Path, "ProjectB");
+        string hashA = ProtocolConstants.ComputeProjectHash(projectA);
+        string hashB = ProtocolConstants.ComputeProjectHash(projectB);
+        string now = DateTimeOffset.UtcNow.ToString("O");
+        string registryContents =
+            $$"""
+            {"activeProjectRoot":"","instances":[{"projectRoot":"{{projectA.Replace("\\", "\\\\")}}","projectName":"ProjectA","projectHash":"{{hashA}}","pipeName":"{{ProtocolConstants.BuildPipeName(hashA).Replace("\\", "\\\\")}}","editorProcessId":1234,"unityVersion":"6000.3.10f1","state":"idle","lastSeenUtc":"{{now}}","capabilities":[]},{"projectRoot":"{{projectB.Replace("\\", "\\\\")}}","projectName":"ProjectB","projectHash":"{{hashB}}","pipeName":"{{ProtocolConstants.BuildPipeName(hashB).Replace("\\", "\\\\")}}","editorProcessId":1235,"unityVersion":"6000.3.10f1","state":"idle","lastSeenUtc":"{{now}}","capabilities":[]}]}
+            """;
+        string currentDirectory = Path.Combine(temp.Path, "cwd");
+        Directory.CreateDirectory(currentDirectory);
+
+        var result = await InvokeAsync(args, registryContents: registryContents, currentDirectory: currentDirectory);
+
+        Assert.Equal(2, result.ExitCode);
+        var response = ParseResponse(result.Stdout);
+        Assert.Equal("CLI_USAGE", response.error?.code);
+        Assert.Contains("ProjectA", result.Stdout);
+        Assert.Contains("ProjectB", result.Stdout);
     }
 
     private static async Task<CliInvocationResult> InvokeAsync(
