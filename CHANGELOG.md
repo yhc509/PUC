@@ -6,11 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-06-05
+
 ### Added
 - `execute` now returns structured values: assign to `__pucResult` to receive a type-preserving JSON result (float G9 / double G17 round-trip). `ExecuteValueSerializer` is public for use in `custom` commands.
 
 ### Changed
-- `--project` 미지정 라우팅이 안전해졌습니다. 실행 중인 Unity 인스턴스가 둘 이상이고 `instances use`로 고정된 핀이 없으면, 조용히 첫 번째를 고르는 대신 후보 목록과 함께 에러로 실패합니다. CWD가 프로젝트 디렉토리 안이거나 핀이 있으면 종전처럼 자동 선택됩니다. `instances use`로 고정한 대상은 자동 승격된 `activeProjectRoot`와 구분되어 무지정 fallback으로 신뢰됩니다.
+- No-`--project` routing is now safe in multi-instance setups. When two or more Editors are live and none is pinned, the CLI fails with a candidate list instead of silently selecting the first instance. Routing still auto-selects when the current directory is inside a project or a pin is set. A pin set via `instances use` is distinguished from the auto-promoted `activeProjectRoot` and is the only value trusted for the no-`--project` fallback.
+
+### Compatibility
+- `activeProjectRootPinned` is an additive registry field that older CLIs/packages ignore; no wire/protocol bump. Pin persistence requires both the CLI and the Unity package to be on this version — in a mixed setup an older Editor-side bridge drops the pin on each heartbeat, after which routing falls back to the safe ambiguous-target error (never a silent mis-route).
+- Behavior change: multi-instance commands with no `--project` previously succeeded by picking the first instance; they now fail with a candidate list. Pass `--project`, run from a project directory, or set a default with `instances use`.
 
 ## [0.2.2] - 2026-05-29
 
