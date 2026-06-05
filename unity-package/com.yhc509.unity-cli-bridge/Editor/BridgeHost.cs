@@ -1094,7 +1094,7 @@ namespace UnityCliBridge.Bridge.Editor
                     || string.Equals(activeRecord.state, "offline", StringComparison.OrdinalIgnoreCase)
                     || activeRecord.editorProcessId <= 0;
 
-                if (isCurrentProjectPromotionNeeded)
+                if (!registry.activeProjectRootPinned && isCurrentProjectPromotionNeeded)
                 {
                     registry.activeProjectRoot = _projectRoot;
                 }
@@ -1130,7 +1130,8 @@ namespace UnityCliBridge.Bridge.Editor
 
                 registry.instances = remainingRecords;
 
-                if (string.Equals(registry.activeProjectRoot, _projectRoot, StringComparison.OrdinalIgnoreCase))
+                if (!registry.activeProjectRootPinned
+                    && string.Equals(registry.activeProjectRoot, _projectRoot, StringComparison.OrdinalIgnoreCase))
                 {
                     registry.activeProjectRoot = registry.instances.Length > 0 ? registry.instances[0].projectRoot : string.Empty;
                 }
