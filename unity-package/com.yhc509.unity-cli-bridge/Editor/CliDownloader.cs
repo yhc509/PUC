@@ -18,6 +18,7 @@ namespace UnityCliBridge.Bridge.Editor
 
         public static void DownloadAndInstallAsync(
             string url,
+            string releaseVersion,
             string installDir,
             Action<float> onProgress,
             Action<string> onError,
@@ -31,6 +32,11 @@ namespace UnityCliBridge.Bridge.Editor
             if (string.IsNullOrWhiteSpace(url))
             {
                 throw new ArgumentException("Download URL is required.", nameof(url));
+            }
+
+            if (string.IsNullOrWhiteSpace(releaseVersion))
+            {
+                throw new ArgumentException("Release version is required.", nameof(releaseVersion));
             }
 
             if (string.IsNullOrWhiteSpace(installDir))
@@ -61,6 +67,7 @@ namespace UnityCliBridge.Bridge.Editor
             _activeOperation = new DownloadInstallOperation(
                 request,
                 archivePath,
+                releaseVersion.Trim(),
                 installDir,
                 onProgress,
                 onError,
@@ -93,7 +100,7 @@ namespace UnityCliBridge.Bridge.Editor
 
                 operation.OnProgress(0.95f);
                 InstallArchive(operation.ArchivePath, operation.InstallDirectory);
-                CliInstallerState.SetInstalledVersion(CliInstallerState.GetPackageVersion());
+                CliInstallerState.SetInstalledVersion(operation.ReleaseVersion);
                 operation.OnProgress(1f);
                 operation.OnComplete();
             }
@@ -334,6 +341,7 @@ namespace UnityCliBridge.Bridge.Editor
             public DownloadInstallOperation(
                 UnityWebRequest request,
                 string archivePath,
+                string releaseVersion,
                 string installDirectory,
                 Action<float> onProgress,
                 Action<string> onError,
@@ -341,6 +349,7 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 Request = request;
                 ArchivePath = archivePath;
+                ReleaseVersion = releaseVersion;
                 InstallDirectory = installDirectory;
                 OnProgress = onProgress;
                 OnError = onError;
@@ -350,6 +359,8 @@ namespace UnityCliBridge.Bridge.Editor
             public UnityWebRequest Request { get; }
 
             public string ArchivePath { get; }
+
+            public string ReleaseVersion { get; }
 
             public string InstallDirectory { get; }
 

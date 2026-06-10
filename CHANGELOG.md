@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- The **Unity CLI Manager** window (`Window > Unity CLI Manager`) now installs and updates against the latest *published* GitHub release instead of building the download URL from the package version. Previously, when the matching release was still a draft, the installer tried to fetch a draft asset and failed with an error dialog. Draft and pre-release versions are now ignored.
+- The installer now tells a failed release check (network error, timeout, GitHub rate limit) apart from "no published release available". A transient failure no longer locks the window into a false "no release" state for up to an hour — it surfaces a retryable "Check failed" status and keeps using the cached release version. An installed CLI whose version is unknown is once again offered a reinstall path.
+
 ## [0.3.0] - 2026-06-10
 
 ### Added
