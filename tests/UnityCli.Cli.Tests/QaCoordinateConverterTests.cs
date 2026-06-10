@@ -21,6 +21,14 @@ public sealed class QaCoordinateConverterTests
     }
 
     [Fact]
+    public void ConvertScreenshotYToScreenY_WithNonPositiveScreenHeight_ReturnsRawY()
+    {
+        int convertedY = QaCoordinateConverter.ConvertScreenshotYToScreenY(rawY: 200, screenHeight: 0, screenshotHeight: 1080);
+
+        Assert.Equal(200, convertedY);
+    }
+
+    [Fact]
     public void ConvertScreenshotCoordinates_WithScreenshotDimensions_ScalesAndInvertsY()
     {
         int convertedX = QaCoordinateConverter.ConvertScreenshotXToScreenX(rawX: 300, screenWidth: 960, screenshotWidth: 1920);

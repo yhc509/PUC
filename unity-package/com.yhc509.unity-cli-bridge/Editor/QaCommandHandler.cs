@@ -495,23 +495,23 @@ namespace UnityCliBridge.Bridge.Editor
         {
             if (string.IsNullOrWhiteSpace(args.target))
             {
+                int screenshotWidth = args.screenshotWidth > 0 ? args.screenshotWidth : ScreenshotCommandHandler.LastCapturedWidth;
+                int screenshotHeight = args.screenshotHeight > 0 ? args.screenshotHeight : ScreenshotCommandHandler.LastCapturedHeight;
+                Vector2Int screenSize = GetGameViewRenderSize();
+                WarnIfAspectMismatch(screenshotWidth, screenshotHeight, screenSize.x, screenSize.y);
                 return new SwipeScreenPositions(
-                    ConvertRawSwipeCoordinateToScreenPosition(args.fromX, args.fromY, args.screenshotWidth, args.screenshotHeight),
-                    ConvertRawSwipeCoordinateToScreenPosition(args.toX, args.toY, args.screenshotWidth, args.screenshotHeight));
+                    ConvertRawSwipeCoordinateToScreenPosition(args.fromX, args.fromY, screenshotWidth, screenshotHeight, screenSize),
+                    ConvertRawSwipeCoordinateToScreenPosition(args.toX, args.toY, screenshotWidth, screenshotHeight, screenSize));
             }
 
             GameObject target = ResolveSwipeTarget(args);
             return ResolveTargetSwipeScreenPositions(target, args);
         }
 
-        private static Vector2 ConvertRawSwipeCoordinateToScreenPosition(int rawX, int rawY, int screenshotWidth, int screenshotHeight)
+        private static Vector2 ConvertRawSwipeCoordinateToScreenPosition(int rawX, int rawY, int screenshotWidth, int screenshotHeight, Vector2Int screenSize)
         {
-            int resolvedScreenshotWidth = screenshotWidth > 0 ? screenshotWidth : ScreenshotCommandHandler.LastCapturedWidth;
-            int resolvedScreenshotHeight = screenshotHeight > 0 ? screenshotHeight : ScreenshotCommandHandler.LastCapturedHeight;
-            Vector2Int screenSize = GetGameViewRenderSize();
-            WarnIfAspectMismatch(resolvedScreenshotWidth, resolvedScreenshotHeight, screenSize.x, screenSize.y);
-            int screenX = QaCoordinateConverter.ConvertScreenshotXToScreenX(rawX, screenSize.x, resolvedScreenshotWidth);
-            int screenY = QaCoordinateConverter.ConvertScreenshotYToScreenY(rawY, screenSize.y, resolvedScreenshotHeight);
+            int screenX = QaCoordinateConverter.ConvertScreenshotXToScreenX(rawX, screenSize.x, screenshotWidth);
+            int screenY = QaCoordinateConverter.ConvertScreenshotYToScreenY(rawY, screenSize.y, screenshotHeight);
             return new Vector2(screenX, screenY);
         }
 

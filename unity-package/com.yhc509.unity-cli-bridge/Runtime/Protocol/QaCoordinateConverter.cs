@@ -9,7 +9,7 @@ namespace UnityCli.Protocol
 
         public static int ConvertScreenshotYToScreenY(int rawY, int screenHeight, int screenshotHeight)
         {
-            if (screenshotHeight <= 0)
+            if (screenshotHeight <= 0 || screenHeight <= 0)
             {
                 return rawY;
             }
