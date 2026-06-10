@@ -139,13 +139,18 @@ namespace UnityCliBridge.Bridge.Editor
             EditorApplication.update += PollLatestReleaseFetch;
         }
 
-        public static string GetDownloadUrl()
+        public static string GetDownloadUrl(string releaseVersion)
         {
-            string packageVersion = GetPackageVersion();
+            if (string.IsNullOrWhiteSpace(releaseVersion))
+            {
+                throw new ArgumentException("Release version is required.", nameof(releaseVersion));
+            }
+
+            string normalizedReleaseVersion = NormalizeVersion(releaseVersion);
             GetPlatformAssetInfo(out string platformAssetName, out string archiveExtension);
             return string.Format(
                 ReleaseDownloadUrlPattern,
-                packageVersion,
+                normalizedReleaseVersion,
                 platformAssetName,
                 archiveExtension);
         }
@@ -155,9 +160,11 @@ namespace UnityCliBridge.Bridge.Editor
             return RepositoryUrl;
         }
 
-        public static string GetReleasePageUrl()
+        public static string GetReleasePageUrl(string? releaseVersion)
         {
-            return string.Format(ReleasePageUrlPattern, GetPackageVersion());
+            return string.IsNullOrWhiteSpace(releaseVersion)
+                ? string.Empty
+                : string.Format(ReleasePageUrlPattern, NormalizeVersion(releaseVersion));
         }
 
         public static string GetPlatformDisplayName()
@@ -175,6 +182,11 @@ namespace UnityCliBridge.Bridge.Editor
 
         public static CliInstallStatus GetStatus()
         {
+            return GetStatus(GetPackageVersion());
+        }
+
+        public static CliInstallStatus GetStatus(string? targetReleaseVersion)
+        {
             if (!IsInstalled)
             {
                 return CliInstallStatus.NotInstalled;
@@ -183,11 +195,17 @@ namespace UnityCliBridge.Bridge.Editor
             string? installedVersion = GetInstalledVersion();
             if (string.IsNullOrWhiteSpace(installedVersion))
             {
-                return CliInstallStatus.UpdateRequired;
+                return string.IsNullOrWhiteSpace(targetReleaseVersion)
+                    ? CliInstallStatus.UpToDate
+                    : CliInstallStatus.UpdateRequired;
             }
 
-            string packageVersion = GetPackageVersion();
-            return CompareVersions(installedVersion, packageVersion) >= 0
+            if (string.IsNullOrWhiteSpace(targetReleaseVersion))
+            {
+                return CliInstallStatus.UpToDate;
+            }
+
+            return CompareVersions(installedVersion, targetReleaseVersion) >= 0
                 ? CliInstallStatus.UpToDate
                 : CliInstallStatus.UpdateRequired;
         }
@@ -233,8 +251,14 @@ namespace UnityCliBridge.Bridge.Editor
                     }
                     else
                     {
-                        SetLatestReleaseCache(latestReleaseVersion);
+                        latestReleaseVersion = null;
+                        SetLatestReleaseCache(null);
                     }
+                }
+                else if (operation.Request.responseCode == 404)
+                {
+                    latestReleaseVersion = null;
+                    SetLatestReleaseCache(null);
                 }
                 else
                 {
@@ -294,16 +318,27 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             JObject responseJson = JObject.Parse(responseText);
+            bool isDraft = responseJson["draft"]?.Value<bool>() ?? false;
+            bool isPrerelease = responseJson["prerelease"]?.Value<bool>() ?? false;
+            if (isDraft || isPrerelease)
+            {
+                return null;
+            }
+
             string? tagName = responseJson["tag_name"]?.Value<string>()?.Trim();
             return string.IsNullOrWhiteSpace(tagName)
                 ? null
-                : tagName.TrimStart('v', 'V');
+                : NormalizeVersion(tagName);
         }
 
         private static Version ParseVersion(string version)
         {
-            string normalizedVersion = version.Trim().TrimStart('v', 'V');
-            return Version.Parse(normalizedVersion);
+            return Version.Parse(NormalizeVersion(version));
+        }
+
+        private static string NormalizeVersion(string version)
+        {
+            return version.Trim().TrimStart('v', 'V');
         }
 
         private static void SetLatestReleaseCache(string? latestReleaseVersion)
