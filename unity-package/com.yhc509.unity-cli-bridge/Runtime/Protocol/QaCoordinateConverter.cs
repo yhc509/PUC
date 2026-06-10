@@ -18,6 +18,19 @@ namespace UnityCli.Protocol
             return screenHeight - scaledY;
         }
 
+        public static bool IsAspectMismatch(int screenshotWidth, int screenshotHeight, int screenWidth, int screenHeight)
+        {
+            if (screenshotWidth <= 0 || screenshotHeight <= 0 || screenWidth <= 0 || screenHeight <= 0)
+            {
+                return false;
+            }
+
+            double screenshotAspect = (double)screenshotWidth / screenshotHeight;
+            double screenAspect = (double)screenWidth / screenHeight;
+            double relativeDiff = System.Math.Abs(screenshotAspect - screenAspect) / screenAspect;
+            return relativeDiff > 0.05;
+        }
+
         private static int ScaleCoordinate(int rawValue, int screenSize, int screenshotSize)
         {
             if (screenshotSize <= 0 || screenSize <= 0)
