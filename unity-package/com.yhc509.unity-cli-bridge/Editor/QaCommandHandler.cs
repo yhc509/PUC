@@ -231,21 +231,34 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static Vector2Int ResolveTapScreenPosition(QaTapArgs args)
         {
-            int screenshotWidth = args.screenshotWidth > 0 ? args.screenshotWidth : ScreenshotCommandHandler.LastCapturedWidth;
-            int screenshotHeight = args.screenshotHeight > 0 ? args.screenshotHeight : ScreenshotCommandHandler.LastCapturedHeight;
             Vector2Int screenSize = GetGameViewRenderSize();
+            Vector2Int screenshotSize = ResolveScreenshotSize(args.screenshotWidth, args.screenshotHeight, screenSize);
+            int screenshotWidth = screenshotSize.x;
+            int screenshotHeight = screenshotSize.y;
             WarnIfAspectMismatch(screenshotWidth, screenshotHeight, screenSize.x, screenSize.y);
             int screenX = QaCoordinateConverter.ConvertScreenshotXToScreenX(args.x, screenSize.x, screenshotWidth);
             int screenY = QaCoordinateConverter.ConvertScreenshotYToScreenY(args.y, screenSize.y, screenshotHeight);
             return new Vector2Int(screenX, screenY);
         }
 
+        private static Vector2Int ResolveScreenshotSize(int argWidth, int argHeight, Vector2Int gameViewSize)
+        {
+            int width = argWidth > 0
+                ? argWidth
+                : (ScreenshotCommandHandler.LastCapturedWidth > 0 ? ScreenshotCommandHandler.LastCapturedWidth : gameViewSize.x);
+            int height = argHeight > 0
+                ? argHeight
+                : (ScreenshotCommandHandler.LastCapturedHeight > 0 ? ScreenshotCommandHandler.LastCapturedHeight : gameViewSize.y);
+            return new Vector2Int(width, height);
+        }
+
         private static string HandleUiDump(string argumentsJson)
         {
             QaUiDumpArgs args = ProtocolJson.Deserialize<QaUiDumpArgs>(argumentsJson) ?? new QaUiDumpArgs();
-            int screenshotWidth = args.screenshotWidth > 0 ? args.screenshotWidth : ScreenshotCommandHandler.LastCapturedWidth;
-            int screenshotHeight = args.screenshotHeight > 0 ? args.screenshotHeight : ScreenshotCommandHandler.LastCapturedHeight;
             Vector2Int screenSize = GetGameViewRenderSize();
+            Vector2Int screenshotSize = ResolveScreenshotSize(args.screenshotWidth, args.screenshotHeight, screenSize);
+            int screenshotWidth = screenshotSize.x;
+            int screenshotHeight = screenshotSize.y;
             WarnIfAspectMismatch(screenshotWidth, screenshotHeight, screenSize.x, screenSize.y);
 
             List<QaUiElement> elements = CollectClickableUiElements(screenshotWidth, screenshotHeight, screenSize);
@@ -272,7 +285,8 @@ namespace UnityCliBridge.Bridge.Editor
                 if (behaviour == null
                     || behaviour is not IPointerClickHandler
                     || !behaviour.isActiveAndEnabled
-                    || !behaviour.gameObject.activeInHierarchy)
+                    || !behaviour.gameObject.activeInHierarchy
+                    || !behaviour.gameObject.TryGetComponent<RectTransform>(out _))
                 {
                     continue;
                 }
@@ -305,14 +319,9 @@ namespace UnityCliBridge.Bridge.Editor
             };
 
             ScreenPositionContext context = GetScreenPositionContext(gameObject);
-            if (context.RectTransform != null)
-            {
-                ApplyRectTransformImageBounds(element, context.RectTransform, context, screenshotWidth, screenshotHeight, screenSize);
-            }
-            else
-            {
-                ApplyPointImageBounds(element, gameObject, screenshotWidth, screenshotHeight, screenSize);
-            }
+            RectTransform rectTransform = context.RectTransform
+                ?? throw new InvalidOperationException("ui-dump elements must have a RectTransform.");
+            ApplyRectTransformImageBounds(element, rectTransform, context, screenshotWidth, screenshotHeight, screenSize);
 
             return element;
         }
@@ -429,25 +438,6 @@ namespace UnityCliBridge.Bridge.Editor
             element.height = imgBottom - imgTop;
             element.centerX = (imgLeft + imgRight) / 2;
             element.centerY = (imgTop + imgBottom) / 2;
-        }
-
-        private static void ApplyPointImageBounds(
-            QaUiElement element,
-            GameObject gameObject,
-            int screenshotWidth,
-            int screenshotHeight,
-            Vector2Int screenSize)
-        {
-            Vector2 screenPoint = GetScreenPosition(gameObject);
-            int centerX = QaCoordinateConverter.ConvertScreenXToScreenshotX((int)screenPoint.x, screenSize.x, screenshotWidth);
-            int centerY = QaCoordinateConverter.ConvertScreenYToScreenshotY((int)screenPoint.y, screenSize.y, screenshotHeight);
-
-            element.x = centerX;
-            element.y = centerY;
-            element.width = 0;
-            element.height = 0;
-            element.centerX = centerX;
-            element.centerY = centerY;
         }
 
         private static int CompareUiElements(QaUiElement left, QaUiElement right)
@@ -729,9 +719,10 @@ namespace UnityCliBridge.Bridge.Editor
         {
             if (string.IsNullOrWhiteSpace(args.target))
             {
-                int screenshotWidth = args.screenshotWidth > 0 ? args.screenshotWidth : ScreenshotCommandHandler.LastCapturedWidth;
-                int screenshotHeight = args.screenshotHeight > 0 ? args.screenshotHeight : ScreenshotCommandHandler.LastCapturedHeight;
                 Vector2Int screenSize = GetGameViewRenderSize();
+                Vector2Int screenshotSize = ResolveScreenshotSize(args.screenshotWidth, args.screenshotHeight, screenSize);
+                int screenshotWidth = screenshotSize.x;
+                int screenshotHeight = screenshotSize.y;
                 WarnIfAspectMismatch(screenshotWidth, screenshotHeight, screenSize.x, screenSize.y);
                 return new SwipeScreenPositions(
                     ConvertRawSwipeCoordinateToScreenPosition(args.fromX, args.fromY, screenshotWidth, screenshotHeight, screenSize),

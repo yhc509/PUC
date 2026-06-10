@@ -232,6 +232,8 @@ unity-cli qa wait-until --scene GameScene --timeout 5000
 
 `qa ui-dump` returns clickable UI elements with hierarchy `path`, visible `text`, `interactable`, and image-space rect/center fields. Feed a returned `path` to `qa click --target`, or `centerX`/`centerY` to `qa tap --x --y`.
 
+Returned `path` values are reliable when unique; if same-named siblings share a path, use `centerX`/`centerY` with `qa tap` instead.
+
 `screenshot` responses include both image size (`width`/`height`) and live input metadata (`screenWidth`/`screenHeight`, `imageOrigin=top-left`, `coordinateOrigin=bottom-left`). `qa tap` takes screenshot image coordinates as-is, reuses the last successful `screenshot` dimensions when `--screenshot-width`/`--screenshot-height` are omitted, and lets the bridge handle Y-flip plus resolution scaling into Unity screen space. See [qa-testing.md](tools/skills/unity-cli-operator/references/qa-testing.md) for the coordinate workflow.
 
 ## Token Optimization

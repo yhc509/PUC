@@ -41,6 +41,7 @@ status → play → (입력 시뮬레이션) → 검증 (로그 + 스크린샷) 
 ### 클릭 가능 UI 탐색 → 구조화 덤프 (ui-dump)
 - `qa ui-dump`는 현재 Play Mode 화면에서 `IPointerClickHandler`가 붙은 활성 GameObject를 수집한다.
 - 응답의 `path`는 `qa click --target <path>`에 바로 사용할 수 있다.
+- `path`는 고유할 때 신뢰할 수 있다. 같은 이름의 sibling이 같은 path를 공유하면 `centerX`/`centerY`로 `qa tap`을 사용한다.
 - `centerX`/`centerY`는 스크린샷 이미지 좌표(top-left origin)이므로 `qa tap --x <centerX> --y <centerY>`에 바로 사용할 수 있다.
 - `text`는 UGUI Text/TMP_Text 같은 자식 컴포넌트의 `text` 프로퍼티를 reflection으로 읽는다. TMP 패키지가 없어도 동작한다.
 - `qa ui-dump` 자체는 raycast를 하지 않으므로 EventSystem을 요구하지 않는다. 실제 `qa click`/`qa tap` 실행에는 EventSystem이 필요하다.
@@ -153,6 +154,8 @@ ucli screenshot --view game --path /tmp/qa-check.png --project "$P" --json
 2. Dump candidates: `qa ui-dump` -> inspect each element's `path`, `text`, `interactable`, `x`, `y`, `width`, `height`, `centerX`, `centerY`
 3. Prefer path click: `qa click --target <path>`
 4. If a coordinate tap is better, use `qa tap --x <centerX> --y <centerY>`
+
+Returned `path` values are reliable when unique; if same-named siblings share a path, use `centerX`/`centerY` with `qa tap` instead.
 
 If the dump should match a resized image, pass `--screenshot-width` and `--screenshot-height` together. Otherwise, the bridge uses the last successful `screenshot` dimensions when available.
 

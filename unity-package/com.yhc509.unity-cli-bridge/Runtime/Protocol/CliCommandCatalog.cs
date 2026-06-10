@@ -588,7 +588,7 @@ namespace UnityCli.Protocol
             new CliCommandDescriptor(
                 "qa ui-dump",
                 "qa ui-dump [--screenshot-width <int> --screenshot-height <int>]",
-                "Dumps currently clickable UI elements (path, type, text, interactable, image-space rect/center) as JSON; requires Play Mode. Feed a returned path to `qa click --target`, or centerX/centerY to `qa tap`. Coordinates use the last captured screenshot size unless overridden.",
+                "Dumps currently clickable UI elements (path, type, text, interactable, image-space rect/center) as JSON; requires Play Mode. Feed a returned path to `qa click --target`, or centerX/centerY to `qa tap`. The returned path is reliable when unique; if same-named siblings share a path, tap by centerX/centerY instead. Coordinates use the last captured screenshot size unless overridden.",
                 CliCommandGroup.QaWorkflows,
                 ProtocolConstants.CommandQaUiDump,
                 canUseLocal: false,
