@@ -6,8 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-10
+
+### Added
+- `qa ui-dump` lists the currently clickable UI elements as JSON — each with its hierarchy path, component type, child text, interactable state, and image-space rect/center — so an agent can resolve a target in one call instead of capturing a screenshot, analyzing the image, and guessing coordinates. Feed a returned `path` to `qa click --target`, or `centerX`/`centerY` to `qa tap`. Clickable elements are detected via `IPointerClickHandler` and restricted to RectTransform-backed UI; text and interactable state are read by reflection, so the package gains no dependency on `UnityEngine.UI` or TextMeshPro. Interactability honors the `CanvasGroup` chain via `Selectable.IsInteractable()`.
+- `screenshot --format <png|jpg>`, `--quality <1-100>`, and `--max-width <int>`. JPEG output and aspect-preserving downscaling make agent-consumed captures much smaller (PNG remains the default). The response reports the `format` written alongside the existing `fileSizeBytes`.
+- `qa wait-until --object-interactable <id|path>` waits until a target is active and actually interactable (honoring the `CanvasGroup` chain), and `qa wait-until --object-gone <id|path>` waits until a target disappears from the active hierarchy. These replace fixed sleeps with condition polling. Multiple conditions combine with AND; a self-contradictory combination on the same target is rejected up front.
+
 ### Fixed
 - `qa tap` / `qa swipe` coordinate conversion now samples the Game View render resolution (`Handles.GetMainGameViewSize()`) instead of the editor panel size, so taps no longer miss their target in Play Mode. Screenshot responses report the same render resolution in `screenWidth`/`screenHeight`.
+- When no screenshot has been captured and no explicit size is given, `qa tap` / `qa swipe` / `qa ui-dump` now fall back to the current Game View size as the coordinate basis instead of skipping the Y-flip, so coordinates stay top-left and round-trip even on the first call.
 
 ## [0.2.3] - 2026-06-05
 
