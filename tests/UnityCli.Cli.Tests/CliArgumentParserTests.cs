@@ -1323,6 +1323,40 @@ public sealed class CliArgumentParserTests
     }
 
     [Fact]
+    public void Parse_Screenshot_AcceptsLightweightOptions()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "screenshot",
+            "--format", "jpg",
+            "--quality", "70",
+            "--max-width", "1024"
+        ]);
+
+        Assert.Equal(CommandKind.Screenshot, parsed.Kind);
+        Assert.Equal("jpg", parsed.ScreenshotFormat);
+        Assert.Equal(70, parsed.ScreenshotQuality);
+        Assert.Equal(1024, parsed.ScreenshotMaxWidth);
+    }
+
+    [Fact]
+    public void ToEnvelope_Screenshot_IncludesLightweightOptions()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "screenshot",
+            "--format", "jpeg",
+            "--quality", "70",
+            "--max-width", "1024"
+        ]);
+
+        using var document = JsonDocument.Parse(parsed.ToEnvelope().argumentsJson);
+        var arguments = document.RootElement;
+
+        Assert.Equal("jpeg", arguments.GetProperty("format").GetString());
+        Assert.Equal(70, arguments.GetProperty("quality").GetInt32());
+        Assert.Equal(1024, arguments.GetProperty("maxWidth").GetInt32());
+    }
+
+    [Fact]
     public void Parse_Screenshot_AcceptsCameraName()
     {
         var parsed = CliArgumentParser.Parse([
@@ -1354,6 +1388,28 @@ public sealed class CliArgumentParserTests
 
         Assert.Contains("--view", ex.Message);
         Assert.Contains("--camera", ex.Message);
+    }
+
+    [Fact]
+    public void Parse_Screenshot_RejectsInvalidFormat()
+    {
+        var ex = Assert.Throws<CliUsageException>(() =>
+            CliArgumentParser.Parse(["screenshot", "--format", "webp"]));
+
+        Assert.Contains("--format", ex.Message);
+        Assert.Contains("png", ex.Message);
+        Assert.Contains("jpg", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("101")]
+    public void Parse_Screenshot_RejectsInvalidQuality(string quality)
+    {
+        var ex = Assert.Throws<CliUsageException>(() =>
+            CliArgumentParser.Parse(["screenshot", "--quality", quality]));
+
+        Assert.Contains("--quality", ex.Message);
     }
 
     [Fact]

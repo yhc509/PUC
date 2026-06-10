@@ -104,6 +104,7 @@ unity-cli compile                          # Trigger recompile
 unity-cli compile --wait                   # Wait until compile/import finishes and bridge is reachable
 unity-cli refresh --wait                   # Refresh assets and wait for Editor readiness
 unity-cli screenshot --path /tmp/shot.png  # Game View capture (default), or --view scene
+unity-cli screenshot --format jpg --quality 70 --max-width 1024 --path /tmp/shot.jpg
 unity-cli read-console --type error        # Check for errors after any operation
 unity-cli execute-menu --list "GameObject" # Browse Unity menus
 unity-cli execute --code "Debug.Log(1);" --force  # Run arbitrary C# (escape hatch)
@@ -222,6 +223,7 @@ A typical AI repair loop is: make a focused code change, `unity-cli refresh`, ru
 ```bash
 unity-cli qa click --qa-id StartButton
 unity-cli screenshot --view game --path /tmp/qa-reference.png
+unity-cli screenshot --view game --format jpg --quality 70 --max-width 1024 --path /tmp/qa-reference.jpg
 unity-cli qa ui-dump --json
 unity-cli qa tap --x 400 --y 300
 unity-cli qa swipe --from 100,200 --to 300,400

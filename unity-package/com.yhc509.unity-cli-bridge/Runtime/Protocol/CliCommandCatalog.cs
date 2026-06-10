@@ -159,8 +159,8 @@ namespace UnityCli.Protocol
                 notes: new[] { "Use --list to inspect registered menu item paths before executing one." }),
             new CliCommandDescriptor(
                 "screenshot",
-                "screenshot [--view game|scene (default: game) | --camera <name>] [--path <output.png>] [--width N] [--height N]",
-                "Captures a screenshot from the Game View, Scene View, or a named camera. Defaults to Game View when neither --view nor --camera is supplied. The response includes image size plus screen-space metadata (`screenWidth`, `screenHeight`, `imageOrigin`, `coordinateOrigin`) for QA coordinate alignment. In Play Mode, --view game can downscale the native Game View capture but does not upscale it.",
+                "screenshot [--view game|scene (default: game) | --camera <name>] [--path <output.png|output.jpg>] [--width N] [--height N] [--format png|jpg|jpeg] [--quality 1-100] [--max-width N]",
+                "Captures a screenshot from the Game View, Scene View, or a named camera. Defaults to Game View; encoding defaults to PNG. Use --format jpg with --quality to reduce file size, and --max-width to downscale proportionally when --width/--height are not specified. The response includes image size, actual saved format, and screen-space metadata (`screenWidth`, `screenHeight`, `imageOrigin`, `coordinateOrigin`) for QA coordinate alignment. In Play Mode, --view game can downscale the native Game View capture but does not upscale it.",
                 CliCommandGroup.EditorControl,
                 ProtocolConstants.CommandScreenshot,
                 canUseLocal: false,
@@ -169,6 +169,8 @@ namespace UnityCli.Protocol
                 notes: new[]
                 {
                     "Live-only.",
+                    "--format controls encoding regardless of --path extension; temporary paths use .png or .jpg to match the selected format.",
+                    "--max-width is ignored when --width or --height is specified.",
                     "Play Mode --view game captures at the native Game View size first; larger --width/--height requests warn and save at native resolution instead of upscaling.",
                 }),
             new CliCommandDescriptor(

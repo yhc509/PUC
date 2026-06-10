@@ -446,6 +446,15 @@ public static partial class CliArgumentParser
                 case CommandKind.Screenshot when token == "--height":
                     parsed.ScreenshotHeight = RequireInt(RequireValue(tokens, "--height"), "--height");
                     break;
+                case CommandKind.Screenshot when token == "--format":
+                    parsed.ScreenshotFormat = RequireScreenshotFormat(RequireValue(tokens, "--format"));
+                    break;
+                case CommandKind.Screenshot when token == "--quality":
+                    parsed.ScreenshotQuality = RequireScreenshotQuality(RequireValue(tokens, "--quality"));
+                    break;
+                case CommandKind.Screenshot when token == "--max-width":
+                    parsed.ScreenshotMaxWidth = RequireInt(RequireValue(tokens, "--max-width"), "--max-width");
+                    break;
                 case CommandKind.ExecuteCode when token == "--code":
                     parsed.ExecuteCodeSnippet = RequireValue(tokens, "--code");
                     break;

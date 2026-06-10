@@ -75,6 +75,9 @@ namespace UnityCli.Protocol
         public string? outputPath;
         public int width;
         public int height;
+        public string? format;
+        public int quality;
+        public int maxWidth;
     }
 
     [Serializable]
@@ -88,6 +91,7 @@ namespace UnityCli.Protocol
         public string coordinateOrigin = "bottom-left";
         public string imageOrigin = "top-left";
         public long fileSizeBytes;
+        public string format = "png";
     }
 
     [Serializable]

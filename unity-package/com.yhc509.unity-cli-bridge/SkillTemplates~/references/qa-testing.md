@@ -133,6 +133,7 @@ ucli read-console --type error --limit 5 --project "$P" --json
 
 ```bash
 ucli screenshot --view game --path /tmp/qa-check.png --project "$P" --json
+ucli screenshot --view game --format jpg --quality 70 --max-width 1024 --path /tmp/qa-check.jpg --project "$P" --json
 # 이후 이미지를 Read 도구로 확인
 ```
 
