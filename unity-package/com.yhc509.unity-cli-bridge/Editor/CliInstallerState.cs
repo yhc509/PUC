@@ -22,6 +22,7 @@ namespace UnityCliBridge.Bridge.Editor
         private const string InstalledVersionEditorPrefsKey = "UnityCliBridge.CLI.InstalledVersion";
         private const string LatestReleaseVersionKey = "UnityCliBridge.CLI.LatestReleaseVersion";
         private const string LatestReleaseCheckTimeKey = "UnityCliBridge.CLI.LatestReleaseCheckTime";
+        private const string LatestReleaseFailureCheckTimeKey = "UnityCliBridge.CLI.LatestReleaseFailureCheckTime";
         private const string PackageJsonFileName = "package.json";
         private const string RepositoryUrl = "https://github.com/yhc509/unity-cli-bridge";
         private const string GitHubApiLatestReleaseUrl = "https://api.github.com/repos/yhc509/unity-cli-bridge/releases/latest";
@@ -39,6 +40,7 @@ namespace UnityCliBridge.Bridge.Editor
         private const string MacPlatformDisplayName = "macOS arm64";
         private const string WindowsPlatformDisplayName = "Windows x64";
         private const int CacheExpirationMinutes = 60;
+        private const int FailureRetryDelayMinutes = 2;
         private const int LatestReleaseRequestTimeoutSeconds = 15;
         private static LatestReleaseFetchOperation? _activeLatestReleaseFetch;
 
@@ -100,7 +102,7 @@ namespace UnityCliBridge.Bridge.Editor
             string cachedCheckTime = EditorPrefs.GetString(LatestReleaseCheckTimeKey, string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(cachedCheckTime))
             {
-                return true;
+                return IsLatestReleaseFailureBackoffExpired();
             }
 
             if (!DateTimeOffset.TryParseExact(
@@ -110,13 +112,18 @@ namespace UnityCliBridge.Bridge.Editor
                     DateTimeStyles.RoundtripKind,
                     out DateTimeOffset lastCheckTimeUtc))
             {
-                return true;
+                return IsLatestReleaseFailureBackoffExpired();
             }
 
-            return lastCheckTimeUtc.AddMinutes(CacheExpirationMinutes) <= DateTimeOffset.UtcNow;
+            if (lastCheckTimeUtc.AddMinutes(CacheExpirationMinutes) > DateTimeOffset.UtcNow)
+            {
+                return false;
+            }
+
+            return IsLatestReleaseFailureBackoffExpired();
         }
 
-        public static void FetchLatestReleaseVersion(Action<string?> onComplete)
+        public static void FetchLatestReleaseVersion(Action<LatestReleaseFetchResult> onComplete)
         {
             if (onComplete == null)
             {
@@ -195,9 +202,7 @@ namespace UnityCliBridge.Bridge.Editor
             string? installedVersion = GetInstalledVersion();
             if (string.IsNullOrWhiteSpace(installedVersion))
             {
-                return string.IsNullOrWhiteSpace(targetReleaseVersion)
-                    ? CliInstallStatus.UpToDate
-                    : CliInstallStatus.UpdateRequired;
+                return CliInstallStatus.UpdateRequired;
             }
 
             if (string.IsNullOrWhiteSpace(targetReleaseVersion))
@@ -238,42 +243,45 @@ namespace UnityCliBridge.Bridge.Editor
             EditorApplication.update -= PollLatestReleaseFetch;
             _activeLatestReleaseFetch = null;
 
-            string? latestReleaseVersion = GetCachedLatestReleaseVersion();
+            LatestReleaseFetchResult result;
             try
             {
-                if (operation.Request.result == UnityWebRequest.Result.Success)
+                if (operation.Request.result == UnityWebRequest.Result.Success
+                    && operation.Request.responseCode == 200)
                 {
                     string? fetchedLatestReleaseVersion = ParseLatestReleaseVersion(operation.Request.downloadHandler.text);
                     if (!string.IsNullOrWhiteSpace(fetchedLatestReleaseVersion))
                     {
-                        latestReleaseVersion = fetchedLatestReleaseVersion;
                         SetLatestReleaseCache(fetchedLatestReleaseVersion);
+                        result = LatestReleaseFetchResult.Success(fetchedLatestReleaseVersion);
                     }
                     else
                     {
-                        latestReleaseVersion = null;
                         SetLatestReleaseCache(null);
+                        result = LatestReleaseFetchResult.Success(null);
                     }
                 }
                 else if (operation.Request.responseCode == 404)
                 {
-                    latestReleaseVersion = null;
                     SetLatestReleaseCache(null);
+                    result = LatestReleaseFetchResult.Success(null);
                 }
                 else
                 {
-                    SetLatestReleaseCache(latestReleaseVersion);
+                    SetLatestReleaseFailureBackoff();
+                    result = LatestReleaseFetchResult.Failure(GetCachedLatestReleaseVersion());
                 }
             }
             catch
             {
                 // Parse failure: keep the last known good version from cache.
-                SetLatestReleaseCache(latestReleaseVersion);
+                SetLatestReleaseFailureBackoff();
+                result = LatestReleaseFetchResult.Failure(GetCachedLatestReleaseVersion());
             }
 
             try
             {
-                operation.Complete(latestReleaseVersion);
+                operation.Complete(result);
             }
             finally
             {
@@ -351,6 +359,35 @@ namespace UnityCliBridge.Bridge.Editor
             EditorPrefs.SetString(
                 LatestReleaseCheckTimeKey,
                 DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+            EditorPrefs.DeleteKey(LatestReleaseFailureCheckTimeKey);
+        }
+
+        private static bool IsLatestReleaseFailureBackoffExpired()
+        {
+            string cachedFailureCheckTime = EditorPrefs.GetString(LatestReleaseFailureCheckTimeKey, string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(cachedFailureCheckTime))
+            {
+                return true;
+            }
+
+            if (!DateTimeOffset.TryParseExact(
+                    cachedFailureCheckTime,
+                    "O",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind,
+                    out DateTimeOffset lastFailureCheckTimeUtc))
+            {
+                return true;
+            }
+
+            return lastFailureCheckTimeUtc.AddMinutes(FailureRetryDelayMinutes) <= DateTimeOffset.UtcNow;
+        }
+
+        private static void SetLatestReleaseFailureBackoff()
+        {
+            EditorPrefs.SetString(
+                LatestReleaseFailureCheckTimeKey,
+                DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
         }
 
         private static void GetPlatformAssetInfo(out string platformAssetName, out string archiveExtension)
@@ -372,9 +409,9 @@ namespace UnityCliBridge.Bridge.Editor
 
         private sealed class LatestReleaseFetchOperation : IDisposable
         {
-            private Action<string?> _onComplete;
+            private Action<LatestReleaseFetchResult> _onComplete;
 
-            public LatestReleaseFetchOperation(UnityWebRequest request, Action<string?> onComplete)
+            public LatestReleaseFetchOperation(UnityWebRequest request, Action<LatestReleaseFetchResult> onComplete)
             {
                 Request = request ?? throw new ArgumentNullException(nameof(request));
                 _onComplete = onComplete ?? throw new ArgumentNullException(nameof(onComplete));
@@ -382,7 +419,7 @@ namespace UnityCliBridge.Bridge.Editor
 
             public UnityWebRequest Request { get; }
 
-            public void AddOnComplete(Action<string?> onComplete)
+            public void AddOnComplete(Action<LatestReleaseFetchResult> onComplete)
             {
                 if (onComplete == null)
                 {
@@ -392,14 +429,37 @@ namespace UnityCliBridge.Bridge.Editor
                 _onComplete += onComplete;
             }
 
-            public void Complete(string? latestReleaseVersion)
+            public void Complete(LatestReleaseFetchResult result)
             {
-                _onComplete(latestReleaseVersion);
+                _onComplete(result);
             }
 
             public void Dispose()
             {
                 Request.Dispose();
+            }
+        }
+
+        public readonly struct LatestReleaseFetchResult
+        {
+            private LatestReleaseFetchResult(bool succeeded, string? latestReleaseVersion)
+            {
+                Succeeded = succeeded;
+                LatestReleaseVersion = latestReleaseVersion;
+            }
+
+            public bool Succeeded { get; }
+
+            public string? LatestReleaseVersion { get; }
+
+            public static LatestReleaseFetchResult Success(string? latestReleaseVersion)
+            {
+                return new LatestReleaseFetchResult(true, latestReleaseVersion);
+            }
+
+            public static LatestReleaseFetchResult Failure(string? latestReleaseVersion)
+            {
+                return new LatestReleaseFetchResult(false, latestReleaseVersion);
             }
         }
     }

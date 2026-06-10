@@ -31,6 +31,7 @@ namespace UnityCliBridge.Bridge.Editor
         private bool _hasLoadedState;
         private bool _isDownloading;
         private bool _isFetchingLatestVersion;
+        private bool _latestReleaseCheckFailed;
         private bool _isUpdateAvailable;
         private SkillTarget _skillTarget;
 
@@ -152,6 +153,16 @@ namespace UnityCliBridge.Bridge.Editor
                     using (new EditorGUI.DisabledScope(true))
                     {
                         GUILayout.Button("Checking release...", GUILayout.Height(28f));
+                    }
+
+                    return;
+                }
+
+                if (_latestReleaseCheckFailed && string.IsNullOrWhiteSpace(_latestReleaseVersion))
+                {
+                    if (GUILayout.Button("Retry release check", GUILayout.Height(28f)))
+                    {
+                        RefreshLatestReleaseVersion(true);
                     }
 
                     return;
@@ -360,6 +371,7 @@ namespace UnityCliBridge.Bridge.Editor
                 _pathCommand = string.Empty;
                 _status = CliInstallStatus.NotInstalled;
                 _isFetchingLatestVersion = false;
+                _latestReleaseCheckFailed = false;
                 ResetUpdateAvailabilityCache();
 
                 if (string.IsNullOrWhiteSpace(_errorMessage))
@@ -369,22 +381,24 @@ namespace UnityCliBridge.Bridge.Editor
             }
         }
 
-        private void RefreshLatestReleaseVersion()
+        private void RefreshLatestReleaseVersion(bool forceRefresh = false)
         {
             _latestReleaseVersion = CliInstallerState.GetCachedLatestReleaseVersion() ?? string.Empty;
             RefreshReleaseDerivedState();
-            if (_isFetchingLatestVersion || !CliInstallerState.IsLatestReleaseCacheExpired())
+            if (_isFetchingLatestVersion || (!forceRefresh && !CliInstallerState.IsLatestReleaseCacheExpired()))
             {
                 return;
             }
 
             _isFetchingLatestVersion = true;
+            _latestReleaseCheckFailed = false;
             CliInstallerState.FetchLatestReleaseVersion(HandleLatestReleaseVersionFetched);
         }
 
-        private void HandleLatestReleaseVersionFetched(string? latestReleaseVersion)
+        private void HandleLatestReleaseVersionFetched(CliInstallerState.LatestReleaseFetchResult result)
         {
-            _latestReleaseVersion = latestReleaseVersion ?? string.Empty;
+            _latestReleaseVersion = result.LatestReleaseVersion ?? string.Empty;
+            _latestReleaseCheckFailed = !result.Succeeded;
             _isFetchingLatestVersion = false;
             RefreshReleaseDerivedState();
             Repaint();
@@ -436,6 +450,11 @@ namespace UnityCliBridge.Bridge.Editor
                 return "Checking...";
             }
 
+            if (_latestReleaseCheckFailed && string.IsNullOrWhiteSpace(_latestReleaseVersion))
+            {
+                return "Check failed";
+            }
+
             return FormatVersion(_latestReleaseVersion);
         }
 
@@ -449,6 +468,13 @@ namespace UnityCliBridge.Bridge.Editor
             if (_isFetchingLatestVersion && string.IsNullOrWhiteSpace(_latestReleaseVersion))
             {
                 return "Checking the latest published CLI release...";
+            }
+
+            if (_latestReleaseCheckFailed)
+            {
+                return string.IsNullOrWhiteSpace(_latestReleaseVersion)
+                    ? "Could not check the latest published CLI release. You can retry the release check."
+                    : "Could not refresh the latest published CLI release. Using the cached release version.";
             }
 
             if (string.IsNullOrWhiteSpace(_latestReleaseVersion))
