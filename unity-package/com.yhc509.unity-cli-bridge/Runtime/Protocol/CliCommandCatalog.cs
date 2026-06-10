@@ -608,7 +608,7 @@ namespace UnityCli.Protocol
             new CliCommandDescriptor(
                 "qa wait-until",
                 "qa wait-until (--scene <name> | --log-contains <text> | --object-exists <qa-id|path> | --object-interactable <qa-id|path> | --object-gone <qa-id|path>) [--timeout <ms>]",
-                "Polls the editor until a condition is met or timeout expires; supports waiting for clickable/interactable UI or inactive/destroyed objects; requires Play Mode.",
+                "Polls the editor until all supplied conditions are met (AND) or timeout expires; supports waiting for clickable/interactable UI or inactive/destroyed objects; requires Play Mode.",
                 CliCommandGroup.QaWorkflows,
                 ProtocolConstants.CommandQaWaitUntil,
                 canUseLocal: false,

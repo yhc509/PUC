@@ -308,6 +308,46 @@ public sealed class QaParserTests
     }
 
     [Fact]
+    public void Parse_QaWaitUntil_WithSameObjectGoneAndObjectExists_ThrowsUsage()
+    {
+        var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "qa", "wait-until",
+            "--object-gone", "Foo",
+            "--object-exists", "Foo"
+        ]));
+
+        Assert.Contains("--object-gone", ex.Message);
+        Assert.Contains("--object-exists", ex.Message);
+    }
+
+    [Fact]
+    public void Parse_QaWaitUntil_WithSameObjectGoneAndObjectInteractable_ThrowsUsage()
+    {
+        var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "qa", "wait-until",
+            "--object-gone", "Foo",
+            "--object-interactable", "Foo"
+        ]));
+
+        Assert.Contains("--object-gone", ex.Message);
+        Assert.Contains("--object-interactable", ex.Message);
+    }
+
+    [Fact]
+    public void Parse_QaWaitUntil_WithDifferentObjectGoneAndObjectExists_Succeeds()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "qa", "wait-until",
+            "--object-gone", "A",
+            "--object-exists", "B"
+        ]);
+
+        Assert.Equal(CommandKind.QaWaitUntil, parsed.Kind);
+        Assert.Equal("A", parsed.QaWaitObjectGone);
+        Assert.Equal("B", parsed.QaWaitObjectExists);
+    }
+
+    [Fact]
     public void Parse_QaClick_ToEnvelope_UsesQaClickCommand()
     {
         var parsed = CliArgumentParser.Parse(["qa", "click", "--qa-id", "test-btn"]);

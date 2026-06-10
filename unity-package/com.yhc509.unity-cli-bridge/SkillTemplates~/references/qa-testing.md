@@ -250,7 +250,7 @@ ucli qa wait-until --log-contains "Game started" --timeout 5000 --project "$P" -
 ucli stop --project "$P" --json
 ```
 
-고정 대기 대신 화면 상태를 조건으로 기다리면 불필요한 sleep을 줄일 수 있다. 버튼은 활성화와 `interactable=true`를 함께 기다리고, 로딩 표시는 active hierarchy에서 사라질 때까지 기다린다. `--object-interactable`은 대상 컴포넌트의 public bool `interactable` 프로퍼티를 읽으며, 해당 프로퍼티가 없는 오브젝트는 active로 resolve되면 true로 취급한다.
+고정 대기 대신 화면 상태를 조건으로 기다리면 불필요한 sleep을 줄일 수 있다. 여러 조건을 함께 지정하면 모두(AND) 충족돼야 한다. 버튼은 활성화와 유효 interactable 상태를 함께 기다리고, 로딩 표시는 active hierarchy에서 사라질 때까지 기다린다. `--object-interactable`은 대상 컴포넌트의 `IsInteractable()` 결과를 우선 사용하고, 없으면 public bool `interactable` 프로퍼티를 읽으며, 해당 상태가 없는 오브젝트는 active로 resolve되면 true로 취급한다.
 
 ```bash
 # 시작 버튼이 클릭 가능해질 때까지 대기 후 클릭

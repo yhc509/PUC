@@ -381,6 +381,36 @@ namespace UnityCliBridge.Bridge.Editor
                     continue;
                 }
 
+                MethodInfo? method = component.GetType().GetMethod(
+                    "IsInteractable",
+                    BindingFlags.Instance | BindingFlags.Public,
+                    null,
+                    Type.EmptyTypes,
+                    null);
+                if (method == null || method.ReturnType != typeof(bool))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    if (method.Invoke(component, null) is bool value)
+                    {
+                        return value;
+                    }
+                }
+                catch (Exception)
+                {
+                }
+            }
+
+            foreach (Component component in components)
+            {
+                if (component == null)
+                {
+                    continue;
+                }
+
                 PropertyInfo? property = component.GetType().GetProperty("interactable", BindingFlags.Instance | BindingFlags.Public);
                 if (property == null || property.PropertyType != typeof(bool) || property.GetIndexParameters().Length != 0)
                 {
