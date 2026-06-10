@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Reflection;
 using System.Threading.Tasks;
 using UnityCli.Protocol;
 using UnityEditor;
@@ -28,6 +29,7 @@ namespace UnityCliBridge.Bridge.Editor
                 || string.Equals(command, ProtocolConstants.CommandQaTap, StringComparison.Ordinal)
                 || string.Equals(command, ProtocolConstants.CommandQaSwipe, StringComparison.Ordinal)
                 || string.Equals(command, ProtocolConstants.CommandQaKey, StringComparison.Ordinal)
+                || string.Equals(command, ProtocolConstants.CommandQaUiDump, StringComparison.Ordinal)
                 || string.Equals(command, ProtocolConstants.CommandQaWaitUntil, StringComparison.Ordinal);
         }
 
@@ -53,6 +55,11 @@ namespace UnityCliBridge.Bridge.Editor
             if (string.Equals(command, ProtocolConstants.CommandQaKey, StringComparison.Ordinal))
             {
                 return HandleKey(argumentsJson);
+            }
+
+            if (string.Equals(command, ProtocolConstants.CommandQaUiDump, StringComparison.Ordinal))
+            {
+                return HandleUiDump(argumentsJson);
             }
 
             if (string.Equals(command, ProtocolConstants.CommandQaSwipe, StringComparison.Ordinal))
@@ -224,13 +231,230 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static Vector2Int ResolveTapScreenPosition(QaTapArgs args)
         {
-            int screenshotWidth = args.screenshotWidth > 0 ? args.screenshotWidth : ScreenshotCommandHandler.LastCapturedWidth;
-            int screenshotHeight = args.screenshotHeight > 0 ? args.screenshotHeight : ScreenshotCommandHandler.LastCapturedHeight;
             Vector2Int screenSize = GetGameViewRenderSize();
+            Vector2Int screenshotSize = ResolveScreenshotSize(args.screenshotWidth, args.screenshotHeight, screenSize);
+            int screenshotWidth = screenshotSize.x;
+            int screenshotHeight = screenshotSize.y;
             WarnIfAspectMismatch(screenshotWidth, screenshotHeight, screenSize.x, screenSize.y);
             int screenX = QaCoordinateConverter.ConvertScreenshotXToScreenX(args.x, screenSize.x, screenshotWidth);
             int screenY = QaCoordinateConverter.ConvertScreenshotYToScreenY(args.y, screenSize.y, screenshotHeight);
             return new Vector2Int(screenX, screenY);
+        }
+
+        private static Vector2Int ResolveScreenshotSize(int argWidth, int argHeight, Vector2Int gameViewSize)
+        {
+            int width = argWidth > 0
+                ? argWidth
+                : (ScreenshotCommandHandler.LastCapturedWidth > 0 ? ScreenshotCommandHandler.LastCapturedWidth : gameViewSize.x);
+            int height = argHeight > 0
+                ? argHeight
+                : (ScreenshotCommandHandler.LastCapturedHeight > 0 ? ScreenshotCommandHandler.LastCapturedHeight : gameViewSize.y);
+            return new Vector2Int(width, height);
+        }
+
+        private static string HandleUiDump(string argumentsJson)
+        {
+            QaUiDumpArgs args = ProtocolJson.Deserialize<QaUiDumpArgs>(argumentsJson) ?? new QaUiDumpArgs();
+            Vector2Int screenSize = GetGameViewRenderSize();
+            Vector2Int screenshotSize = ResolveScreenshotSize(args.screenshotWidth, args.screenshotHeight, screenSize);
+            int screenshotWidth = screenshotSize.x;
+            int screenshotHeight = screenshotSize.y;
+            WarnIfAspectMismatch(screenshotWidth, screenshotHeight, screenSize.x, screenSize.y);
+
+            List<QaUiElement> elements = CollectClickableUiElements(screenshotWidth, screenshotHeight, screenSize);
+            elements.Sort(CompareUiElements);
+
+            return ProtocolJson.Serialize(new QaUiDumpPayload
+            {
+                elements = elements.ToArray(),
+            });
+        }
+
+        private static List<QaUiElement> CollectClickableUiElements(int screenshotWidth, int screenshotHeight, Vector2Int screenSize)
+        {
+            var elements = new List<QaUiElement>();
+            var seenGameObjects = new HashSet<int>();
+
+#if UNITY_2022_2_OR_NEWER
+            MonoBehaviour[] behaviours = UnityEngine.Object.FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+#else
+            MonoBehaviour[] behaviours = UnityEngine.Object.FindObjectsOfType<MonoBehaviour>();
+#endif
+            foreach (MonoBehaviour behaviour in behaviours)
+            {
+                if (behaviour == null
+                    || behaviour is not IPointerClickHandler
+                    || !behaviour.isActiveAndEnabled
+                    || !behaviour.gameObject.activeInHierarchy
+                    || !behaviour.gameObject.TryGetComponent<RectTransform>(out _))
+                {
+                    continue;
+                }
+
+                GameObject gameObject = behaviour.gameObject;
+                if (!seenGameObjects.Add(gameObject.GetInstanceID()))
+                {
+                    continue;
+                }
+
+                elements.Add(CreateUiElement(gameObject, behaviour, screenshotWidth, screenshotHeight, screenSize));
+            }
+
+            return elements;
+        }
+
+        private static QaUiElement CreateUiElement(
+            GameObject gameObject,
+            MonoBehaviour clickHandler,
+            int screenshotWidth,
+            int screenshotHeight,
+            Vector2Int screenSize)
+        {
+            var element = new QaUiElement
+            {
+                path = GetGameObjectPath(gameObject),
+                type = GetPointerClickHandlerTypeName(gameObject, clickHandler.GetType().Name),
+                text = GetFirstTextValue(gameObject),
+                interactable = GetInteractableValue(gameObject),
+            };
+
+            ScreenPositionContext context = GetScreenPositionContext(gameObject);
+            RectTransform rectTransform = context.RectTransform
+                ?? throw new InvalidOperationException("ui-dump elements must have a RectTransform.");
+            ApplyRectTransformImageBounds(element, rectTransform, context, screenshotWidth, screenshotHeight, screenSize);
+
+            return element;
+        }
+
+        private static string GetPointerClickHandlerTypeName(GameObject gameObject, string fallbackTypeName)
+        {
+            MonoBehaviour[] behaviours = gameObject.GetComponents<MonoBehaviour>();
+            foreach (MonoBehaviour behaviour in behaviours)
+            {
+                if (behaviour != null && behaviour is IPointerClickHandler && behaviour.isActiveAndEnabled)
+                {
+                    return behaviour.GetType().Name;
+                }
+            }
+
+            return fallbackTypeName;
+        }
+
+        private static string GetFirstTextValue(GameObject gameObject)
+        {
+            Component[] components = gameObject.GetComponentsInChildren<Component>(includeInactive: true);
+            foreach (Component component in components)
+            {
+                if (component == null)
+                {
+                    continue;
+                }
+
+                PropertyInfo? property = component.GetType().GetProperty("text", BindingFlags.Instance | BindingFlags.Public);
+                if (property == null || property.PropertyType != typeof(string) || property.GetIndexParameters().Length != 0)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    if (property.GetValue(component) is string value && !string.IsNullOrEmpty(value))
+                    {
+                        return value;
+                    }
+                }
+                catch (Exception)
+                {
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static bool GetInteractableValue(GameObject gameObject)
+        {
+            Component[] components = gameObject.GetComponents<Component>();
+            foreach (Component component in components)
+            {
+                if (component == null)
+                {
+                    continue;
+                }
+
+                PropertyInfo? property = component.GetType().GetProperty("interactable", BindingFlags.Instance | BindingFlags.Public);
+                if (property == null || property.PropertyType != typeof(bool) || property.GetIndexParameters().Length != 0)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    if (property.GetValue(component) is bool value)
+                    {
+                        return value;
+                    }
+                }
+                catch (Exception)
+                {
+                }
+            }
+
+            return true;
+        }
+
+        private static void ApplyRectTransformImageBounds(
+            QaUiElement element,
+            RectTransform rectTransform,
+            ScreenPositionContext context,
+            int screenshotWidth,
+            int screenshotHeight,
+            Vector2Int screenSize)
+        {
+            var corners = new Vector3[4];
+            rectTransform.GetWorldCorners(corners);
+
+            float minX = float.MaxValue;
+            float minY = float.MaxValue;
+            float maxX = float.MinValue;
+            float maxY = float.MinValue;
+
+            for (int index = 0; index < corners.Length; index++)
+            {
+                Vector2 screenPoint = WorldToScreenPoint(corners[index], context);
+                minX = Mathf.Min(minX, screenPoint.x);
+                minY = Mathf.Min(minY, screenPoint.y);
+                maxX = Mathf.Max(maxX, screenPoint.x);
+                maxY = Mathf.Max(maxY, screenPoint.y);
+            }
+
+            int imgLeft = QaCoordinateConverter.ConvertScreenXToScreenshotX((int)minX, screenSize.x, screenshotWidth);
+            int imgRight = QaCoordinateConverter.ConvertScreenXToScreenshotX((int)maxX, screenSize.x, screenshotWidth);
+            int imgTop = QaCoordinateConverter.ConvertScreenYToScreenshotY((int)maxY, screenSize.y, screenshotHeight);
+            int imgBottom = QaCoordinateConverter.ConvertScreenYToScreenshotY((int)minY, screenSize.y, screenshotHeight);
+
+            element.x = imgLeft;
+            element.y = imgTop;
+            element.width = imgRight - imgLeft;
+            element.height = imgBottom - imgTop;
+            element.centerX = (imgLeft + imgRight) / 2;
+            element.centerY = (imgTop + imgBottom) / 2;
+        }
+
+        private static int CompareUiElements(QaUiElement left, QaUiElement right)
+        {
+            int compare = left.centerY.CompareTo(right.centerY);
+            if (compare != 0)
+            {
+                return compare;
+            }
+
+            compare = left.centerX.CompareTo(right.centerX);
+            if (compare != 0)
+            {
+                return compare;
+            }
+
+            return string.CompareOrdinal(left.path, right.path);
         }
 
         private static string HandleKey(string argumentsJson)
@@ -495,9 +719,10 @@ namespace UnityCliBridge.Bridge.Editor
         {
             if (string.IsNullOrWhiteSpace(args.target))
             {
-                int screenshotWidth = args.screenshotWidth > 0 ? args.screenshotWidth : ScreenshotCommandHandler.LastCapturedWidth;
-                int screenshotHeight = args.screenshotHeight > 0 ? args.screenshotHeight : ScreenshotCommandHandler.LastCapturedHeight;
                 Vector2Int screenSize = GetGameViewRenderSize();
+                Vector2Int screenshotSize = ResolveScreenshotSize(args.screenshotWidth, args.screenshotHeight, screenSize);
+                int screenshotWidth = screenshotSize.x;
+                int screenshotHeight = screenshotSize.y;
                 WarnIfAspectMismatch(screenshotWidth, screenshotHeight, screenSize.x, screenSize.y);
                 return new SwipeScreenPositions(
                     ConvertRawSwipeCoordinateToScreenPosition(args.fromX, args.fromY, screenshotWidth, screenshotHeight, screenSize),

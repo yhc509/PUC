@@ -378,6 +378,9 @@ public static partial class CliArgumentParser
             case CommandKind.QaTap:
                 ValidateQaScreenshotDimensions(parsed, "`qa tap`");
                 break;
+            case CommandKind.QaUiDump:
+                ValidateQaScreenshotDimensions(parsed, "`qa ui-dump`");
+                break;
             case CommandKind.QaSwipe when string.IsNullOrWhiteSpace(parsed.QaSwipeFrom) || string.IsNullOrWhiteSpace(parsed.QaSwipeTo):
                 throw new CliUsageException("`qa swipe`에는 `--from`과 `--to`가 모두 필요합니다.");
             case CommandKind.QaSwipe:
@@ -548,6 +551,7 @@ public static partial class CliArgumentParser
             CommandKind.QaTap => "qa tap",
             CommandKind.QaSwipe => "qa swipe",
             CommandKind.QaKey => "qa key",
+            CommandKind.QaUiDump => "qa ui-dump",
             CommandKind.QaWait => "qa wait",
             CommandKind.QaWaitUntil => "qa wait-until",
             CommandKind.InstancesList => "instances list",

@@ -61,6 +61,7 @@ public enum CommandKind
     QaTap,
     QaSwipe,
     QaKey,
+    QaUiDump,
     QaWait,
     QaWaitUntil,
 }
@@ -229,6 +230,7 @@ public sealed class ParsedCommand
                 CommandKind.QaTap => ProtocolConstants.CommandQaTap,
                 CommandKind.QaSwipe => ProtocolConstants.CommandQaSwipe,
                 CommandKind.QaKey => ProtocolConstants.CommandQaKey,
+                CommandKind.QaUiDump => ProtocolConstants.CommandQaUiDump,
                 CommandKind.QaWaitUntil => ProtocolConstants.CommandQaWaitUntil,
                 CommandKind.AssetFind => ProtocolConstants.CommandAssetFind,
                 CommandKind.AssetTypes => ProtocolConstants.CommandAssetTypes,
@@ -354,6 +356,11 @@ public sealed class ParsedCommand
             {
                 x = QaTapX ?? 0,
                 y = QaTapY ?? 0,
+                screenshotWidth = QaScreenshotWidth ?? 0,
+                screenshotHeight = QaScreenshotHeight ?? 0,
+            },
+            CommandKind.QaUiDump => new QaUiDumpArgs
+            {
                 screenshotWidth = QaScreenshotWidth ?? 0,
                 screenshotHeight = QaScreenshotHeight ?? 0,
             },

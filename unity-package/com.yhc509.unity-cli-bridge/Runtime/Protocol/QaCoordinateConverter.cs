@@ -7,6 +7,11 @@ namespace UnityCli.Protocol
             return ScaleCoordinate(rawX, screenWidth, screenshotWidth);
         }
 
+        public static int ConvertScreenXToScreenshotX(int screenX, int screenWidth, int screenshotWidth)
+        {
+            return ScaleCoordinate(screenX, screenshotWidth, screenWidth);
+        }
+
         public static int ConvertScreenshotYToScreenY(int rawY, int screenHeight, int screenshotHeight)
         {
             if (screenshotHeight <= 0 || screenHeight <= 0)
@@ -16,6 +21,16 @@ namespace UnityCli.Protocol
 
             int scaledY = ScaleCoordinate(rawY, screenHeight, screenshotHeight);
             return screenHeight - scaledY;
+        }
+
+        public static int ConvertScreenYToScreenshotY(int screenY, int screenHeight, int screenshotHeight)
+        {
+            if (screenHeight <= 0 || screenshotHeight <= 0)
+            {
+                return screenY;
+            }
+
+            return ScaleCoordinate(screenHeight - screenY, screenshotHeight, screenHeight);
         }
 
         public static bool IsAspectMismatch(int screenshotWidth, int screenshotHeight, int screenWidth, int screenHeight)

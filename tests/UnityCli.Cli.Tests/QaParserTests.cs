@@ -54,6 +54,20 @@ public sealed class QaParserTests
     }
 
     [Fact]
+    public void Parse_QaUiDump_AcceptsScreenshotDimensions()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "qa", "ui-dump",
+            "--screenshot-width", "800",
+            "--screenshot-height", "600"
+        ]);
+
+        Assert.Equal(CommandKind.QaUiDump, parsed.Kind);
+        Assert.Equal(800, parsed.QaScreenshotWidth);
+        Assert.Equal(600, parsed.QaScreenshotHeight);
+    }
+
+    [Fact]
     public void Parse_QaSwipe_AcceptsDuration()
     {
         var parsed = CliArgumentParser.Parse(["qa", "swipe", "--from", "100,200", "--to", "300,400", "--duration", "500"]);
@@ -202,6 +216,18 @@ public sealed class QaParserTests
     }
 
     [Fact]
+    public void Parse_QaUiDump_WithOnlyScreenshotWidth_ThrowsUsage()
+    {
+        var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "qa", "ui-dump",
+            "--screenshot-width", "800"
+        ]));
+
+        Assert.Contains("--screenshot-width", ex.Message);
+        Assert.Contains("--screenshot-height", ex.Message);
+    }
+
+    [Fact]
     public void Parse_QaSwipe_WithInvalidCoordinate_ThrowsUsage()
     {
         var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
@@ -304,6 +330,23 @@ public sealed class QaParserTests
 
         Assert.Equal(1920, arguments.GetProperty("screenshotWidth").GetInt32());
         Assert.Equal(1080, arguments.GetProperty("screenshotHeight").GetInt32());
+    }
+
+    [Fact]
+    public void Parse_QaUiDump_ToEnvelope_UsesQaUiDumpCommand()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "qa", "ui-dump",
+            "--screenshot-width", "800",
+            "--screenshot-height", "600"
+        ]);
+
+        var envelope = parsed.ToEnvelope();
+        var arguments = ParseArguments(envelope.argumentsJson);
+
+        Assert.Equal(ProtocolConstants.CommandQaUiDump, envelope.command);
+        Assert.Equal(800, arguments.GetProperty("screenshotWidth").GetInt32());
+        Assert.Equal(600, arguments.GetProperty("screenshotHeight").GetInt32());
     }
 
     [Fact]
@@ -413,6 +456,7 @@ public sealed class QaParserTests
         Assert.Contains("qa tap", helpText);
         Assert.Contains("qa swipe [--target <path>] --from <x,y> --to <x,y> [--duration <ms>] [--screenshot-width <int> --screenshot-height <int>]", helpText);
         Assert.Contains("qa key", helpText);
+        Assert.Contains("qa ui-dump", helpText);
         Assert.Contains("qa wait --ms <int>", helpText);
         Assert.Contains("qa wait-until", helpText);
         Assert.Contains("qa tap and coordinate-based qa swipe treat coordinates as screenshot pixels with a top-left origin", helpText);
@@ -432,6 +476,18 @@ public sealed class QaParserTests
         Assert.Contains("last captured screenshot", descriptor.Summary);
         Assert.Contains("pixel offsets from the target RectTransform center", descriptor.Summary);
         Assert.Contains("multiple frames", descriptor.Summary);
+    }
+
+    [Fact]
+    public void QaUiDump_CommandCatalog_DescribesClickableUiDump()
+    {
+        CliCommandDescriptor? descriptor = CliCommandCatalog.FindByCommand("qa ui-dump");
+
+        Assert.NotNull(descriptor);
+        Assert.Contains("--screenshot-width <int> --screenshot-height <int>", descriptor!.Synopsis);
+        Assert.Contains("clickable UI elements", descriptor.Summary);
+        Assert.Contains("centerX/centerY", descriptor.Summary);
+        Assert.Equal(ProtocolConstants.CommandQaUiDump, descriptor.ProtocolCommand);
     }
 
     private static JsonElement ParseArguments(string argumentsJson)

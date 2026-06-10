@@ -97,6 +97,7 @@ namespace UnityCli.Protocol
         public const string CommandQaTap = "qa-tap";
         public const string CommandQaSwipe = "qa-swipe";
         public const string CommandQaKey = "qa-key";
+        public const string CommandQaUiDump = "qa-ui-dump";
         public const string CommandQaWaitUntil = "qa-wait-until";
         public const int DefaultQaWaitUntilTimeoutMs = 10_000;
         public const int DefaultQaSwipeDurationMs = 300;

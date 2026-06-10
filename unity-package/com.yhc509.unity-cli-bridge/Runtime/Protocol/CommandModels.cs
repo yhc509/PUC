@@ -500,6 +500,34 @@ namespace UnityCli.Protocol
     }
 
     [Serializable]
+    public sealed class QaUiDumpArgs
+    {
+        public int screenshotWidth;
+        public int screenshotHeight;
+    }
+
+    [Serializable]
+    public sealed class QaUiElement
+    {
+        public string path = string.Empty;
+        public string type = string.Empty;
+        public string text = string.Empty;
+        public bool interactable;
+        public int x;
+        public int y;
+        public int width;
+        public int height;
+        public int centerX;
+        public int centerY;
+    }
+
+    [Serializable]
+    public sealed class QaUiDumpPayload
+    {
+        public QaUiElement[] elements = Array.Empty<QaUiElement>();
+    }
+
+    [Serializable]
     public sealed class QaSwipeArgs
     {
         public string target = string.Empty;
