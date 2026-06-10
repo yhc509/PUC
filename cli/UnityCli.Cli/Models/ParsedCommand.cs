@@ -177,6 +177,8 @@ public sealed class ParsedCommand
     public string? QaWaitScene { get; set; }
     public string? QaWaitLogContains { get; set; }
     public string? QaWaitObjectExists { get; set; }
+    public string? QaWaitObjectInteractable { get; set; }
+    public string? QaWaitObjectGone { get; set; }
     public int QaWaitTimeout { get; set; } = ProtocolConstants.DefaultQaWaitUntilTimeoutMs;
 
     public CommandEnvelope ToEnvelope()
@@ -390,6 +392,8 @@ public sealed class ParsedCommand
                 scene = QaWaitScene,
                 logContains = QaWaitLogContains,
                 objectExists = QaWaitObjectExists,
+                objectInteractable = QaWaitObjectInteractable,
+                objectGone = QaWaitObjectGone,
                 timeoutMs = QaWaitTimeout,
             },
             CommandKind.AssetFind => new AssetFindArgs

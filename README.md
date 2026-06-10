@@ -230,9 +230,13 @@ unity-cli qa swipe --from 100,200 --to 300,400
 unity-cli qa swipe --target ... --from 0,0 --to 100,0 --duration 500
 unity-cli qa key --key space
 unity-cli qa wait-until --scene GameScene --timeout 5000
+unity-cli qa wait-until --object-interactable StartButton --timeout 5000
+unity-cli qa wait-until --object-gone LoadingSpinner --timeout 5000
 ```
 
 `qa ui-dump` returns clickable UI elements with hierarchy `path`, visible `text`, `interactable`, and image-space rect/center fields. Feed a returned `path` to `qa click --target`, or `centerX`/`centerY` to `qa tap --x --y`.
+
+When multiple `qa wait-until` conditions are supplied, every condition must be satisfied (AND). `qa wait-until --object-interactable` waits for an active target whose effective interactable state is true; non-Selectable objects without that state are treated as interactable once active. `qa wait-until --object-gone` waits until an active target can no longer be resolved, which covers deactivated or destroyed objects.
 
 Returned `path` values are reliable when unique; if same-named siblings share a path, use `centerX`/`centerY` with `qa tap` instead.
 
