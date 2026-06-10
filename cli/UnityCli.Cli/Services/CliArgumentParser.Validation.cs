@@ -18,6 +18,28 @@ public static partial class CliArgumentParser
         };
     }
 
+    private static string RequireScreenshotFormat(string value)
+    {
+        return value.ToLowerInvariant() switch
+        {
+            "png" => "png",
+            "jpg" => "jpg",
+            "jpeg" => "jpeg",
+            _ => throw new CliUsageException("`--format`은 `png`, `jpg`, `jpeg` 중 하나여야 합니다."),
+        };
+    }
+
+    private static int RequireScreenshotQuality(string value)
+    {
+        int quality = RequireInt(value, "--quality");
+        if (quality > 100)
+        {
+            throw new CliUsageException("--quality 값은 1 이상 100 이하의 정수여야 합니다.");
+        }
+
+        return quality;
+    }
+
     private static int RequireInt(string value, string option, int? minimumValue = 1)
     {
         if (!int.TryParse(value, out var result))

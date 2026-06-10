@@ -134,6 +134,7 @@ public sealed class ResponseEnvelopeTests
             coordinateOrigin = "bottom-left",
             imageOrigin = "top-left",
             fileSizeBytes = 1234,
+            format = "jpg",
         };
         var response = ResponseEnvelope.Success(
             requestId: "req-1",
@@ -150,6 +151,7 @@ public sealed class ResponseEnvelopeTests
         Assert.Equal("bottom-left", data.GetProperty("coordinateOrigin").GetString());
         Assert.Equal("top-left", data.GetProperty("imageOrigin").GetString());
         Assert.Equal(1234, data.GetProperty("fileSizeBytes").GetInt64());
+        Assert.Equal("jpg", data.GetProperty("format").GetString());
     }
 
     private static JsonElement ParseData(string json)

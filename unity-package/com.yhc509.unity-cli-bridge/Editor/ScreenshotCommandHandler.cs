@@ -10,6 +10,10 @@ namespace UnityCliBridge.Bridge.Editor
 {
     internal sealed class ScreenshotCommandHandler
     {
+        private const string FormatPng = "png";
+        private const string FormatJpg = "jpg";
+        private const int DefaultJpegQuality = 75;
+
         internal static int LastCapturedWidth { get; private set; }
         internal static int LastCapturedHeight { get; private set; }
 
@@ -53,10 +57,12 @@ namespace UnityCliBridge.Bridge.Editor
             string outputPath;
             int capturedWidth;
             int capturedHeight;
+            string format = NormalizeScreenshotFormat(args.format);
+            int jpegQuality = NormalizeJpegQuality(args.quality);
 
             if (!string.IsNullOrWhiteSpace(args.camera))
             {
-                var result = CaptureFromCamera(args.camera!, args.width, args.height);
+                var result = CaptureFromCamera(args.camera!, args.width, args.height, args.maxWidth, format, jpegQuality);
                 outputPath = result.path;
                 capturedWidth = result.width;
                 capturedHeight = result.height;
@@ -64,7 +70,7 @@ namespace UnityCliBridge.Bridge.Editor
             else
             {
                 string view = string.IsNullOrWhiteSpace(args.view) ? "game" : args.view!;
-                var result = CaptureView(view, args.width, args.height);
+                var result = CaptureView(view, args.width, args.height, args.maxWidth, format, jpegQuality);
                 outputPath = result.path;
                 capturedWidth = result.width;
                 capturedHeight = result.height;
@@ -90,6 +96,8 @@ namespace UnityCliBridge.Bridge.Editor
 
             var fileInfo = new FileInfo(resolvedPath);
             Vector2 gameViewSize = Handles.GetMainGameViewSize();
+            LastCapturedWidth = capturedWidth;
+            LastCapturedHeight = capturedHeight;
 
             return ProtocolJson.Serialize(new ScreenshotPayload
             {
@@ -101,16 +109,23 @@ namespace UnityCliBridge.Bridge.Editor
                 coordinateOrigin = "bottom-left",
                 imageOrigin = "top-left",
                 fileSizeBytes = fileInfo.Exists ? fileInfo.Length : 0,
+                format = format,
             });
         }
 
-        private (string path, int width, int height) CaptureView(string view, int requestedWidth, int requestedHeight)
+        private (string path, int width, int height) CaptureView(
+            string view,
+            int requestedWidth,
+            int requestedHeight,
+            int maxWidth,
+            string format,
+            int jpegQuality)
         {
-            string tempPath = Path.Combine(Path.GetTempPath(), $"puc-screenshot-{Guid.NewGuid():N}.png");
+            string tempPath = CreateTempScreenshotPath(format);
 
             if (string.Equals(view, "game", StringComparison.OrdinalIgnoreCase))
             {
-                return CaptureGameView(tempPath, requestedWidth, requestedHeight);
+                return CaptureGameView(tempPath, requestedWidth, requestedHeight, maxWidth, format, jpegQuality);
             }
 
             if (string.Equals(view, "scene", StringComparison.OrdinalIgnoreCase))
@@ -130,14 +145,21 @@ namespace UnityCliBridge.Bridge.Editor
                     throw new CommandFailureException("SCREENSHOT_FAILED", "Scene View 캡처를 위한 카메라가 없습니다.", false, null);
                 }
 
-                CaptureCameraToPath(camera, width, height, tempPath);
-                return (tempPath, width, height);
+                int effectiveMaxWidth = ShouldApplyMaxWidth(requestedWidth, requestedHeight) ? maxWidth : 0;
+                var result = CaptureCameraToPath(camera, width, height, effectiveMaxWidth, format, jpegQuality, tempPath);
+                return (tempPath, result.width, result.height);
             }
 
             throw new CommandFailureException("INVALID_VIEW", $"지원하지 않는 view입니다: {view}", false, null);
         }
 
-        private (string path, int width, int height) CaptureFromCamera(string cameraName, int requestedWidth, int requestedHeight)
+        private (string path, int width, int height) CaptureFromCamera(
+            string cameraName,
+            int requestedWidth,
+            int requestedHeight,
+            int maxWidth,
+            string format,
+            int jpegQuality)
         {
             var camera = FindCamera(cameraName);
             if (camera == null)
@@ -158,16 +180,23 @@ namespace UnityCliBridge.Bridge.Editor
                 height = gameView.height;
             }
 
-            string tempPath = Path.Combine(Path.GetTempPath(), $"puc-screenshot-{Guid.NewGuid():N}.png");
-            CaptureCameraToPath(camera, width, height, tempPath);
-            return (tempPath, width, height);
+            string tempPath = CreateTempScreenshotPath(format);
+            int effectiveMaxWidth = ShouldApplyMaxWidth(requestedWidth, requestedHeight) ? maxWidth : 0;
+            var result = CaptureCameraToPath(camera, width, height, effectiveMaxWidth, format, jpegQuality, tempPath);
+            return (tempPath, result.width, result.height);
         }
 
-        private static (string path, int width, int height) CaptureGameView(string path, int requestedWidth, int requestedHeight)
+        private static (string path, int width, int height) CaptureGameView(
+            string path,
+            int requestedWidth,
+            int requestedHeight,
+            int maxWidth,
+            string format,
+            int jpegQuality)
         {
             if (!EditorApplication.isPlaying)
             {
-                return CaptureGameViewFromCamera(path, requestedWidth, requestedHeight);
+                return CaptureGameViewFromCamera(path, requestedWidth, requestedHeight, maxWidth, format, jpegQuality);
             }
 
             Texture2D? capturedTexture = null;
@@ -191,7 +220,7 @@ namespace UnityCliBridge.Bridge.Editor
 
                 WarnIfSuspiciousPlayModeCapture(capturedTexture, gameViewWindow);
 
-                var outputSize = ResolvePlayModeGameViewOutputSize(capturedTexture, requestedWidth, requestedHeight);
+                var outputSize = ResolvePlayModeGameViewOutputSize(capturedTexture, requestedWidth, requestedHeight, maxWidth);
                 int width = outputSize.width;
                 int height = outputSize.height;
 
@@ -199,9 +228,7 @@ namespace UnityCliBridge.Bridge.Editor
                     ? ResizeTexture(capturedTexture, width, height)
                     : capturedTexture;
 
-                WriteTextureToPath(outputTexture, path);
-                LastCapturedWidth = width;
-                LastCapturedHeight = height;
+                WriteTextureToPath(outputTexture, path, format, jpegQuality);
                 return (path, width, height);
             }
             finally
@@ -221,7 +248,8 @@ namespace UnityCliBridge.Bridge.Editor
         private static (int width, int height, bool shouldResize) ResolvePlayModeGameViewOutputSize(
             Texture2D capturedTexture,
             int requestedWidth,
-            int requestedHeight)
+            int requestedHeight,
+            int maxWidth)
         {
             int width = requestedWidth > 0 ? requestedWidth : capturedTexture.width;
             int height = requestedHeight > 0 ? requestedHeight : capturedTexture.height;
@@ -235,6 +263,11 @@ namespace UnityCliBridge.Bridge.Editor
                 UnityEngine.Debug.LogWarning(
                     $"[UnityCliBridge] Play Mode Game View screenshot requested {width}x{height}, but the capture only returned the native Game View size {capturedTexture.width}x{capturedTexture.height}. Saving the native capture without upscaling.");
                 return (capturedTexture.width, capturedTexture.height, false);
+            }
+
+            if (ShouldApplyMaxWidth(requestedWidth, requestedHeight) && maxWidth > 0 && capturedTexture.width > maxWidth)
+            {
+                return (maxWidth, CalculateAspectFitHeight(capturedTexture.width, capturedTexture.height, maxWidth), true);
             }
 
             return (width, height, width != capturedTexture.width || height != capturedTexture.height);
@@ -333,7 +366,13 @@ namespace UnityCliBridge.Bridge.Editor
             return null;
         }
 
-        private static (string path, int width, int height) CaptureGameViewFromCamera(string path, int requestedWidth, int requestedHeight)
+        private static (string path, int width, int height) CaptureGameViewFromCamera(
+            string path,
+            int requestedWidth,
+            int requestedHeight,
+            int maxWidth,
+            string format,
+            int jpegQuality)
         {
             Camera? camera = Camera.main;
             if (camera == null && Camera.allCameras.Length > 0)
@@ -359,16 +398,25 @@ namespace UnityCliBridge.Bridge.Editor
                 height = gameView.height;
             }
 
-            CaptureCameraToPath(camera, width, height, path);
-            return (path, width, height);
+            int effectiveMaxWidth = ShouldApplyMaxWidth(requestedWidth, requestedHeight) ? maxWidth : 0;
+            var result = CaptureCameraToPath(camera, width, height, effectiveMaxWidth, format, jpegQuality, path);
+            return (path, result.width, result.height);
         }
 
-        private static void CaptureCameraToPath(Camera camera, int width, int height, string path)
+        private static (int width, int height) CaptureCameraToPath(
+            Camera camera,
+            int width,
+            int height,
+            int maxWidth,
+            string format,
+            int jpegQuality,
+            string path)
         {
             var renderTexture = new RenderTexture(width, height, 24);
             RenderTexture? previousActive = RenderTexture.active;
             RenderTexture? previousTarget = camera.targetTexture;
             Texture2D? texture = null;
+            Texture2D? outputTexture = null;
 
             try
             {
@@ -379,12 +427,20 @@ namespace UnityCliBridge.Bridge.Editor
                 texture = new Texture2D(width, height, TextureFormat.RGB24, false);
                 texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
                 texture.Apply();
-                WriteTextureToPath(texture, path);
+                var output = ApplyMaxWidth(texture, maxWidth);
+                outputTexture = output.texture;
+                WriteTextureToPath(outputTexture, path, format, jpegQuality);
+                return (output.width, output.height);
             }
             finally
             {
                 camera.targetTexture = previousTarget;
                 RenderTexture.active = previousActive;
+
+                if (outputTexture != null && !ReferenceEquals(outputTexture, texture))
+                {
+                    UnityEngine.Object.DestroyImmediate(outputTexture);
+                }
 
                 if (texture != null)
                 {
@@ -417,10 +473,60 @@ namespace UnityCliBridge.Bridge.Editor
             }
         }
 
-        private static void WriteTextureToPath(Texture2D texture, string path)
+        private static (Texture2D texture, int width, int height) ApplyMaxWidth(Texture2D sourceTexture, int maxWidth)
         {
-            byte[] pngBytes = texture.EncodeToPNG();
-            File.WriteAllBytes(path, pngBytes);
+            if (maxWidth > 0 && sourceTexture.width > maxWidth)
+            {
+                int height = CalculateAspectFitHeight(sourceTexture.width, sourceTexture.height, maxWidth);
+                Texture2D resizedTexture = ResizeTexture(sourceTexture, maxWidth, height);
+                return (resizedTexture, maxWidth, height);
+            }
+
+            return (sourceTexture, sourceTexture.width, sourceTexture.height);
+        }
+
+        private static int CalculateAspectFitHeight(int width, int height, int maxWidth)
+        {
+            return Mathf.Max(1, Mathf.RoundToInt(height * maxWidth / (float)width));
+        }
+
+        private static bool ShouldApplyMaxWidth(int requestedWidth, int requestedHeight)
+        {
+            return requestedWidth <= 0 && requestedHeight <= 0;
+        }
+
+        private static string NormalizeScreenshotFormat(string? format)
+        {
+            if (string.IsNullOrWhiteSpace(format))
+            {
+                return FormatPng;
+            }
+
+            return format!.Trim().ToLowerInvariant() switch
+            {
+                FormatJpg => FormatJpg,
+                "jpeg" => FormatJpg,
+                _ => FormatPng,
+            };
+        }
+
+        private static int NormalizeJpegQuality(int quality)
+        {
+            return Mathf.Clamp(quality > 0 ? quality : DefaultJpegQuality, 1, 100);
+        }
+
+        private static string CreateTempScreenshotPath(string format)
+        {
+            string extension = string.Equals(format, FormatJpg, StringComparison.Ordinal) ? ".jpg" : ".png";
+            return Path.Combine(Path.GetTempPath(), $"puc-screenshot-{Guid.NewGuid():N}{extension}");
+        }
+
+        private static void WriteTextureToPath(Texture2D texture, string path, string format, int jpegQuality)
+        {
+            byte[] bytes = string.Equals(format, FormatJpg, StringComparison.Ordinal)
+                ? texture.EncodeToJPG(jpegQuality)
+                : texture.EncodeToPNG();
+            File.WriteAllBytes(path, bytes);
         }
 
         private static Camera? FindCamera(string name)

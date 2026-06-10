@@ -93,6 +93,9 @@ public sealed class ParsedCommand
     public string? ScreenshotPath { get; set; }
     public int? ScreenshotWidth { get; set; }
     public int? ScreenshotHeight { get; set; }
+    public string? ScreenshotFormat { get; set; }
+    public int? ScreenshotQuality { get; set; }
+    public int? ScreenshotMaxWidth { get; set; }
     public string? PackageName { get; set; }
     public string? PackageVersion { get; set; }
     public string? PackageQuery { get; set; }
@@ -289,6 +292,9 @@ public sealed class ParsedCommand
                 outputPath = ScreenshotPath,
                 width = ScreenshotWidth ?? 0,
                 height = ScreenshotHeight ?? 0,
+                format = ScreenshotFormat,
+                quality = ScreenshotQuality ?? 0,
+                maxWidth = ScreenshotMaxWidth ?? 0,
             },
             CommandKind.PackageList => new { },
             CommandKind.PackageAdd => new PackageAddArgs
