@@ -455,16 +455,26 @@ namespace UnityCliBridge.Bridge.Editor
         {
             var renderTexture = new RenderTexture(width, height, 0, RenderTextureFormat.ARGB32);
             RenderTexture? previousActive = RenderTexture.active;
+            Texture2D? resizedTexture = null;
 
             try
             {
                 Graphics.Blit(sourceTexture, renderTexture);
                 RenderTexture.active = renderTexture;
 
-                var resizedTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                resizedTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
                 resizedTexture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
                 resizedTexture.Apply();
                 return resizedTexture;
+            }
+            catch
+            {
+                if (resizedTexture != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(resizedTexture);
+                }
+
+                throw;
             }
             finally
             {
@@ -504,15 +514,34 @@ namespace UnityCliBridge.Bridge.Editor
 
             return format!.Trim().ToLowerInvariant() switch
             {
+                FormatPng => FormatPng,
                 FormatJpg => FormatJpg,
                 "jpeg" => FormatJpg,
-                _ => FormatPng,
+                _ => throw new CommandFailureException(
+                    "SCREENSHOT_INVALID_FORMAT",
+                    "screenshot format은 png, jpg, jpeg 중 하나여야 합니다.",
+                    false,
+                    null),
             };
         }
 
         private static int NormalizeJpegQuality(int quality)
         {
-            return Mathf.Clamp(quality > 0 ? quality : DefaultJpegQuality, 1, 100);
+            if (quality == 0)
+            {
+                return DefaultJpegQuality;
+            }
+
+            if (quality >= 1 && quality <= 100)
+            {
+                return quality;
+            }
+
+            throw new CommandFailureException(
+                "SCREENSHOT_INVALID_QUALITY",
+                "screenshot quality는 1~100 범위여야 합니다.",
+                false,
+                null);
         }
 
         private static string CreateTempScreenshotPath(string format)
