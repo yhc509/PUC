@@ -222,12 +222,15 @@ A typical AI repair loop is: make a focused code change, `unity-cli refresh`, ru
 ```bash
 unity-cli qa click --qa-id StartButton
 unity-cli screenshot --view game --path /tmp/qa-reference.png
+unity-cli qa ui-dump --json
 unity-cli qa tap --x 400 --y 300
 unity-cli qa swipe --from 100,200 --to 300,400
 unity-cli qa swipe --target ... --from 0,0 --to 100,0 --duration 500
 unity-cli qa key --key space
 unity-cli qa wait-until --scene GameScene --timeout 5000
 ```
+
+`qa ui-dump` returns clickable UI elements with hierarchy `path`, visible `text`, `interactable`, and image-space rect/center fields. Feed a returned `path` to `qa click --target`, or `centerX`/`centerY` to `qa tap --x --y`.
 
 `screenshot` responses include both image size (`width`/`height`) and live input metadata (`screenWidth`/`screenHeight`, `imageOrigin=top-left`, `coordinateOrigin=bottom-left`). `qa tap` takes screenshot image coordinates as-is, reuses the last successful `screenshot` dimensions when `--screenshot-width`/`--screenshot-height` are omitted, and lets the bridge handle Y-flip plus resolution scaling into Unity screen space. See [qa-testing.md](tools/skills/unity-cli-operator/references/qa-testing.md) for the coordinate workflow.
 

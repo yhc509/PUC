@@ -586,6 +586,15 @@ namespace UnityCli.Protocol
                 canUseLive: true,
                 isAllowedWhileBusy: false),
             new CliCommandDescriptor(
+                "qa ui-dump",
+                "qa ui-dump [--screenshot-width <int> --screenshot-height <int>]",
+                "Dumps currently clickable UI elements (path, type, text, interactable, image-space rect/center) as JSON; requires Play Mode. Feed a returned path to `qa click --target`, or centerX/centerY to `qa tap`. Coordinates use the last captured screenshot size unless overridden.",
+                CliCommandGroup.QaWorkflows,
+                ProtocolConstants.CommandQaUiDump,
+                canUseLocal: false,
+                canUseLive: true,
+                isAllowedWhileBusy: false),
+            new CliCommandDescriptor(
                 "qa wait",
                 "qa wait --ms <int>",
                 "Waits for the specified number of milliseconds (local only, does not contact the editor).",

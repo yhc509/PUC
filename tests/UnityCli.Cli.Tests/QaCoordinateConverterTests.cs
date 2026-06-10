@@ -49,6 +49,48 @@ public sealed class QaCoordinateConverterTests
     }
 
     [Fact]
+    public void ConvertScreenCoordinates_WhenScreenMatchesScreenshot_RoundTripsScreenshotCoordinates()
+    {
+        int screenX = QaCoordinateConverter.ConvertScreenshotXToScreenX(rawX: 845, screenWidth: 1440, screenshotWidth: 1440);
+        int screenY = QaCoordinateConverter.ConvertScreenshotYToScreenY(rawY: 2540, screenHeight: 2960, screenshotHeight: 2960);
+
+        int imageX = QaCoordinateConverter.ConvertScreenXToScreenshotX(screenX, screenWidth: 1440, screenshotWidth: 1440);
+        int imageY = QaCoordinateConverter.ConvertScreenYToScreenshotY(screenY, screenHeight: 2960, screenshotHeight: 2960);
+
+        Assert.Equal(845, imageX);
+        Assert.Equal(2540, imageY);
+    }
+
+    [Fact]
+    public void ConvertScreenCoordinates_WithScaledScreenshot_RoundTripsRepresentativeCoordinates()
+    {
+        int screenX = QaCoordinateConverter.ConvertScreenshotXToScreenX(rawX: 300, screenWidth: 960, screenshotWidth: 1920);
+        int screenY = QaCoordinateConverter.ConvertScreenshotYToScreenY(rawY: 200, screenHeight: 540, screenshotHeight: 1080);
+
+        int imageX = QaCoordinateConverter.ConvertScreenXToScreenshotX(screenX, screenWidth: 960, screenshotWidth: 1920);
+        int imageY = QaCoordinateConverter.ConvertScreenYToScreenshotY(screenY, screenHeight: 540, screenshotHeight: 1080);
+
+        Assert.Equal(300, imageX);
+        Assert.Equal(200, imageY);
+    }
+
+    [Fact]
+    public void ConvertScreenYToScreenshotY_WhenScreenMatchesScreenshot_FlipsY()
+    {
+        int imageY = QaCoordinateConverter.ConvertScreenYToScreenshotY(screenY: 200, screenHeight: 1440, screenshotHeight: 1440);
+
+        Assert.Equal(1240, imageY);
+    }
+
+    [Fact]
+    public void ConvertScreenYToScreenshotY_WithNonPositiveScreenHeight_ReturnsScreenY()
+    {
+        int imageY = QaCoordinateConverter.ConvertScreenYToScreenshotY(screenY: 200, screenHeight: 0, screenshotHeight: 1080);
+
+        Assert.Equal(200, imageY);
+    }
+
+    [Fact]
     public void IsAspectMismatch_WhenAspectsMatch_ReturnsFalse()
     {
         Assert.False(QaCoordinateConverter.IsAspectMismatch(1440, 2960, 1440, 2960));

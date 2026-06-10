@@ -21,6 +21,7 @@ status → play → (입력 시뮬레이션) → 검증 (로그 + 스크린샷) 
 |--------|-----------|-----------|
 | `qa click --target <path>` | EventSystem.Execute | UI 버튼, 토글 등 클릭 |
 | `qa click --qa-id <id>` | EventSystem.Execute | [QaTarget] 어트리뷰트로 마킹된 대상 |
+| `qa ui-dump [--screenshot-width W --screenshot-height H]` | Bridge UI 구조 덤프 | 클릭 가능한 UI의 path/text/rect/center 조회 |
 | `qa tap --x N --y N [--screenshot-width W --screenshot-height H]` | EventSystem raycast + Execute | 스크린샷 분석 결과 기반 UI 좌표 탭 |
 | `qa swipe --target <path> --from x,y --to x,y` | Input System target-relative swipe | UI 슬라이더, ScrollRect 드래그 |
 | `qa swipe --from x,y --to x,y [--screenshot-width W --screenshot-height H]` | Input System 스크린샷 좌표 | 스크린샷 분석 결과 기반 화면 스와이프 |
@@ -36,6 +37,13 @@ status → play → (입력 시뮬레이션) → 검증 (로그 + 스크린샷) 
 - 버튼 클릭, 토글 등 EventSystem을 통해 즉시 처리하는 대상
 - `--target`으로 hierarchy path 지정: `/Canvas[0]/Button[0]`
 - EventSystem이 씬에 있어야 함 (없으면 `QA_NO_EVENT_SYSTEM` 에러)
+
+### 클릭 가능 UI 탐색 → 구조화 덤프 (ui-dump)
+- `qa ui-dump`는 현재 Play Mode 화면에서 `IPointerClickHandler`가 붙은 활성 GameObject를 수집한다.
+- 응답의 `path`는 `qa click --target <path>`에 바로 사용할 수 있다.
+- `centerX`/`centerY`는 스크린샷 이미지 좌표(top-left origin)이므로 `qa tap --x <centerX> --y <centerY>`에 바로 사용할 수 있다.
+- `text`는 UGUI Text/TMP_Text 같은 자식 컴포넌트의 `text` 프로퍼티를 reflection으로 읽는다. TMP 패키지가 없어도 동작한다.
+- `qa ui-dump` 자체는 raycast를 하지 않으므로 EventSystem을 요구하지 않는다. 실제 `qa click`/`qa tap` 실행에는 EventSystem이 필요하다.
 
 ### UI 좌표 탭 → EventSystem raycast 경로 (tap)
 - 스크린샷에서 읽은 좌표로 현재 화면의 UGUI 대상을 찾을 때 사용
@@ -135,9 +143,18 @@ ucli screenshot --view game --path /tmp/qa-check.png --project "$P" --json
 
 ## Coordinate-Based UI Interaction
 
-### When to use `qa click` vs `qa tap`
-- **`qa click --target <path>`**: Use when you know the GameObject path (from `scene inspect`). 100% precise, no coordinate guessing.
-- **`qa tap --x <X> --y <Y>`**: Use when you only have visual information from a screenshot (for example, you can see a button but do not know its path).
+### When to use `qa ui-dump`, `qa click`, or `qa tap`
+- **`qa ui-dump`**: Use first when you need clickable UI candidates with path, visible text, and image-space rect/center.
+- **`qa click --target <path>`**: Use when you know the GameObject path from `qa ui-dump` or `scene inspect`. 100% precise, no coordinate guessing.
+- **`qa tap --x <X> --y <Y>`**: Use when you only have image coordinates, such as `centerX`/`centerY` from `qa ui-dump` or pixels read from a screenshot.
+
+### qa ui-dump Workflow
+1. Enter Play Mode and, if you already captured a reference image, keep its `width`/`height` available
+2. Dump candidates: `qa ui-dump` -> inspect each element's `path`, `text`, `interactable`, `x`, `y`, `width`, `height`, `centerX`, `centerY`
+3. Prefer path click: `qa click --target <path>`
+4. If a coordinate tap is better, use `qa tap --x <centerX> --y <centerY>`
+
+If the dump should match a resized image, pass `--screenshot-width` and `--screenshot-height` together. Otherwise, the bridge uses the last successful `screenshot` dimensions when available.
 
 ### qa tap Workflow
 1. Take a screenshot: `screenshot` -> note `width`, `height`, and when needed `screenWidth`, `screenHeight`, `imageOrigin`, `coordinateOrigin` from the response
@@ -158,8 +175,8 @@ If you need to specify different dimensions, for example when the screenshot was
 ucli qa tap --x 480 --y 225 --screenshot-width 961 --screenshot-height 554 --project "$P" --json
 ```
 
-### Precise coordinate lookup via execute
-When screenshot coordinates are imprecise, use `execute` to log exact UI element positions:
+### Precise coordinate lookup fallback via execute
+Prefer `qa ui-dump` for clickable UI. When screenshot coordinates are imprecise and the target is not exposed by `IPointerClickHandler`, use `execute` to log exact UI element positions:
 
 ```bash
 # Find a button's screen center coordinates
