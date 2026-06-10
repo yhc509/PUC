@@ -118,7 +118,7 @@ Commands for Play Mode QA interactions such as click, tap, swipe, key input, and
 | `qa key` | `qa key --key <keyName>` | live | `None` | Simulates a key press via Input System; requires Play Mode. |
 | `qa ui-dump` | `qa ui-dump [--screenshot-width <int> --screenshot-height <int>]` | live | `None` | Dumps currently clickable UI elements (path, type, text, interactable, image-space rect/center) as JSON; requires Play Mode. Feed a returned path to `qa click --target`, or centerX/centerY to `qa tap`. The returned path is reliable when unique; if same-named siblings share a path, tap by centerX/centerY instead. Coordinates use the last captured screenshot size unless overridden. |
 | `qa wait` | `qa wait --ms <int>` | local | `None` | Waits for the specified number of milliseconds (local only, does not contact the editor). |
-| `qa wait-until` | `qa wait-until (--scene <name> \| --log-contains <text> \| --object-exists <qa-id\|path>) [--timeout <ms>]` | live | `None` | Polls the editor until a condition is met or timeout expires; requires Play Mode. |
+| `qa wait-until` | `qa wait-until (--scene <name> \| --log-contains <text> \| --object-exists <qa-id\|path> \| --object-interactable <qa-id\|path> \| --object-gone <qa-id\|path>) [--timeout <ms>]` | live | `None` | Polls the editor until a condition is met or timeout expires; supports waiting for clickable/interactable UI or inactive/destroyed objects; requires Play Mode. |
 
 ## Instance Management
 

@@ -425,9 +425,11 @@ public static partial class CliArgumentParser
                 bool hasScene = !string.IsNullOrWhiteSpace(parsed.QaWaitScene);
                 bool hasLogContains = !string.IsNullOrWhiteSpace(parsed.QaWaitLogContains);
                 bool hasObjectExists = !string.IsNullOrWhiteSpace(parsed.QaWaitObjectExists) || !string.IsNullOrWhiteSpace(parsed.QaId);
-                if (!hasScene && !hasLogContains && !hasObjectExists)
+                bool hasObjectInteractable = !string.IsNullOrWhiteSpace(parsed.QaWaitObjectInteractable);
+                bool hasObjectGone = !string.IsNullOrWhiteSpace(parsed.QaWaitObjectGone);
+                if (!hasScene && !hasLogContains && !hasObjectExists && !hasObjectInteractable && !hasObjectGone)
                 {
-                    throw new CliUsageException("`qa wait-until`에는 `--scene`, `--log-contains`, `--object-exists`, `--qa-id` 중 하나 이상이 필요합니다.");
+                    throw new CliUsageException("`qa wait-until`에는 `--scene`, `--log-contains`, `--object-exists`, `--object-interactable`, `--object-gone`, `--qa-id` 중 하나 이상이 필요합니다.");
                 }
 
                 if (!string.IsNullOrWhiteSpace(parsed.QaId) && !string.IsNullOrWhiteSpace(parsed.QaWaitObjectExists))

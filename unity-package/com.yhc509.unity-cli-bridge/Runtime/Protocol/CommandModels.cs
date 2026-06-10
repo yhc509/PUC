@@ -568,6 +568,8 @@ namespace UnityCli.Protocol
         public string? scene;
         public string? logContains;
         public string? objectExists;
+        public string? objectInteractable;
+        public string? objectGone;
         public int timeoutMs = ProtocolConstants.DefaultQaWaitUntilTimeoutMs;
     }
 

@@ -30,6 +30,8 @@ status → play → (입력 시뮬레이션) → 검증 (로그 + 스크린샷) 
 | `qa wait-until --scene <name>` | Bridge 폴링 | 씬 전환 대기 |
 | `qa wait-until --log-contains <text>` | Bridge 폴링 | 특정 로그 출력 대기 |
 | `qa wait-until --object-exists <path>` | Bridge 폴링 | 오브젝트 존재 대기 |
+| `qa wait-until --object-interactable <path>` | Bridge 폴링 | 버튼/대상 클릭 가능 대기 |
+| `qa wait-until --object-gone <path>` | Bridge 폴링 | 로딩/오브젝트 비활성 또는 파괴 대기 |
 
 ## 입력 방식 판단 기준
 
@@ -246,6 +248,17 @@ ucli qa click --target "/Canvas/StartButton" --project "$P" --json
 ucli qa wait-until --log-contains "Game started" --timeout 5000 --project "$P" --json
 
 ucli stop --project "$P" --json
+```
+
+고정 대기 대신 화면 상태를 조건으로 기다리면 불필요한 sleep을 줄일 수 있다. 버튼은 활성화와 `interactable=true`를 함께 기다리고, 로딩 표시는 active hierarchy에서 사라질 때까지 기다린다. `--object-interactable`은 대상 컴포넌트의 public bool `interactable` 프로퍼티를 읽으며, 해당 프로퍼티가 없는 오브젝트는 active로 resolve되면 true로 취급한다.
+
+```bash
+# 시작 버튼이 클릭 가능해질 때까지 대기 후 클릭
+ucli qa wait-until --object-interactable StartButton --timeout 10000 --project "$P" --json
+ucli qa click --qa-id StartButton --project "$P" --json
+
+# 로딩 스피너가 비활성/파괴될 때까지 대기
+ucli qa wait-until --object-gone LoadingSpinner --timeout 10000 --project "$P" --json
 ```
 
 ## 알려진 제한사항

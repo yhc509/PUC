@@ -582,6 +582,12 @@ public static partial class CliArgumentParser
                 case CommandKind.QaWaitUntil when token == "--object-exists":
                     parsed.QaWaitObjectExists = RequireValue(tokens, "--object-exists");
                     break;
+                case CommandKind.QaWaitUntil when token == "--object-interactable":
+                    parsed.QaWaitObjectInteractable = RequireValue(tokens, "--object-interactable");
+                    break;
+                case CommandKind.QaWaitUntil when token == "--object-gone":
+                    parsed.QaWaitObjectGone = RequireValue(tokens, "--object-gone");
+                    break;
                 case CommandKind.QaWaitUntil when token == "--timeout":
                     parsed.QaWaitTimeout = RequireInt(RequireValue(tokens, "--timeout"), "--timeout");
                     break;

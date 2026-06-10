@@ -162,6 +162,24 @@ public sealed class QaParserTests
     }
 
     [Fact]
+    public void Parse_QaWaitUntil_AcceptsObjectInteractable()
+    {
+        var parsed = CliArgumentParser.Parse(["qa", "wait-until", "--object-interactable", "start-btn"]);
+
+        Assert.Equal(CommandKind.QaWaitUntil, parsed.Kind);
+        Assert.Equal("start-btn", parsed.QaWaitObjectInteractable);
+    }
+
+    [Fact]
+    public void Parse_QaWaitUntil_AcceptsObjectGone()
+    {
+        var parsed = CliArgumentParser.Parse(["qa", "wait-until", "--object-gone", "loading-spinner"]);
+
+        Assert.Equal(CommandKind.QaWaitUntil, parsed.Kind);
+        Assert.Equal("loading-spinner", parsed.QaWaitObjectGone);
+    }
+
+    [Fact]
     public void Parse_Qa_WithoutSubcommand_ThrowsUsage()
     {
         Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["qa"]));
@@ -403,6 +421,8 @@ public sealed class QaParserTests
             "--scene", "GameScene",
             "--log-contains", "Loading",
             "--object-exists", "start-btn",
+            "--object-interactable", "ready-btn",
+            "--object-gone", "loading-spinner",
             "--timeout", "5000"
         ]);
 
@@ -413,6 +433,8 @@ public sealed class QaParserTests
         Assert.Equal("GameScene", arguments.GetProperty("scene").GetString());
         Assert.Equal("Loading", arguments.GetProperty("logContains").GetString());
         Assert.Equal("start-btn", arguments.GetProperty("objectExists").GetString());
+        Assert.Equal("ready-btn", arguments.GetProperty("objectInteractable").GetString());
+        Assert.Equal("loading-spinner", arguments.GetProperty("objectGone").GetString());
         Assert.Equal(5000, arguments.GetProperty("timeoutMs").GetInt32());
     }
 

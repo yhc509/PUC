@@ -613,13 +613,15 @@ namespace UnityCliBridge.Bridge.Editor
         {
             bool hasCondition = !string.IsNullOrWhiteSpace(args.scene)
                 || !string.IsNullOrWhiteSpace(args.logContains)
-                || !string.IsNullOrWhiteSpace(args.objectExists);
+                || !string.IsNullOrWhiteSpace(args.objectExists)
+                || !string.IsNullOrWhiteSpace(args.objectInteractable)
+                || !string.IsNullOrWhiteSpace(args.objectGone);
 
             if (!hasCondition)
             {
                 throw new CommandFailureException(
                     "QA_MISSING_CONDITION",
-                    "At least one condition (--scene, --log-contains, --object-exists) is required.",
+                    "At least one condition (--scene, --log-contains, --object-exists, --object-interactable, --object-gone) is required.",
                     false,
                     null);
             }
@@ -871,6 +873,36 @@ namespace UnityCliBridge.Bridge.Editor
                 }
 
                 reasonSegments.Add($"Object '{args.objectExists}' exists.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(args.objectInteractable))
+            {
+                GameObject? target;
+                if ((!QaTargetRegistry.TryResolve(args.objectInteractable!, out target) || target == null)
+                    && (!QaTargetRegistry.TryResolvePath(args.objectInteractable!, out target) || target == null))
+                {
+                    return false;
+                }
+
+                if (!GetInteractableValue(target))
+                {
+                    return false;
+                }
+
+                reasonSegments.Add($"Object '{args.objectInteractable}' is interactable.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(args.objectGone))
+            {
+                GameObject? goneTarget;
+                bool found = (QaTargetRegistry.TryResolve(args.objectGone!, out goneTarget) && goneTarget != null)
+                    || (QaTargetRegistry.TryResolvePath(args.objectGone!, out goneTarget) && goneTarget != null);
+                if (found)
+                {
+                    return false;
+                }
+
+                reasonSegments.Add($"Object '{args.objectGone}' is gone.");
             }
 
             reason = reasonSegments.Count > 0 ? string.Join(" ", reasonSegments) : null;
