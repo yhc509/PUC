@@ -89,14 +89,15 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             var fileInfo = new FileInfo(resolvedPath);
+            Vector2 gameViewSize = Handles.GetMainGameViewSize();
 
             return ProtocolJson.Serialize(new ScreenshotPayload
             {
                 savedPath = resolvedPath,
                 width = capturedWidth,
                 height = capturedHeight,
-                screenWidth = Screen.width,
-                screenHeight = Screen.height,
+                screenWidth = (int)gameViewSize.x,
+                screenHeight = (int)gameViewSize.y,
                 coordinateOrigin = "bottom-left",
                 imageOrigin = "top-left",
                 fileSizeBytes = fileInfo.Exists ? fileInfo.Length : 0,

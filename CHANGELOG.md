@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- `qa tap` / `qa swipe` coordinate conversion now samples the Game View render resolution (`Handles.GetMainGameViewSize()`) instead of the editor panel size, so taps no longer miss their target in Play Mode. Screenshot responses report the same render resolution in `screenWidth`/`screenHeight`.
+
 ## [0.2.3] - 2026-06-05
 
 ### Added
