@@ -255,7 +255,7 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
 #if ENABLE_INPUT_SYSTEM
-            Vector2 anchorScreenPosition = GetWorldTapScreenPosition(gameObject);
+            Vector2 anchorScreenPosition = GetWorldTapScreenPosition(gameObject, target);
             QaInputSimulator.SimulateTap(anchorScreenPosition);
             return ProtocolJson.Serialize(new QaTapPayload { completed = true });
 #else
@@ -282,7 +282,7 @@ namespace UnityCliBridge.Bridge.Editor
         }
 
 #if ENABLE_INPUT_SYSTEM
-        private static Vector2 GetWorldTapScreenPosition(GameObject gameObject)
+        private static Vector2 GetWorldTapScreenPosition(GameObject gameObject, string target)
         {
             Transform anchor = ResolveTapAnchor(gameObject);
             Camera? camera = Camera.main;
@@ -296,6 +296,18 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             Vector3 screenPoint = camera.WorldToScreenPoint(anchor.position);
+            Vector2Int screenSize = GetGameViewRenderSize();
+            if (screenPoint.z <= 0f
+                || screenPoint.x < 0f || screenPoint.x > screenSize.x
+                || screenPoint.y < 0f || screenPoint.y > screenSize.y)
+            {
+                throw new CommandFailureException(
+                    "QA_TARGET_OFFSCREEN",
+                    $"qa tap --target: '{target}' anchor is off-screen; nothing to tap.",
+                    false,
+                    null);
+            }
+
             return new Vector2(screenPoint.x, screenPoint.y);
         }
 #endif
@@ -582,6 +594,15 @@ namespace UnityCliBridge.Bridge.Editor
             WarnIfAspectMismatch(screenshotWidth, screenshotHeight, screenSize.x, screenSize.y);
 
             Camera? camera = Camera.main;
+            if (camera == null)
+            {
+                throw new CommandFailureException(
+                    "QA_NO_CAMERA",
+                    "qa world-dump requires a main camera to project world objects to screen.",
+                    false,
+                    null);
+            }
+
             List<QaWorldElement> elements = CollectWorldTappables(
                 camera, args.includeOffscreen, screenshotWidth, screenshotHeight, screenSize);
             elements.Sort(CompareWorldElements);
@@ -593,7 +614,7 @@ namespace UnityCliBridge.Bridge.Editor
         }
 
         private static List<QaWorldElement> CollectWorldTappables(
-            Camera? camera,
+            Camera camera,
             bool includeOffscreen,
             int screenshotWidth,
             int screenshotHeight,
@@ -637,7 +658,7 @@ namespace UnityCliBridge.Bridge.Editor
         private static QaWorldElement? CreateWorldElement(
             GameObject gameObject,
             IQaTappable tappable,
-            Camera? camera,
+            Camera camera,
             bool includeOffscreen,
             int screenshotWidth,
             int screenshotHeight,
@@ -649,15 +670,12 @@ namespace UnityCliBridge.Bridge.Editor
             int centerX = 0;
             int centerY = 0;
 
-            if (camera != null)
-            {
-                Vector3 screenPoint = camera.WorldToScreenPoint(anchor.position);
-                onScreen = screenPoint.z > 0f
-                    && screenPoint.x >= 0f && screenPoint.x <= screenSize.x
-                    && screenPoint.y >= 0f && screenPoint.y <= screenSize.y;
-                centerX = QaCoordinateConverter.ConvertScreenXToScreenshotX((int)screenPoint.x, screenSize.x, screenshotWidth);
-                centerY = QaCoordinateConverter.ConvertScreenYToScreenshotY((int)screenPoint.y, screenSize.y, screenshotHeight);
-            }
+            Vector3 screenPoint = camera.WorldToScreenPoint(anchor.position);
+            onScreen = screenPoint.z > 0f
+                && screenPoint.x >= 0f && screenPoint.x <= screenSize.x
+                && screenPoint.y >= 0f && screenPoint.y <= screenSize.y;
+            centerX = QaCoordinateConverter.ConvertScreenXToScreenshotX((int)screenPoint.x, screenSize.x, screenshotWidth);
+            centerY = QaCoordinateConverter.ConvertScreenYToScreenshotY((int)screenPoint.y, screenSize.y, screenshotHeight);
 
             if (!onScreen && !includeOffscreen)
             {

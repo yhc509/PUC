@@ -46,7 +46,7 @@ status → play → (입력 시뮬레이션) → 검증 (로그 + 스크린샷) 
 - `path`는 고유할 때 신뢰할 수 있다. 같은 이름의 sibling이 같은 path를 공유하면 `centerX`/`centerY`로 `qa tap`을 사용한다.
 - `centerX`/`centerY`는 스크린샷 이미지 좌표(top-left origin)이므로 `qa tap --x <centerX> --y <centerY>`에 바로 사용할 수 있다.
 - `text`는 UGUI Text/TMP_Text 같은 자식 컴포넌트의 `text` 프로퍼티를 reflection으로 읽는다. TMP 패키지가 없어도 동작한다.
-- `qa ui-dump` 자체는 raycast를 하지 않으므로 EventSystem을 요구하지 않는다. 실제 `qa click`/`qa tap` 실행에는 EventSystem이 필요하다.
+- `qa ui-dump` 자체는 raycast를 하지 않으므로 EventSystem을 요구하지 않는다. 실제 `qa click`과 좌표 기반 `qa tap --x/--y` 실행에는 EventSystem이 필요하다.
 
 ### UI 좌표 탭 → EventSystem raycast 경로 (tap)
 - 스크린샷에서 읽은 좌표로 현재 화면의 UGUI 대상을 찾을 때 사용
@@ -77,7 +77,7 @@ status → play → (입력 시뮬레이션) → 검증 (로그 + 스크린샷) 
 ## 사전 조건
 
 ### EventSystem
-`qa click`, `qa tap`, UGUI 대상 `qa swipe --target`은 씬에 EventSystem이 필요하다.
+`qa click`, 좌표 기반 `qa tap --x/--y`, UGUI 대상 `qa swipe --target`은 씬에 EventSystem이 필요하다. 월드 대상 `qa tap --target`은 direct action 또는 Input System 좌표 fallback 경로를 사용하므로 EventSystem이 필수가 아니다.
 없으면 메뉴로 추가:
 
 ```bash
@@ -170,6 +170,7 @@ UI elements come from `qa ui-dump`. For non-UI world objects (units on a battle 
 - `qa world-dump` then lists them with `label`, `path`, image-space `centerX`/`centerY`, `onScreen`, `hasAction`.
 - Tap with `qa tap --target <path>`. If the object's `TryQaTap()` handles it (e.g. `onQaTap` is wired), the bridge invokes it directly; otherwise the bridge simulates an Input System tap at the anchor, which reaches games that poll the Input System directly (where `qa tap --x --y`'s EventSystem path does not).
 - Off-screen objects are hidden unless you pass `--include-offscreen`.
+- Same-named sibling world objects share a path and resolve to the first match; give tappable objects unique names/labels to target them individually.
 
 ### qa tap Workflow
 1. Take a screenshot: `screenshot` -> note `width`, `height`, and when needed `screenWidth`, `screenHeight`, `imageOrigin`, `coordinateOrigin` from the response

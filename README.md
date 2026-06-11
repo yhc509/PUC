@@ -242,7 +242,7 @@ unity-cli qa wait-until --object-gone LoadingSpinner --timeout 5000
 
 When multiple `qa wait-until` conditions are supplied, every condition must be satisfied (AND). `qa wait-until --object-interactable` waits for an active target whose effective interactable state is true; non-Selectable objects without that state are treated as interactable once active. `qa wait-until --object-gone` waits until an active target can no longer be resolved, which covers deactivated or destroyed objects.
 
-Returned `path` values are reliable when unique; if same-named siblings share a path, use `centerX`/`centerY` with `qa tap` instead.
+Same-named sibling world objects share a path and resolve to the first match; give tappable objects unique names/labels to target them individually.
 
 `screenshot` responses include both image size (`width`/`height`) and live input metadata (`screenWidth`/`screenHeight`, `imageOrigin=top-left`, `coordinateOrigin=bottom-left`). `qa tap` takes screenshot image coordinates as-is, reuses the last successful `screenshot` dimensions when `--screenshot-width`/`--screenshot-height` are omitted, and lets the bridge handle Y-flip plus resolution scaling into Unity screen space. See [qa-testing.md](tools/skills/unity-cli-operator/references/qa-testing.md) for the coordinate workflow.
 
