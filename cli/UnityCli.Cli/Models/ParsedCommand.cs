@@ -62,6 +62,7 @@ public enum CommandKind
     QaSwipe,
     QaKey,
     QaUiDump,
+    QaWorldDump,
     QaWait,
     QaWaitUntil,
 }
@@ -169,6 +170,7 @@ public sealed class ParsedCommand
     public int? QaTapY { get; set; }
     public int? QaScreenshotWidth { get; set; }
     public int? QaScreenshotHeight { get; set; }
+    public bool QaWorldDumpIncludeOffscreen { get; set; }
     public string? QaSwipeFrom { get; set; }
     public string? QaSwipeTo { get; set; }
     public int QaSwipeDuration { get; set; } = ProtocolConstants.DefaultQaSwipeDurationMs;
@@ -236,6 +238,7 @@ public sealed class ParsedCommand
                 CommandKind.QaSwipe => ProtocolConstants.CommandQaSwipe,
                 CommandKind.QaKey => ProtocolConstants.CommandQaKey,
                 CommandKind.QaUiDump => ProtocolConstants.CommandQaUiDump,
+                CommandKind.QaWorldDump => ProtocolConstants.CommandQaWorldDump,
                 CommandKind.QaWaitUntil => ProtocolConstants.CommandQaWaitUntil,
                 CommandKind.AssetFind => ProtocolConstants.CommandAssetFind,
                 CommandKind.AssetTypes => ProtocolConstants.CommandAssetTypes,
@@ -366,11 +369,18 @@ public sealed class ParsedCommand
                 y = QaTapY ?? 0,
                 screenshotWidth = QaScreenshotWidth ?? 0,
                 screenshotHeight = QaScreenshotHeight ?? 0,
+                target = QaTarget,
             },
             CommandKind.QaUiDump => new QaUiDumpArgs
             {
                 screenshotWidth = QaScreenshotWidth ?? 0,
                 screenshotHeight = QaScreenshotHeight ?? 0,
+            },
+            CommandKind.QaWorldDump => new QaWorldDumpArgs
+            {
+                screenshotWidth = QaScreenshotWidth ?? 0,
+                screenshotHeight = QaScreenshotHeight ?? 0,
+                includeOffscreen = QaWorldDumpIncludeOffscreen,
             },
             CommandKind.QaSwipe => new QaSwipeArgs
             {
