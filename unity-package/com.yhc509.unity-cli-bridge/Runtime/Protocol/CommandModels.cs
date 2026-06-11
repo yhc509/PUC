@@ -495,6 +495,7 @@ namespace UnityCli.Protocol
         public int y;
         public int screenshotWidth;
         public int screenshotHeight;
+        public string? target;
     }
 
     [Serializable]
@@ -529,6 +530,31 @@ namespace UnityCli.Protocol
     public sealed class QaUiDumpPayload
     {
         public QaUiElement[] elements = Array.Empty<QaUiElement>();
+    }
+
+    [Serializable]
+    public sealed class QaWorldDumpArgs
+    {
+        public int screenshotWidth;
+        public int screenshotHeight;
+        public bool includeOffscreen;
+    }
+
+    [Serializable]
+    public sealed class QaWorldElement
+    {
+        public string path = string.Empty;
+        public string label = string.Empty;
+        public int centerX;
+        public int centerY;
+        public bool onScreen;
+        public bool hasAction;
+    }
+
+    [Serializable]
+    public sealed class QaWorldDumpPayload
+    {
+        public QaWorldElement[] elements = Array.Empty<QaWorldElement>();
     }
 
     [Serializable]
