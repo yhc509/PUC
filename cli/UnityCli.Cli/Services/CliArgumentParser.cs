@@ -356,6 +356,7 @@ public static partial class CliArgumentParser
             "swipe" => new ParsedCommand(CommandKind.QaSwipe),
             "key" => new ParsedCommand(CommandKind.QaKey),
             "ui-dump" => new ParsedCommand(CommandKind.QaUiDump),
+            "world-dump" => new ParsedCommand(CommandKind.QaWorldDump),
             "wait" => new ParsedCommand(CommandKind.QaWait),
             "wait-until" => new ParsedCommand(CommandKind.QaWaitUntil),
             _ => throw new CliUsageException($"알 수 없는 qa 서브커맨드입니다: {subCommand}"),
@@ -540,6 +541,7 @@ public static partial class CliArgumentParser
                     break;
                 case CommandKind.QaClick when token == "--target":
                 case CommandKind.QaSwipe when token == "--target":
+                case CommandKind.QaTap when token == "--target":
                     parsed.QaTarget = RequireValue(tokens, "--target");
                     break;
                 case CommandKind.QaTap when token == "--x":
@@ -550,13 +552,18 @@ public static partial class CliArgumentParser
                     break;
                 case CommandKind.QaTap when token == "--screenshot-width":
                 case CommandKind.QaUiDump when token == "--screenshot-width":
+                case CommandKind.QaWorldDump when token == "--screenshot-width":
                 case CommandKind.QaSwipe when token == "--screenshot-width":
                     parsed.QaScreenshotWidth = RequireInt(RequireValue(tokens, "--screenshot-width"), "--screenshot-width");
                     break;
                 case CommandKind.QaTap when token == "--screenshot-height":
                 case CommandKind.QaUiDump when token == "--screenshot-height":
+                case CommandKind.QaWorldDump when token == "--screenshot-height":
                 case CommandKind.QaSwipe when token == "--screenshot-height":
                     parsed.QaScreenshotHeight = RequireInt(RequireValue(tokens, "--screenshot-height"), "--screenshot-height");
+                    break;
+                case CommandKind.QaWorldDump when token == "--include-offscreen":
+                    parsed.QaWorldDumpIncludeOffscreen = true;
                     break;
                 case CommandKind.QaSwipe when token == "--from":
                     parsed.QaSwipeFrom = RequireValue(tokens, "--from");

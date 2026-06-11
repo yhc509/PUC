@@ -66,7 +66,7 @@ status → play → (입력 시뮬레이션) → 검증 (로그 + 스크린샷) 
 ## 사전 조건
 
 ### EventSystem
-`qa click`, `qa tap`, UGUI 대상 `qa swipe --target`은 씬에 EventSystem이 필요하다.
+`qa click`, 좌표 기반 `qa tap --x/--y`, UGUI 대상 `qa swipe --target`은 씬에 EventSystem이 필요하다. 월드 대상 `qa tap --target`은 direct action 또는 Input System 좌표 fallback 경로를 사용하므로 EventSystem이 필수가 아니다.
 없으면 메뉴로 추가:
 
 ```bash
@@ -138,6 +138,16 @@ ucli screenshot --view game --path /tmp/qa-check.png --project "$P" --json
 ### When to use `qa click` vs `qa tap`
 - **`qa click --target <path>`**: Use when you know the GameObject path (from `scene inspect`). 100% precise, no coordinate guessing.
 - **`qa tap --x <X> --y <Y>`**: Use when you only have visual information from a screenshot (for example, you can see a button but do not know its path).
+
+### Non-UI world objects (`qa world-dump`)
+
+UI elements come from `qa ui-dump`. For non-UI world objects (units on a battle grid, world-space interactables), the game opts them in:
+
+- Implement `UnityCliBridge.Bridge.IQaTappable` on your own component, or attach the `QaTappable` marker component (set `label`, optional `anchor`, optional `onQaTap`).
+- `qa world-dump` then lists them with `label`, `path`, image-space `centerX`/`centerY`, `onScreen`, `hasAction`.
+- Tap with `qa tap --target <path>`. If the object's `TryQaTap()` handles it (e.g. `onQaTap` is wired), the bridge invokes it directly; otherwise the bridge simulates an Input System tap at the anchor, which reaches games that poll the Input System directly (where `qa tap --x --y`'s EventSystem path does not).
+- Off-screen objects are hidden unless you pass `--include-offscreen`.
+- Same-named sibling world objects share a path and resolve to the first match; give tappable objects unique names/labels to target them individually.
 
 ### qa tap Workflow
 1. Take a screenshot: `screenshot` -> note `width`, `height`, and when needed `screenWidth`, `screenHeight`, `imageOrigin`, `coordinateOrigin` from the response

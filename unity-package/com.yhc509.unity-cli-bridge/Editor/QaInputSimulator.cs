@@ -59,6 +59,32 @@ namespace UnityCliBridge.Bridge.Editor
             throw new CommandFailureException("QA_NO_POINTER_DEVICE", "No pointer device found in Input System.", false, null);
         }
 
+        /// <summary>
+        /// Queues a pointer press and release at the given screen position in the current frame.
+        /// Mirrors SimulateKey's same-frame press/release; reaches Input System polling that reads
+        /// Mouse/Touchscreen state. Prefers Touchscreen, then Mouse.
+        /// </summary>
+        public static void SimulateTap(Vector2 screenPosition)
+        {
+            Touchscreen? touchscreen = Touchscreen.current;
+            if (touchscreen != null)
+            {
+                QueueTouchState(touchscreen, screenPosition, UnityEngine.InputSystem.TouchPhase.Began);
+                QueueTouchState(touchscreen, screenPosition, UnityEngine.InputSystem.TouchPhase.Ended);
+                return;
+            }
+
+            Mouse? mouse = Mouse.current;
+            if (mouse != null)
+            {
+                QueueMouseState(mouse, screenPosition, true);
+                QueueMouseState(mouse, screenPosition, false);
+                return;
+            }
+
+            throw new CommandFailureException("QA_NO_POINTER_DEVICE", "No pointer device found in Input System.", false, null);
+        }
+
         private static Keyboard RequireKeyboard()
         {
             Keyboard? keyboard = Keyboard.current;

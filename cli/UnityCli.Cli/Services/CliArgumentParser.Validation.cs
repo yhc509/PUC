@@ -395,13 +395,30 @@ public static partial class CliArgumentParser
 
                 break;
             }
-            case CommandKind.QaTap when !parsed.QaTapX.HasValue || !parsed.QaTapY.HasValue:
-                throw new CliUsageException("`qa tap`에는 `--x`와 `--y`가 모두 필요합니다.");
             case CommandKind.QaTap:
+            {
+                bool hasTarget = !string.IsNullOrWhiteSpace(parsed.QaTarget);
+                bool hasAnyCoord = parsed.QaTapX.HasValue || parsed.QaTapY.HasValue;
+                if (hasTarget)
+                {
+                    if (hasAnyCoord)
+                    {
+                        throw new CliUsageException("`qa tap`에서 `--target`과 `--x`/`--y`는 함께 사용할 수 없습니다.");
+                    }
+                }
+                else if (!parsed.QaTapX.HasValue || !parsed.QaTapY.HasValue)
+                {
+                    throw new CliUsageException("`qa tap`에는 `--x`와 `--y`가 모두 필요합니다(또는 `--target`).");
+                }
+
                 ValidateQaScreenshotDimensions(parsed, "`qa tap`");
                 break;
+            }
             case CommandKind.QaUiDump:
                 ValidateQaScreenshotDimensions(parsed, "`qa ui-dump`");
+                break;
+            case CommandKind.QaWorldDump:
+                ValidateQaScreenshotDimensions(parsed, "`qa world-dump`");
                 break;
             case CommandKind.QaSwipe when string.IsNullOrWhiteSpace(parsed.QaSwipeFrom) || string.IsNullOrWhiteSpace(parsed.QaSwipeTo):
                 throw new CliUsageException("`qa swipe`에는 `--from`과 `--to`가 모두 필요합니다.");
@@ -583,6 +600,7 @@ public static partial class CliArgumentParser
             CommandKind.QaSwipe => "qa swipe",
             CommandKind.QaKey => "qa key",
             CommandKind.QaUiDump => "qa ui-dump",
+            CommandKind.QaWorldDump => "qa world-dump",
             CommandKind.QaWait => "qa wait",
             CommandKind.QaWaitUntil => "qa wait-until",
             CommandKind.InstancesList => "instances list",

@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Threading.Tasks;
 using UnityCli.Protocol;
+using UnityCliBridge.Bridge;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -30,6 +31,7 @@ namespace UnityCliBridge.Bridge.Editor
                 || string.Equals(command, ProtocolConstants.CommandQaSwipe, StringComparison.Ordinal)
                 || string.Equals(command, ProtocolConstants.CommandQaKey, StringComparison.Ordinal)
                 || string.Equals(command, ProtocolConstants.CommandQaUiDump, StringComparison.Ordinal)
+                || string.Equals(command, ProtocolConstants.CommandQaWorldDump, StringComparison.Ordinal)
                 || string.Equals(command, ProtocolConstants.CommandQaWaitUntil, StringComparison.Ordinal);
         }
 
@@ -60,6 +62,11 @@ namespace UnityCliBridge.Bridge.Editor
             if (string.Equals(command, ProtocolConstants.CommandQaUiDump, StringComparison.Ordinal))
             {
                 return HandleUiDump(argumentsJson);
+            }
+
+            if (string.Equals(command, ProtocolConstants.CommandQaWorldDump, StringComparison.Ordinal))
+            {
+                return HandleWorldDump(argumentsJson);
             }
 
             if (string.Equals(command, ProtocolConstants.CommandQaSwipe, StringComparison.Ordinal))
@@ -196,6 +203,12 @@ namespace UnityCliBridge.Bridge.Editor
         private static string HandleTap(string argumentsJson)
         {
             QaTapArgs args = ProtocolJson.Deserialize<QaTapArgs>(argumentsJson) ?? new QaTapArgs();
+
+            if (!string.IsNullOrWhiteSpace(args.target))
+            {
+                return HandleTapTarget(args.target!);
+            }
+
             Vector2Int screenPosition = ResolveTapScreenPosition(args);
 
             EventSystem eventSystem = RequireEventSystem();
@@ -227,6 +240,90 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 completed = true,
             });
+        }
+
+        private static string HandleTapTarget(string target)
+        {
+            if (!QaTargetRegistry.TryResolvePath(target, out GameObject? gameObject) || gameObject == null)
+            {
+                throw new CommandFailureException("QA_TARGET_NOT_FOUND", $"No active GameObject found at path '{target}'.", false, null);
+            }
+
+            if (TryInvokeQaTappable(gameObject))
+            {
+                return ProtocolJson.Serialize(new QaTapPayload { completed = true });
+            }
+
+#if ENABLE_INPUT_SYSTEM
+            Vector2 anchorScreenPosition = GetWorldTapScreenPosition(gameObject, target);
+            QaInputSimulator.SimulateTap(anchorScreenPosition);
+            return ProtocolJson.Serialize(new QaTapPayload { completed = true });
+#else
+            throw CreateInputSystemRequiredException("qa tap --target (coordinate fallback)");
+#endif
+        }
+
+        private static bool TryInvokeQaTappable(GameObject gameObject)
+        {
+            foreach (IQaTappable tappable in gameObject.GetComponents<IQaTappable>())
+            {
+                if (tappable is Behaviour behaviour && !behaviour.isActiveAndEnabled)
+                {
+                    continue;
+                }
+
+                if (tappable.TryQaTap())
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+#if ENABLE_INPUT_SYSTEM
+        private static Vector2 GetWorldTapScreenPosition(GameObject gameObject, string target)
+        {
+            Transform anchor = ResolveTapAnchor(gameObject);
+            Camera? camera = Camera.main;
+            if (camera == null)
+            {
+                throw new CommandFailureException(
+                    "QA_NO_CAMERA",
+                    "qa tap --target requires a main camera to resolve a world object's screen position.",
+                    false,
+                    null);
+            }
+
+            Vector3 screenPoint = camera.WorldToScreenPoint(anchor.position);
+            Vector2Int screenSize = GetGameViewRenderSize();
+            if (screenPoint.z <= 0f
+                || screenPoint.x < 0f || screenPoint.x > screenSize.x
+                || screenPoint.y < 0f || screenPoint.y > screenSize.y)
+            {
+                throw new CommandFailureException(
+                    "QA_TARGET_OFFSCREEN",
+                    $"qa tap --target: '{target}' anchor is off-screen; nothing to tap.",
+                    false,
+                    null);
+            }
+
+            return new Vector2(screenPoint.x, screenPoint.y);
+        }
+#endif
+
+        private static Transform ResolveTapAnchor(GameObject gameObject)
+        {
+            foreach (IQaTappable tappable in gameObject.GetComponents<IQaTappable>())
+            {
+                Transform? anchor = tappable.QaAnchor;
+                if (anchor != null)
+                {
+                    return anchor;
+                }
+            }
+
+            return gameObject.transform;
         }
 
         private static Vector2Int ResolveTapScreenPosition(QaTapArgs args)
@@ -471,6 +568,144 @@ namespace UnityCliBridge.Bridge.Editor
         }
 
         private static int CompareUiElements(QaUiElement left, QaUiElement right)
+        {
+            int compare = left.centerY.CompareTo(right.centerY);
+            if (compare != 0)
+            {
+                return compare;
+            }
+
+            compare = left.centerX.CompareTo(right.centerX);
+            if (compare != 0)
+            {
+                return compare;
+            }
+
+            return string.CompareOrdinal(left.path, right.path);
+        }
+
+        private static string HandleWorldDump(string argumentsJson)
+        {
+            QaWorldDumpArgs args = ProtocolJson.Deserialize<QaWorldDumpArgs>(argumentsJson) ?? new QaWorldDumpArgs();
+            Vector2Int screenSize = GetGameViewRenderSize();
+            Vector2Int screenshotSize = ResolveScreenshotSize(args.screenshotWidth, args.screenshotHeight, screenSize);
+            int screenshotWidth = screenshotSize.x;
+            int screenshotHeight = screenshotSize.y;
+            WarnIfAspectMismatch(screenshotWidth, screenshotHeight, screenSize.x, screenSize.y);
+
+            Camera? camera = Camera.main;
+            if (camera == null)
+            {
+                throw new CommandFailureException(
+                    "QA_NO_CAMERA",
+                    "qa world-dump requires a main camera to project world objects to screen.",
+                    false,
+                    null);
+            }
+
+            List<QaWorldElement> elements = CollectWorldTappables(
+                camera, args.includeOffscreen, screenshotWidth, screenshotHeight, screenSize);
+            elements.Sort(CompareWorldElements);
+
+            return ProtocolJson.Serialize(new QaWorldDumpPayload
+            {
+                elements = elements.ToArray(),
+            });
+        }
+
+        private static List<QaWorldElement> CollectWorldTappables(
+            Camera camera,
+            bool includeOffscreen,
+            int screenshotWidth,
+            int screenshotHeight,
+            Vector2Int screenSize)
+        {
+            var elements = new List<QaWorldElement>();
+            var seenGameObjects = new HashSet<int>();
+
+#if UNITY_2022_2_OR_NEWER
+            MonoBehaviour[] behaviours = UnityEngine.Object.FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+#else
+            MonoBehaviour[] behaviours = UnityEngine.Object.FindObjectsOfType<MonoBehaviour>();
+#endif
+            foreach (MonoBehaviour behaviour in behaviours)
+            {
+                if (behaviour == null
+                    || behaviour is not IQaTappable tappable
+                    || !behaviour.isActiveAndEnabled
+                    || !behaviour.gameObject.activeInHierarchy)
+                {
+                    continue;
+                }
+
+                GameObject gameObject = behaviour.gameObject;
+                if (!seenGameObjects.Add(gameObject.GetInstanceID()))
+                {
+                    continue;
+                }
+
+                QaWorldElement? element = CreateWorldElement(
+                    gameObject, tappable, camera, includeOffscreen, screenshotWidth, screenshotHeight, screenSize);
+                if (element != null)
+                {
+                    elements.Add(element);
+                }
+            }
+
+            return elements;
+        }
+
+        private static QaWorldElement? CreateWorldElement(
+            GameObject gameObject,
+            IQaTappable tappable,
+            Camera camera,
+            bool includeOffscreen,
+            int screenshotWidth,
+            int screenshotHeight,
+            Vector2Int screenSize)
+        {
+            Transform anchor = tappable.QaAnchor != null ? tappable.QaAnchor! : gameObject.transform;
+
+            bool onScreen = false;
+            int centerX = 0;
+            int centerY = 0;
+
+            Vector3 screenPoint = camera.WorldToScreenPoint(anchor.position);
+            onScreen = screenPoint.z > 0f
+                && screenPoint.x >= 0f && screenPoint.x <= screenSize.x
+                && screenPoint.y >= 0f && screenPoint.y <= screenSize.y;
+            centerX = QaCoordinateConverter.ConvertScreenXToScreenshotX((int)screenPoint.x, screenSize.x, screenshotWidth);
+            centerY = QaCoordinateConverter.ConvertScreenYToScreenshotY((int)screenPoint.y, screenSize.y, screenshotHeight);
+
+            if (!onScreen && !includeOffscreen)
+            {
+                return null;
+            }
+
+            return new QaWorldElement
+            {
+                path = GetGameObjectPath(gameObject),
+                label = tappable.QaLabel,
+                centerX = centerX,
+                centerY = centerY,
+                onScreen = onScreen,
+                hasAction = DetermineHasAction(tappable),
+            };
+        }
+
+        private static bool DetermineHasAction(IQaTappable tappable)
+        {
+            // QaTappable reports action availability without side effects via its persistent listener count;
+            // custom IQaTappable implementations are optimistically reported as actionable (confirmed at tap time).
+            if (tappable is QaTappable marker)
+            {
+                return marker.onQaTap != null && marker.onQaTap.GetPersistentEventCount() > 0;
+            }
+
+            return true;
+        }
+
+        private static int CompareWorldElements(QaWorldElement left, QaWorldElement right)
         {
             int compare = left.centerY.CompareTo(right.centerY);
             if (compare != 0)
