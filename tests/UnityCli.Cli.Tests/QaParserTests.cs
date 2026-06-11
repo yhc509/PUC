@@ -519,6 +519,7 @@ public sealed class QaParserTests
         Assert.Contains("qa swipe [--target <path>] --from <x,y> --to <x,y> [--duration <ms>] [--screenshot-width <int> --screenshot-height <int>]", helpText);
         Assert.Contains("qa key", helpText);
         Assert.Contains("qa ui-dump", helpText);
+        Assert.Contains("qa world-dump", helpText);
         Assert.Contains("qa wait --ms <int>", helpText);
         Assert.Contains("qa wait-until", helpText);
         Assert.Contains("qa tap and coordinate-based qa swipe treat coordinates as screenshot pixels with a top-left origin", helpText);
@@ -550,6 +551,110 @@ public sealed class QaParserTests
         Assert.Contains("clickable UI elements", descriptor.Summary);
         Assert.Contains("centerX/centerY", descriptor.Summary);
         Assert.Equal(ProtocolConstants.CommandQaUiDump, descriptor.ProtocolCommand);
+    }
+
+    [Fact]
+    public void Parse_QaWorldDump_AcceptsScreenshotDimensions()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "qa", "world-dump",
+            "--screenshot-width", "800",
+            "--screenshot-height", "600"
+        ]);
+
+        Assert.Equal(CommandKind.QaWorldDump, parsed.Kind);
+        Assert.Equal(800, parsed.QaScreenshotWidth);
+        Assert.Equal(600, parsed.QaScreenshotHeight);
+        Assert.False(parsed.QaWorldDumpIncludeOffscreen);
+    }
+
+    [Fact]
+    public void Parse_QaWorldDump_AcceptsIncludeOffscreen()
+    {
+        var parsed = CliArgumentParser.Parse(["qa", "world-dump", "--include-offscreen"]);
+
+        Assert.Equal(CommandKind.QaWorldDump, parsed.Kind);
+        Assert.True(parsed.QaWorldDumpIncludeOffscreen);
+    }
+
+    [Fact]
+    public void Parse_QaWorldDump_WithOnlyScreenshotWidth_ThrowsUsage()
+    {
+        var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "qa", "world-dump",
+            "--screenshot-width", "800"
+        ]));
+
+        Assert.Contains("--screenshot-width", ex.Message);
+        Assert.Contains("--screenshot-height", ex.Message);
+    }
+
+    [Fact]
+    public void Parse_QaWorldDump_ToEnvelope_UsesQaWorldDumpCommand()
+    {
+        var parsed = CliArgumentParser.Parse(["qa", "world-dump", "--include-offscreen"]);
+
+        var envelope = parsed.ToEnvelope();
+        var arguments = ParseArguments(envelope.argumentsJson);
+
+        Assert.Equal(ProtocolConstants.CommandQaWorldDump, envelope.command);
+        Assert.True(arguments.GetProperty("includeOffscreen").GetBoolean());
+    }
+
+    [Fact]
+    public void Parse_QaTap_WithTarget()
+    {
+        var parsed = CliArgumentParser.Parse(["qa", "tap", "--target", "/Battle/Units/Unit_Erich"]);
+
+        Assert.Equal(CommandKind.QaTap, parsed.Kind);
+        Assert.Equal("/Battle/Units/Unit_Erich", parsed.QaTarget);
+        Assert.Null(parsed.QaTapX);
+        Assert.Null(parsed.QaTapY);
+    }
+
+    [Fact]
+    public void Parse_QaTap_WithTarget_ToEnvelope_IncludesTarget()
+    {
+        var parsed = CliArgumentParser.Parse(["qa", "tap", "--target", "/Battle/Units/Unit_Erich"]);
+
+        var envelope = parsed.ToEnvelope();
+        var arguments = ParseArguments(envelope.argumentsJson);
+
+        Assert.Equal(ProtocolConstants.CommandQaTap, envelope.command);
+        Assert.Equal("/Battle/Units/Unit_Erich", arguments.GetProperty("target").GetString());
+    }
+
+    [Fact]
+    public void Parse_QaTap_WithTargetAndCoordinates_ThrowsUsage()
+    {
+        var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "qa", "tap",
+            "--target", "/Battle/Units/Unit_Erich",
+            "--x", "100",
+            "--y", "200"
+        ]));
+
+        Assert.Contains("--target", ex.Message);
+    }
+
+    [Fact]
+    public void Parse_QaTap_WithNeitherTargetNorCoordinates_ThrowsUsage()
+    {
+        var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["qa", "tap"]));
+
+        Assert.Contains("--x", ex.Message);
+    }
+
+    [Fact]
+    public void QaWorldDump_CommandCatalog_DescribesWorldTappables()
+    {
+        CliCommandDescriptor? descriptor = CliCommandCatalog.FindByCommand("qa world-dump");
+
+        Assert.NotNull(descriptor);
+        Assert.Contains("--include-offscreen", descriptor!.Synopsis);
+        Assert.Contains("IQaTappable", descriptor.Summary);
+        Assert.Contains("qa tap --target", descriptor.Summary);
+        Assert.Equal(ProtocolConstants.CommandQaWorldDump, descriptor.ProtocolCommand);
     }
 
     private static JsonElement ParseArguments(string argumentsJson)
