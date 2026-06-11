@@ -162,6 +162,15 @@ Returned `path` values are reliable when unique; if same-named siblings share a 
 
 If the dump should match a resized image, pass `--screenshot-width` and `--screenshot-height` together. Otherwise, the bridge uses the last successful `screenshot` dimensions when available.
 
+### Non-UI world objects (`qa world-dump`)
+
+UI elements come from `qa ui-dump`. For non-UI world objects (units on a battle grid, world-space interactables), the game opts them in:
+
+- Implement `UnityCliBridge.Bridge.IQaTappable` on your own component, or attach the `QaTappable` marker component (set `label`, optional `anchor`, optional `onQaTap`).
+- `qa world-dump` then lists them with `label`, `path`, image-space `centerX`/`centerY`, `onScreen`, `hasAction`.
+- Tap with `qa tap --target <path>`. If the object's `TryQaTap()` handles it (e.g. `onQaTap` is wired), the bridge invokes it directly; otherwise the bridge simulates an Input System tap at the anchor, which reaches games that poll the Input System directly (where `qa tap --x --y`'s EventSystem path does not).
+- Off-screen objects are hidden unless you pass `--include-offscreen`.
+
 ### qa tap Workflow
 1. Take a screenshot: `screenshot` -> note `width`, `height`, and when needed `screenWidth`, `screenHeight`, `imageOrigin`, `coordinateOrigin` from the response
 2. Analyze the screenshot image to find the target pixel coordinates `(X, Y)` with `Y=0` at the top-left

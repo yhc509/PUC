@@ -139,6 +139,15 @@ ucli screenshot --view game --path /tmp/qa-check.png --project "$P" --json
 - **`qa click --target <path>`**: Use when you know the GameObject path (from `scene inspect`). 100% precise, no coordinate guessing.
 - **`qa tap --x <X> --y <Y>`**: Use when you only have visual information from a screenshot (for example, you can see a button but do not know its path).
 
+### Non-UI world objects (`qa world-dump`)
+
+UI elements come from `qa ui-dump`. For non-UI world objects (units on a battle grid, world-space interactables), the game opts them in:
+
+- Implement `UnityCliBridge.Bridge.IQaTappable` on your own component, or attach the `QaTappable` marker component (set `label`, optional `anchor`, optional `onQaTap`).
+- `qa world-dump` then lists them with `label`, `path`, image-space `centerX`/`centerY`, `onScreen`, `hasAction`.
+- Tap with `qa tap --target <path>`. If the object's `TryQaTap()` handles it (e.g. `onQaTap` is wired), the bridge invokes it directly; otherwise the bridge simulates an Input System tap at the anchor, which reaches games that poll the Input System directly (where `qa tap --x --y`'s EventSystem path does not).
+- Off-screen objects are hidden unless you pass `--include-offscreen`.
+
 ### qa tap Workflow
 1. Take a screenshot: `screenshot` -> note `width`, `height`, and when needed `screenWidth`, `screenHeight`, `imageOrigin`, `coordinateOrigin` from the response
 2. Analyze the screenshot image to find the target pixel coordinates `(X, Y)` with `Y=0` at the top-left
