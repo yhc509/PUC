@@ -377,6 +377,19 @@ public static partial class CliArgumentParser
 
                 break;
             }
+            case CommandKind.QaRunSequence:
+                if (parsed.QaSequenceArgs == null || parsed.QaSequenceArgs.steps.Length == 0)
+                {
+                    throw new CliUsageException("`qa run-sequence`에는 `--spec-json <json|@file>`(비어 있지 않은 steps)이 필요합니다.");
+                }
+
+                if (parsed.QaSequenceTimeoutMs < 0
+                    || parsed.QaSequenceTimeoutMs > ProtocolConstants.MaxQaRunSequenceTimeoutMs)
+                {
+                    throw new CliUsageException($"`qa run-sequence`의 `--timeout`은 0~{ProtocolConstants.MaxQaRunSequenceTimeoutMs}ms 범위여야 합니다.");
+                }
+
+                break;
         }
     }
 
@@ -603,6 +616,7 @@ public static partial class CliArgumentParser
             CommandKind.QaWorldDump => "qa world-dump",
             CommandKind.QaWait => "qa wait",
             CommandKind.QaWaitUntil => "qa wait-until",
+            CommandKind.QaRunSequence => "qa run-sequence",
             CommandKind.InstancesList => "instances list",
             CommandKind.InstancesUse => "instances use",
             CommandKind.Doctor => "doctor",
