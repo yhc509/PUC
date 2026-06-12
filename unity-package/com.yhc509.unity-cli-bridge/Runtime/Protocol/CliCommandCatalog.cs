@@ -606,6 +606,16 @@ namespace UnityCli.Protocol
                 canUseLive: true,
                 isAllowedWhileBusy: false),
             new CliCommandDescriptor(
+                "qa run-sequence",
+                "qa run-sequence --spec-json <json|@file> [--timeout <ms>]",
+                "Runs a linear sequence of condition-gated action steps in the bridge: each step waits (ANDed conditions) then executes its actions, with no per-step screenshot round-trip. Conditions read built-in state (active/gone/transform/scene/log/interactable) or game-exposed IQaQueryable values, compared with ==/!=/>=/<=/near/changed. Actions reuse qa key/tap/swipe/wait. Returns the completed step count, or the stopped step with its unmet conditions and a state snapshot on timeout. Requires Play Mode; no force-rule.",
+                CliCommandGroup.QaWorkflows,
+                ProtocolConstants.CommandQaRunSequence,
+                canUseLocal: false,
+                canUseLive: true,
+                isAllowedWhileBusy: false,
+                defaultLiveTimeoutMs: ProtocolConstants.MaxQaRunSequenceTimeoutMs + 5_000),
+            new CliCommandDescriptor(
                 "qa wait",
                 "qa wait --ms <int>",
                 "Waits for the specified number of milliseconds (local only, does not contact the editor).",
