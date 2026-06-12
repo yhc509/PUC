@@ -13,7 +13,7 @@ using UnityEngine.SceneManagement;
 
 namespace UnityCliBridge.Bridge.Editor
 {
-    internal sealed class QaCommandHandler
+    internal sealed partial class QaCommandHandler
     {
         private static readonly Dictionary<int, ScreenPositionContext> _screenPositionContextCache = new();
         private static bool _isScreenPositionCacheSubscribed;
