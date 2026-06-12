@@ -21,6 +21,7 @@ status → play → (입력 시뮬레이션) → 검증 (로그 + 스크린샷) 
 |--------|-----------|-----------|
 | `qa click --target <path>` | EventSystem.Execute | UI 버튼, 토글 등 클릭 |
 | `qa click --qa-id <id>` | EventSystem.Execute | [QaTarget] 어트리뷰트로 마킹된 대상 |
+| `qa ui-dump [--screenshot-width W --screenshot-height H]` | Bridge UI 구조 덤프 | 클릭 가능한 UI의 path/text/rect/center 조회 |
 | `qa tap --x N --y N [--screenshot-width W --screenshot-height H]` | EventSystem raycast + Execute | 스크린샷 분석 결과 기반 UI 좌표 탭 |
 | `qa swipe --target <path> --from x,y --to x,y` | Input System target-relative swipe | UI 슬라이더, ScrollRect 드래그 |
 | `qa swipe --from x,y --to x,y [--screenshot-width W --screenshot-height H]` | Input System 스크린샷 좌표 | 스크린샷 분석 결과 기반 화면 스와이프 |
@@ -29,6 +30,8 @@ status → play → (입력 시뮬레이션) → 검증 (로그 + 스크린샷) 
 | `qa wait-until --scene <name>` | Bridge 폴링 | 씬 전환 대기 |
 | `qa wait-until --log-contains <text>` | Bridge 폴링 | 특정 로그 출력 대기 |
 | `qa wait-until --object-exists <path>` | Bridge 폴링 | 오브젝트 존재 대기 |
+| `qa wait-until --object-interactable <path>` | Bridge 폴링 | 버튼/대상 클릭 가능 대기 |
+| `qa wait-until --object-gone <path>` | Bridge 폴링 | 로딩/오브젝트 비활성 또는 파괴 대기 |
 | `qa run-sequence --spec-json @seq.json` | Bridge deferred state machine | 조건 대기와 입력 액션을 한 요청에서 순차 실행 |
 
 ## 입력 방식 판단 기준
@@ -37,6 +40,14 @@ status → play → (입력 시뮬레이션) → 검증 (로그 + 스크린샷) 
 - 버튼 클릭, 토글 등 EventSystem을 통해 즉시 처리하는 대상
 - `--target`으로 hierarchy path 지정: `/Canvas[0]/Button[0]`
 - EventSystem이 씬에 있어야 함 (없으면 `QA_NO_EVENT_SYSTEM` 에러)
+
+### 클릭 가능 UI 탐색 → 구조화 덤프 (ui-dump)
+- `qa ui-dump`는 현재 Play Mode 화면에서 `IPointerClickHandler`가 붙은 활성 GameObject를 수집한다.
+- 응답의 `path`는 `qa click --target <path>`에 바로 사용할 수 있다.
+- `path`는 고유할 때 신뢰할 수 있다. 같은 이름의 sibling이 같은 path를 공유하면 `centerX`/`centerY`로 `qa tap`을 사용한다.
+- `centerX`/`centerY`는 스크린샷 이미지 좌표(top-left origin)이므로 `qa tap --x <centerX> --y <centerY>`에 바로 사용할 수 있다.
+- `text`는 UGUI Text/TMP_Text 같은 자식 컴포넌트의 `text` 프로퍼티를 reflection으로 읽는다. TMP 패키지가 없어도 동작한다.
+- `qa ui-dump` 자체는 raycast를 하지 않으므로 EventSystem을 요구하지 않는다. 실제 `qa click`과 좌표 기반 `qa tap --x/--y` 실행에는 EventSystem이 필요하다.
 
 ### UI 좌표 탭 → EventSystem raycast 경로 (tap)
 - 스크린샷에서 읽은 좌표로 현재 화면의 UGUI 대상을 찾을 때 사용
@@ -125,6 +136,7 @@ ucli read-console --type error --limit 5 --project "$P" --json
 
 ```bash
 ucli screenshot --view game --path /tmp/qa-check.png --project "$P" --json
+ucli screenshot --view game --format jpg --quality 70 --max-width 1024 --path /tmp/qa-check.jpg --project "$P" --json
 # 이후 이미지를 Read 도구로 확인
 ```
 
@@ -136,9 +148,20 @@ ucli screenshot --view game --path /tmp/qa-check.png --project "$P" --json
 
 ## Coordinate-Based UI Interaction
 
-### When to use `qa click` vs `qa tap`
-- **`qa click --target <path>`**: Use when you know the GameObject path (from `scene inspect`). 100% precise, no coordinate guessing.
-- **`qa tap --x <X> --y <Y>`**: Use when you only have visual information from a screenshot (for example, you can see a button but do not know its path).
+### When to use `qa ui-dump`, `qa click`, or `qa tap`
+- **`qa ui-dump`**: Use first when you need clickable UI candidates with path, visible text, and image-space rect/center.
+- **`qa click --target <path>`**: Use when you know the GameObject path from `qa ui-dump` or `scene inspect`. 100% precise, no coordinate guessing.
+- **`qa tap --x <X> --y <Y>`**: Use when you only have image coordinates, such as `centerX`/`centerY` from `qa ui-dump` or pixels read from a screenshot.
+
+### qa ui-dump Workflow
+1. Enter Play Mode and, if you already captured a reference image, keep its `width`/`height` available
+2. Dump candidates: `qa ui-dump` -> inspect each element's `path`, `text`, `interactable`, `x`, `y`, `width`, `height`, `centerX`, `centerY`
+3. Prefer path click: `qa click --target <path>`
+4. If a coordinate tap is better, use `qa tap --x <centerX> --y <centerY>`
+
+Returned `path` values are reliable when unique; if same-named siblings share a path, use `centerX`/`centerY` with `qa tap` instead.
+
+If the dump should match a resized image, pass `--screenshot-width` and `--screenshot-height` together. Otherwise, the bridge uses the last successful `screenshot` dimensions when available.
 
 ### Non-UI world objects (`qa world-dump`)
 
@@ -266,8 +289,8 @@ If you need to specify different dimensions, for example when the screenshot was
 ucli qa tap --x 480 --y 225 --screenshot-width 961 --screenshot-height 554 --project "$P" --json
 ```
 
-### Precise coordinate lookup via execute
-When screenshot coordinates are imprecise, use `execute` to log exact UI element positions:
+### Precise coordinate lookup fallback via execute
+Prefer `qa ui-dump` for clickable UI. When screenshot coordinates are imprecise and the target is not exposed by `IPointerClickHandler`, use `execute` to log exact UI element positions:
 
 ```bash
 # Find a button's screen center coordinates
@@ -333,6 +356,17 @@ ucli qa click --target "/Canvas/StartButton" --project "$P" --json
 ucli qa wait-until --log-contains "Game started" --timeout 5000 --project "$P" --json
 
 ucli stop --project "$P" --json
+```
+
+고정 대기 대신 화면 상태를 조건으로 기다리면 불필요한 sleep을 줄일 수 있다. 여러 조건을 함께 지정하면 모두(AND) 충족돼야 한다. 버튼은 활성화와 유효 interactable 상태를 함께 기다리고, 로딩 표시는 active hierarchy에서 사라질 때까지 기다린다. `--object-interactable`은 대상 컴포넌트의 `IsInteractable()` 결과를 우선 사용하고, 없으면 public bool `interactable` 프로퍼티를 읽으며, 해당 상태가 없는 오브젝트는 active로 resolve되면 true로 취급한다.
+
+```bash
+# 시작 버튼이 클릭 가능해질 때까지 대기 후 클릭
+ucli qa wait-until --object-interactable StartButton --timeout 10000 --project "$P" --json
+ucli qa click --qa-id StartButton --project "$P" --json
+
+# 로딩 스피너가 비활성/파괴될 때까지 대기
+ucli qa wait-until --object-gone LoadingSpinner --timeout 10000 --project "$P" --json
 ```
 
 ## 알려진 제한사항
