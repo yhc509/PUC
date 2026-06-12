@@ -57,6 +57,32 @@ public class QaSequenceSpecParserTests
     }
 
     [Fact]
+    public void Parse_NearWithoutEpsilon_FillsDefaultEpsilon()
+    {
+        const string json = """
+        { "steps": [ { "wait": [ { "target": "/Battle/Erich", "transform": "position", "op": "near", "value": [3,0,3] } ],
+          "actions": [ { "key": "space" } ] } ] }
+        """;
+
+        var cond = QaSequenceSpecParser.Parse(json).steps[0].wait[0];
+
+        Assert.Equal(ProtocolConstants.DefaultQaNearEpsilon, cond.epsilon);
+    }
+
+    [Fact]
+    public void Parse_NearWithExplicitZeroEpsilon_PreservesZero()
+    {
+        const string json = """
+        { "steps": [ { "wait": [ { "target": "/Battle/Erich", "transform": "position", "op": "near", "value": [3,0,3], "epsilon": 0 } ],
+          "actions": [ { "key": "space" } ] } ] }
+        """;
+
+        var cond = QaSequenceSpecParser.Parse(json).steps[0].wait[0];
+
+        Assert.Equal(0f, cond.epsilon);
+    }
+
+    [Fact]
     public void Parse_TapWithTargetAction()
     {
         const string json = """
@@ -77,5 +103,17 @@ public class QaSequenceSpecParserTests
     public void Parse_UnknownOp_Throws()
         => Assert.Throws<CliUsageException>(() => QaSequenceSpecParser.Parse("""
         { "steps": [ { "wait": [ { "target": "/X", "query": "hp", "op": "~~", "value": "0" } ], "actions": [ { "key": "a" } ] } ] }
+        """));
+
+    [Theory]
+    [InlineData("""{ "steps": [ { "wait": [ { "scene": true } ], "actions": [ { "key": "a" } ] } ] }""")]
+    [InlineData("""{ "steps": [ { "wait": [ { "target": "/X", "active": 1 } ], "actions": [ { "key": "a" } ] } ] }""")]
+    public void Parse_MalformedTypedCondition_Throws(string json)
+        => Assert.Throws<CliUsageException>(() => QaSequenceSpecParser.Parse(json));
+
+    [Fact]
+    public void Parse_ScreenshotAction_Throws()
+        => Assert.Throws<CliUsageException>(() => QaSequenceSpecParser.Parse("""
+        { "steps": [ { "actions": [ { "screenshot": true } ] } ] }
         """));
 }

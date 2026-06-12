@@ -21,8 +21,9 @@ namespace UnityCli.Protocol
 
             return op switch
             {
+                "==" => string.Equals(actual, expected, StringComparison.Ordinal),
                 "!=" => !string.Equals(actual, expected, StringComparison.Ordinal),
-                _ => string.Equals(actual, expected, StringComparison.Ordinal),
+                _ => false,
             };
         }
 
@@ -47,7 +48,7 @@ namespace UnityCli.Protocol
         {
             if (a.Length != e.Length)
             {
-                return false;
+                return op == "!=";
             }
 
             double tol = op == "near" ? (epsilon > 0f ? epsilon : 0.0) : 0.0;

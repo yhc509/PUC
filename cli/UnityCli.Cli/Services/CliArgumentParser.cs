@@ -604,7 +604,7 @@ public static partial class CliArgumentParser
                 {
                     string raw = RequireValue(tokens, "--spec-json");
                     string specJson = raw.StartsWith("@", StringComparison.Ordinal)
-                        ? File.ReadAllText(raw.Substring(1))
+                        ? ReadSpecJsonFile(raw.Substring(1))
                         : raw;
                     parsed.QaSequenceArgs = QaSequenceSpecParser.Parse(specJson);
                     break;
@@ -834,13 +834,29 @@ public static partial class CliArgumentParser
         {
             int overall = parsed.QaSequenceTimeoutMs > 0
                 ? parsed.QaSequenceTimeoutMs
+                : parsed.QaSequenceArgs?.timeoutMs > 0
+                    ? parsed.QaSequenceArgs.timeoutMs
                 : ProtocolConstants.DefaultQaRunSequenceTimeoutMs;
-            parsed.TimeoutMs = Math.Max(parsed.TimeoutMs, overall + 5_000);
+            parsed.TimeoutMs = overall + 5_000;
         }
 
         if (parsed.Kind == CommandKind.Raw && string.IsNullOrWhiteSpace(parsed.RawJson))
         {
             throw new CliUsageException("`raw`에는 `--json` payload가 필요합니다.");
+        }
+    }
+
+    private static string ReadSpecJsonFile(string path)
+    {
+        try
+        {
+            return File.ReadAllText(path);
+        }
+        catch (Exception exception) when (exception is IOException
+            || exception is UnauthorizedAccessException
+            || exception is NotSupportedException)
+        {
+            throw new CliUsageException($"--spec-json @{path} 읽기 실패: {exception.Message}");
         }
     }
 

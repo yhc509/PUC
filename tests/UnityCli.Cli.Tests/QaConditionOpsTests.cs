@@ -30,7 +30,14 @@ public class QaConditionOpsTests
     [InlineData("PlayerTurn", "==", "PlayerTurn", true)]
     [InlineData("EnemyTurn", "==", "PlayerTurn", false)]
     [InlineData("EnemyTurn", "!=", "PlayerTurn", true)]
+    [InlineData("EnemyTurn", ">=", "PlayerTurn", false)]
     public void StringEquality_WhenNotNumeric(string actual, string op, string expected, bool result)
+        => Assert.Equal(result, QaConditionOps.Evaluate(actual, op, expected, 0f));
+
+    [Theory]
+    [InlineData("1,2", "!=", "1,2,3", true)]
+    [InlineData("1,2", "==", "1,2,3", false)]
+    public void NumericLengthMismatch_OnlyInequalityMatches(string actual, string op, string expected, bool result)
         => Assert.Equal(result, QaConditionOps.Evaluate(actual, op, expected, 0f));
 
     [Theory]

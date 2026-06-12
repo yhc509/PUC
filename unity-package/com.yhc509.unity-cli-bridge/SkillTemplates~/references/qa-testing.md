@@ -231,13 +231,12 @@ Action keys:
 | `tap` | `{ "tap": { "x": 400, "y": 300 } }` or `{ "tap": { "target": "/Unit" } }` |
 | `swipe` | `{ "swipe": { "from": [100,200], "to": [300,400], "durationMs": 500 } }` |
 | `wait` | `{ "wait": 250 }` |
-| `screenshot` | `{ "screenshot": true }` |
 
 On timeout the response payload still uses a success envelope, with `status: "TimedOut"`. Read:
 
 - `completedSteps`: how far the sequence got
 - `failedStep.index` and `failedStep.name`: where it stopped
-- `failedStep.unmet`: each unmet condition with `expected` and `actual`
+- `failedStep.unmet`: each unmet condition, or a pending action when the step timed out during actions, with `expected` and `actual`
 - `failedStep.stateSnapshot`: current values for that step's conditions
 
 Expose query state by implementing `IQaQueryable` on a component:

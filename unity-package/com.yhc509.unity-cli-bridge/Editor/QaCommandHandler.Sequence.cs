@@ -80,19 +80,19 @@ namespace UnityCliBridge.Bridge.Editor
                     }
 
                     QaSequenceStep step = steps[stepIndex];
+                    if (!baselineCaptured)
+                    {
+                        CaptureChangedBaselines(GetConditions(step), changedBaselines);
+                        baselineCaptured = true;
+                        stepStartMs = nowMs;
+                    }
+
+                    int stepTimeoutMs = step.timeoutMs > 0
+                        ? step.timeoutMs
+                        : ProtocolConstants.DefaultQaRunSequenceStepTimeoutMs;
+
                     if (phase == SequencePhase.WaitCondition)
                     {
-                        if (!baselineCaptured)
-                        {
-                            CaptureChangedBaselines(GetConditions(step), changedBaselines);
-                            baselineCaptured = true;
-                            stepStartMs = nowMs;
-                        }
-
-                        int stepTimeoutMs = step.timeoutMs > 0
-                            ? step.timeoutMs
-                            : ProtocolConstants.DefaultQaRunSequenceStepTimeoutMs;
-
                         if (EvaluateConditions(GetConditions(step), changedBaselines, out var unmet, out var snapshot))
                         {
                             phase = SequencePhase.ExecuteActions;
@@ -121,6 +121,14 @@ namespace UnityCliBridge.Bridge.Editor
                             CompleteSuccess();
                         }
 
+                        return;
+                    }
+
+                    if (nowMs - stepStartMs >= stepTimeoutMs)
+                    {
+                        EvaluateConditions(GetConditions(step), changedBaselines, out var unmet, out var snapshot);
+                        unmet.Add(CreatePendingActionUnmet(actions[actionIndex], actionIndex));
+                        FailTimeout(stepIndex, step, unmet, snapshot);
                         return;
                     }
 
@@ -258,10 +266,7 @@ namespace UnityCliBridge.Bridge.Editor
                             && !string.Equals(actual, baseline, StringComparison.Ordinal);
                     }
 
-                    float epsilon = string.Equals(condition.op, "near", StringComparison.Ordinal) && condition.epsilon <= 0f
-                        ? ProtocolConstants.DefaultQaNearEpsilon
-                        : condition.epsilon;
-                    return QaConditionOps.Evaluate(actual, condition.op, condition.value, epsilon);
+                    return QaConditionOps.Evaluate(actual, condition.op, condition.value, condition.epsilon);
                 default:
                     return false;
             }
@@ -386,6 +391,19 @@ namespace UnityCliBridge.Bridge.Editor
             };
         }
 
+        private static QaSequenceUnmet CreatePendingActionUnmet(QaSequenceAction action, int actionIndex)
+        {
+            return new QaSequenceUnmet
+            {
+                target = action.target,
+                kind = "action",
+                key = $"{actionIndex}:{action.kind}",
+                op = "complete",
+                expected = "done",
+                actual = "pending",
+            };
+        }
+
         private static string GetExpectedBoolValue(QaSequenceCondition condition)
         {
             return string.IsNullOrWhiteSpace(condition.value) ? "true" : condition.value;
@@ -496,8 +514,6 @@ namespace UnityCliBridge.Bridge.Editor
 #else
                     throw CreateInputSystemRequiredException("qa run-sequence swipe");
 #endif
-                case "screenshot":
-                    return true;
                 default:
                     throw new CommandFailureException("QA_SEQUENCE_BAD_ACTION", $"Unknown action kind '{action.kind}'.", false, null);
             }

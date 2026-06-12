@@ -672,6 +672,30 @@ public sealed class QaParserTests
     }
 
     [Fact]
+    public void Parse_QaRunSequence_UsesSpecTimeoutForIpcTimeout()
+    {
+        const string spec = """
+        { "timeoutMs": 40000, "steps": [ { "wait": [ { "target": "/X", "active": true } ], "actions": [ { "key": "space" } ] } ] }
+        """;
+
+        var parsed = CliArgumentParser.Parse(["qa", "run-sequence", "--spec-json", spec]);
+
+        Assert.Equal(45_000, parsed.TimeoutMs);
+    }
+
+    [Fact]
+    public void Parse_QaRunSequence_CliTimeoutOverridesSpecTimeoutForIpcTimeout()
+    {
+        const string spec = """
+        { "timeoutMs": 40000, "steps": [ { "wait": [ { "target": "/X", "active": true } ], "actions": [ { "key": "space" } ] } ] }
+        """;
+
+        var parsed = CliArgumentParser.Parse(["qa", "run-sequence", "--spec-json", spec, "--timeout", "60000"]);
+
+        Assert.Equal(65_000, parsed.TimeoutMs);
+    }
+
+    [Fact]
     public void Parse_QaRunSequence_ToEnvelope_UsesRunSequenceCommand()
     {
         var parsed = CliArgumentParser.Parse(["qa", "run-sequence", "--spec-json", MinimalSequenceSpec]);
@@ -687,6 +711,19 @@ public sealed class QaParserTests
     {
         var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["qa", "run-sequence"]));
         Assert.Contains("--spec-json", ex.Message);
+    }
+
+    [Fact]
+    public void Parse_QaRunSequence_SpecJsonFileReadError_ThrowsUsage()
+    {
+        using var temp = new TempDirectory();
+        string missingPath = Path.Combine(temp.Path, "missing.json");
+
+        var ex = Assert.Throws<CliUsageException>(() =>
+            CliArgumentParser.Parse(["qa", "run-sequence", "--spec-json", $"@{missingPath}"]));
+
+        Assert.Contains("--spec-json", ex.Message);
+        Assert.Contains("읽기 실패", ex.Message);
     }
 
     [Fact]

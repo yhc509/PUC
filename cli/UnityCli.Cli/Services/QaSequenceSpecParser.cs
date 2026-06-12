@@ -25,7 +25,6 @@ public static class QaSequenceSpecParser
         "tap",
         "swipe",
         "wait",
-        "screenshot",
     ];
 
     private static readonly HashSet<string> ValidOps = new(StringComparer.Ordinal)
@@ -125,11 +124,11 @@ public static class QaSequenceSpecParser
             case "gone":
             case "interactable":
                 EnsureTarget(condition, kind);
-                condition.value = NormalizeValue(conditionEl.GetProperty(kind));
+                condition.value = RequireBoolValue(conditionEl.GetProperty(kind), kind);
                 break;
             case "scene":
             case "log":
-                condition.value = NormalizeValue(conditionEl.GetProperty(kind));
+                condition.value = RequireString(conditionEl.GetProperty(kind), kind);
                 break;
             case "transform":
                 EnsureTarget(condition, kind);
@@ -138,7 +137,7 @@ public static class QaSequenceSpecParser
                 condition.value = condition.op == "changed" && !conditionEl.TryGetProperty("value", out _)
                     ? string.Empty
                     : NormalizeRequiredValue(conditionEl, kind);
-                condition.epsilon = TryGetSingle(conditionEl, "epsilon", out float epsilon) ? epsilon : 0f;
+                condition.epsilon = ResolveEpsilon(conditionEl, condition.op);
                 break;
             case "query":
                 EnsureTarget(condition, kind);
@@ -147,7 +146,7 @@ public static class QaSequenceSpecParser
                 condition.value = condition.op == "changed" && !conditionEl.TryGetProperty("value", out _)
                     ? string.Empty
                     : NormalizeRequiredValue(conditionEl, kind);
-                condition.epsilon = TryGetSingle(conditionEl, "epsilon", out float queryEpsilon) ? queryEpsilon : 0f;
+                condition.epsilon = ResolveEpsilon(conditionEl, condition.op);
                 break;
         }
 
@@ -172,8 +171,6 @@ public static class QaSequenceSpecParser
                 break;
             case "wait":
                 action.waitMs = RequireInt32(actionEl.GetProperty("wait"), "wait");
-                break;
-            case "screenshot":
                 break;
         }
 
@@ -297,6 +294,28 @@ public static class QaSequenceSpecParser
         }
 
         return NormalizeValue(valueEl);
+    }
+
+    private static float ResolveEpsilon(JsonElement element, string op)
+    {
+        if (TryGetSingle(element, "epsilon", out float epsilon))
+        {
+            return epsilon;
+        }
+
+        return string.Equals(op, "near", StringComparison.Ordinal)
+            ? ProtocolConstants.DefaultQaNearEpsilon
+            : 0f;
+    }
+
+    private static string RequireBoolValue(JsonElement element, string label)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            _ => throw new CliUsageException($"--spec-json: {label} 값은 bool이어야 합니다."),
+        };
     }
 
     private static string NormalizeValue(JsonElement element)
