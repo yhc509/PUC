@@ -608,6 +608,89 @@ namespace UnityCli.Protocol
     }
 
     [Serializable]
+    public sealed class QaSequenceCondition
+    {
+        public string target = string.Empty;
+        public string kind = string.Empty;
+        public string key = string.Empty;
+        public string op = string.Empty;
+        public string value = string.Empty;
+        public float epsilon;
+    }
+
+    [Serializable]
+    public sealed class QaSequenceAction
+    {
+        public string kind = string.Empty;
+        public string key = string.Empty;
+        public bool hasTapCoords;
+        public int x;
+        public int y;
+        public string target = string.Empty;
+        public int fromX;
+        public int fromY;
+        public int toX;
+        public int toY;
+        public int durationMs;
+        public int waitMs;
+    }
+
+    [Serializable]
+    public sealed class QaSequenceStep
+    {
+        public string name = string.Empty;
+        public QaSequenceCondition[] wait = Array.Empty<QaSequenceCondition>();
+        public QaSequenceAction[] actions = Array.Empty<QaSequenceAction>();
+        public int timeoutMs;
+    }
+
+    [Serializable]
+    public sealed class QaRunSequenceArgs
+    {
+        public QaSequenceStep[] steps = Array.Empty<QaSequenceStep>();
+        public int timeoutMs;
+    }
+
+    [Serializable]
+    public sealed class QaSequenceUnmet
+    {
+        public string target = string.Empty;
+        public string kind = string.Empty;
+        public string key = string.Empty;
+        public string op = string.Empty;
+        public string expected = string.Empty;
+        public string actual = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class QaSequenceSnapshotEntry
+    {
+        public string target = string.Empty;
+        public string key = string.Empty;
+        public string value = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class QaSequenceFailure
+    {
+        public int index;
+        public string name = string.Empty;
+        public QaSequenceUnmet[] unmet = Array.Empty<QaSequenceUnmet>();
+        public QaSequenceSnapshotEntry[] stateSnapshot = Array.Empty<QaSequenceSnapshotEntry>();
+    }
+
+    [Serializable]
+    public sealed class QaRunSequencePayload
+    {
+        public string status = string.Empty;
+        public int completedSteps;
+        public int totalSteps;
+        public bool hasFailure;
+        public QaSequenceFailure failedStep = new QaSequenceFailure();
+        public long elapsedMs;
+    }
+
+    [Serializable]
     public sealed class TestListArgs
     {
         public string mode = "all";

@@ -293,7 +293,7 @@ public static class CliApp
                         timeout: waitTimeout);
                 }
 
-                return NormalizeTestResultEnvelope(response);
+                return NormalizeTestResultEnvelope(parsed.Kind, response);
             }
             catch (Exception ex)
             {
@@ -401,7 +401,7 @@ public static class CliApp
                 return poll;
             }
 
-            poll = NormalizeTestResultEnvelope(poll);
+            poll = NormalizeTestResultEnvelope(CommandKind.TestRun, poll);
             if (!string.Equals(poll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
             {
                 return poll;
@@ -420,7 +420,7 @@ public static class CliApp
         }
 
         var finalPoll = await SendTestResultsPollAsync(target, ipcClient, started.runId, cancellationToken);
-        finalPoll = NormalizeTestResultEnvelope(finalPoll);
+        finalPoll = NormalizeTestResultEnvelope(CommandKind.TestRun, finalPoll);
         if (!string.Equals(finalPoll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
         {
             return finalPoll;
@@ -749,8 +749,13 @@ public static class CliApp
         return JsonSerializer.Deserialize<T>(data.GetRawText(), ProtocolJson.Default);
     }
 
-    internal static ResponseEnvelope NormalizeTestResultEnvelope(ResponseEnvelope response)
+    internal static ResponseEnvelope NormalizeTestResultEnvelope(CommandKind kind, ResponseEnvelope response)
     {
+        if (kind != CommandKind.TestRun)
+        {
+            return response;
+        }
+
         if (!string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
         {
             return response;

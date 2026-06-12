@@ -100,8 +100,13 @@ namespace UnityCli.Protocol
         public const string CommandQaUiDump = "qa-ui-dump";
         public const string CommandQaWaitUntil = "qa-wait-until";
         public const string CommandQaWorldDump = "qa-world-dump";
+        public const string CommandQaRunSequence = "qa-run-sequence";
         public const int DefaultQaWaitUntilTimeoutMs = 10_000;
         public const int DefaultQaSwipeDurationMs = 300;
+        public const int DefaultQaRunSequenceTimeoutMs = 60_000;
+        public const int MaxQaRunSequenceTimeoutMs = 600_000;
+        public const int DefaultQaRunSequenceStepTimeoutMs = 5_000;
+        public const float DefaultQaNearEpsilon = 0.01f;
         public const int TestPlayModeEntryTimeoutSeconds = 15;
         public const string TestSessionKeyActiveRunId = "UCB.Test.activeRunId";
         public const string TestSessionKeyActiveMode = "UCB.Test.activeMode";

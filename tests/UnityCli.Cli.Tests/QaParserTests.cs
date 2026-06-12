@@ -520,6 +520,7 @@ public sealed class QaParserTests
         Assert.Contains("qa key", helpText);
         Assert.Contains("qa ui-dump", helpText);
         Assert.Contains("qa world-dump", helpText);
+        Assert.Contains("qa run-sequence", helpText);
         Assert.Contains("qa wait --ms <int>", helpText);
         Assert.Contains("qa wait-until", helpText);
         Assert.Contains("qa tap and coordinate-based qa swipe treat coordinates as screenshot pixels with a top-left origin", helpText);
@@ -655,6 +656,93 @@ public sealed class QaParserTests
         Assert.Contains("IQaTappable", descriptor.Summary);
         Assert.Contains("qa tap --target", descriptor.Summary);
         Assert.Equal(ProtocolConstants.CommandQaWorldDump, descriptor.ProtocolCommand);
+    }
+
+    private const string MinimalSequenceSpec =
+        """{ "steps": [ { "wait": [ { "target": "/X", "active": true } ], "actions": [ { "key": "space" } ] } ] }""";
+
+    [Fact]
+    public void Parse_QaRunSequence_BuildsWireArgs()
+    {
+        var parsed = CliArgumentParser.Parse(["qa", "run-sequence", "--spec-json", MinimalSequenceSpec]);
+
+        Assert.Equal(CommandKind.QaRunSequence, parsed.Kind);
+        Assert.NotNull(parsed.QaSequenceArgs);
+        Assert.Single(parsed.QaSequenceArgs!.steps);
+    }
+
+    [Fact]
+    public void Parse_QaRunSequence_UsesSpecTimeoutForIpcTimeout()
+    {
+        const string spec = """
+        { "timeoutMs": 40000, "steps": [ { "wait": [ { "target": "/X", "active": true } ], "actions": [ { "key": "space" } ] } ] }
+        """;
+
+        var parsed = CliArgumentParser.Parse(["qa", "run-sequence", "--spec-json", spec]);
+
+        Assert.Equal(45_000, parsed.TimeoutMs);
+    }
+
+    [Fact]
+    public void Parse_QaRunSequence_CliTimeoutOverridesSpecTimeoutForIpcTimeout()
+    {
+        const string spec = """
+        { "timeoutMs": 40000, "steps": [ { "wait": [ { "target": "/X", "active": true } ], "actions": [ { "key": "space" } ] } ] }
+        """;
+
+        var parsed = CliArgumentParser.Parse(["qa", "run-sequence", "--spec-json", spec, "--timeout", "60000"]);
+
+        Assert.Equal(65_000, parsed.TimeoutMs);
+    }
+
+    [Fact]
+    public void Parse_QaRunSequence_ToEnvelope_UsesRunSequenceCommand()
+    {
+        var parsed = CliArgumentParser.Parse(["qa", "run-sequence", "--spec-json", MinimalSequenceSpec]);
+        var envelope = parsed.ToEnvelope();
+        var arguments = ParseArguments(envelope.argumentsJson);
+
+        Assert.Equal(ProtocolConstants.CommandQaRunSequence, envelope.command);
+        Assert.Equal("active", arguments.GetProperty("steps")[0].GetProperty("wait")[0].GetProperty("kind").GetString());
+    }
+
+    [Fact]
+    public void Parse_QaRunSequence_MissingSpec_ThrowsUsage()
+    {
+        var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["qa", "run-sequence"]));
+        Assert.Contains("--spec-json", ex.Message);
+    }
+
+    [Fact]
+    public void Parse_QaRunSequence_SpecJsonFileReadError_ThrowsUsage()
+    {
+        using var temp = new TempDirectory();
+        string missingPath = Path.Combine(temp.Path, "missing.json");
+
+        var ex = Assert.Throws<CliUsageException>(() =>
+            CliArgumentParser.Parse(["qa", "run-sequence", "--spec-json", $"@{missingPath}"]));
+
+        Assert.Contains("--spec-json", ex.Message);
+        Assert.Contains("읽기 실패", ex.Message);
+    }
+
+    [Fact]
+    public void Parse_QaRunSequence_TimeoutOverMax_ThrowsUsage()
+    {
+        var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "qa", "run-sequence", "--spec-json", MinimalSequenceSpec, "--timeout", "9999999"
+        ]));
+        Assert.Contains("--timeout", ex.Message);
+    }
+
+    [Fact]
+    public void QaRunSequence_CommandCatalog_DescribesStepMachine()
+    {
+        CliCommandDescriptor? descriptor = CliCommandCatalog.FindByCommand("qa run-sequence");
+        Assert.NotNull(descriptor);
+        Assert.Contains("--spec-json", descriptor!.Synopsis);
+        Assert.Contains("IQaQueryable", descriptor.Summary);
+        Assert.Equal(ProtocolConstants.CommandQaRunSequence, descriptor.ProtocolCommand);
     }
 
     private static JsonElement ParseArguments(string argumentsJson)

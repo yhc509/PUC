@@ -1,4 +1,5 @@
 #nullable enable
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using UnityCli.Cli.Models;
@@ -359,6 +360,7 @@ public static partial class CliArgumentParser
             "world-dump" => new ParsedCommand(CommandKind.QaWorldDump),
             "wait" => new ParsedCommand(CommandKind.QaWait),
             "wait-until" => new ParsedCommand(CommandKind.QaWaitUntil),
+            "run-sequence" => new ParsedCommand(CommandKind.QaRunSequence),
             _ => throw new CliUsageException($"알 수 없는 qa 서브커맨드입니다: {subCommand}"),
         };
     }
@@ -598,6 +600,18 @@ public static partial class CliArgumentParser
                 case CommandKind.QaWaitUntil when token == "--timeout":
                     parsed.QaWaitTimeout = RequireInt(RequireValue(tokens, "--timeout"), "--timeout");
                     break;
+                case CommandKind.QaRunSequence when token == "--spec-json":
+                {
+                    string raw = RequireValue(tokens, "--spec-json");
+                    string specJson = raw.StartsWith("@", StringComparison.Ordinal)
+                        ? ReadSpecJsonFile(raw.Substring(1))
+                        : raw;
+                    parsed.QaSequenceArgs = QaSequenceSpecParser.Parse(specJson);
+                    break;
+                }
+                case CommandKind.QaRunSequence when token == "--timeout":
+                    parsed.QaSequenceTimeoutMs = RequireInt(RequireValue(tokens, "--timeout"), "--timeout");
+                    break;
                 case CommandKind.AssetFind when token == "--name":
                     parsed.AssetName = RequireValue(tokens, "--name");
                     break;
@@ -816,9 +830,33 @@ public static partial class CliArgumentParser
         ValidateQaOptions(parsed);
         ValidateExecuteOptions(parsed);
 
+        if (parsed.Kind == CommandKind.QaRunSequence)
+        {
+            int overall = parsed.QaSequenceTimeoutMs > 0
+                ? parsed.QaSequenceTimeoutMs
+                : parsed.QaSequenceArgs?.timeoutMs > 0
+                    ? parsed.QaSequenceArgs.timeoutMs
+                : ProtocolConstants.DefaultQaRunSequenceTimeoutMs;
+            parsed.TimeoutMs = overall + 5_000;
+        }
+
         if (parsed.Kind == CommandKind.Raw && string.IsNullOrWhiteSpace(parsed.RawJson))
         {
             throw new CliUsageException("`raw`에는 `--json` payload가 필요합니다.");
+        }
+    }
+
+    private static string ReadSpecJsonFile(string path)
+    {
+        try
+        {
+            return File.ReadAllText(path);
+        }
+        catch (Exception exception) when (exception is IOException
+            || exception is UnauthorizedAccessException
+            || exception is NotSupportedException)
+        {
+            throw new CliUsageException($"--spec-json @{path} 읽기 실패: {exception.Message}");
         }
     }
 

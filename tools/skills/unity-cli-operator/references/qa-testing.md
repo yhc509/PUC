@@ -29,6 +29,7 @@ status → play → (입력 시뮬레이션) → 검증 (로그 + 스크린샷) 
 | `qa wait-until --scene <name>` | Bridge 폴링 | 씬 전환 대기 |
 | `qa wait-until --log-contains <text>` | Bridge 폴링 | 특정 로그 출력 대기 |
 | `qa wait-until --object-exists <path>` | Bridge 폴링 | 오브젝트 존재 대기 |
+| `qa run-sequence --spec-json @seq.json` | Bridge deferred state machine | 조건 대기와 입력 액션을 한 요청에서 순차 실행 |
 
 ## 입력 방식 판단 기준
 
@@ -148,6 +149,103 @@ UI elements come from `qa ui-dump`. For non-UI world objects (units on a battle 
 - Tap with `qa tap --target <path>`. If the object's `TryQaTap()` handles it (e.g. `onQaTap` is wired), the bridge invokes it directly; otherwise the bridge simulates an Input System tap at the anchor, which reaches games that poll the Input System directly (where `qa tap --x --y`'s EventSystem path does not).
 - Off-screen objects are hidden unless you pass `--include-offscreen`.
 - Same-named sibling world objects share a path and resolve to the first match; give tappable objects unique names/labels to target them individually.
+
+### Conditional multi-step actions (`qa run-sequence`)
+
+Use `qa run-sequence` when a test needs to wait for state, press or tap, wait again, and keep going without a command round trip between every step. The command is deferred in the bridge, so it requires Play Mode and returns only when the sequence completes, times out, or errors.
+
+```bash
+ucli qa run-sequence --spec-json @seq-ok.json --timeout 60000 --project "$P" --json
+```
+
+`seq-ok.json`:
+
+```json
+{
+  "steps": [
+    {
+      "name": "move",
+      "wait": [
+        { "target": "/Battle/Erich", "transform": "position", "op": "near", "value": [3, 0, 3], "epsilon": 0.2 }
+      ],
+      "timeoutMs": 5000,
+      "actions": [
+        { "key": "space" }
+      ]
+    },
+    {
+      "name": "ready",
+      "wait": [
+        { "target": "/State", "query": "phase", "op": "==", "value": "Ready" }
+      ],
+      "actions": [
+        { "tap": { "target": "/Battle/Erich" } }
+      ]
+    }
+  ]
+}
+```
+
+Condition keys:
+
+| Kind | Spec shape | Notes |
+|------|------------|-------|
+| `active` | `{ "target": "/X", "active": true }` | Waits for active hierarchy resolve. |
+| `gone` | `{ "target": "/Spinner", "gone": true }` | Waits until the target can no longer be resolved. |
+| `transform` | `{ "target": "/Unit", "transform": "position", "op": "near", "value": [0,0,0] }` | `position`, `rotation`, or `scale`; vector value. |
+| `scene` | `{ "scene": "GameScene" }` | Active scene name. |
+| `log` | `{ "log": "Game started" }` | Recent console log contains text. |
+| `interactable` | `{ "target": "/Start", "interactable": true }` | Same effective interactable check as `qa wait-until`. |
+| `query` | `{ "target": "/State", "query": "phase", "op": "==", "value": "Ready" }` | Reads game state from `IQaQueryable`. |
+
+`transform` and `query` support `==`, `!=`, `>=`, `<=`, `near`, and `changed`. `near` uses `epsilon` when provided, otherwise the bridge default. `changed` captures a baseline when the step starts.
+
+Action keys:
+
+| Kind | Spec shape |
+|------|------------|
+| `key` | `{ "key": "space" }` |
+| `tap` | `{ "tap": { "x": 400, "y": 300 } }` or `{ "tap": { "target": "/Unit" } }` |
+| `swipe` | `{ "swipe": { "from": [100,200], "to": [300,400], "durationMs": 500 } }` |
+| `wait` | `{ "wait": 250 }` |
+
+On timeout the response payload still uses a success envelope, with `status: "TimedOut"`. Read:
+
+- `completedSteps`: how far the sequence got
+- `failedStep.index` and `failedStep.name`: where it stopped
+- `failedStep.unmet`: each unmet condition, or a pending action when the step timed out during actions, with `expected` and `actual`
+- `failedStep.stateSnapshot`: current values for that step's conditions
+
+Expose query state by implementing `IQaQueryable` on a component:
+
+```csharp
+using UnityCliBridge.Bridge;
+using UnityEngine;
+
+public sealed class QaBattleState : MonoBehaviour, IQaQueryable
+{
+    public string phase = "Ready";
+    public int hp = 10;
+
+    public bool TryQaQuery(string key, out object? value)
+    {
+        switch (key)
+        {
+            case "phase":
+                value = phase;
+                return true;
+            case "hp":
+                value = hp;
+                return true;
+            default:
+                value = null;
+                return false;
+        }
+    }
+}
+```
+
+If a `query` target has no `IQaQueryable` or the key is unsupported, timeout diagnostics include an `actual` value like `<no IQaQueryable: phase>`.
 
 ### qa tap Workflow
 1. Take a screenshot: `screenshot` -> note `width`, `height`, and when needed `screenWidth`, `screenHeight`, `imageOrigin`, `coordinateOrigin` from the response

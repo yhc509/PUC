@@ -65,6 +65,7 @@ public enum CommandKind
     QaWorldDump,
     QaWait,
     QaWaitUntil,
+    QaRunSequence,
 }
 
 public sealed class ParsedCommand
@@ -182,6 +183,8 @@ public sealed class ParsedCommand
     public string? QaWaitObjectInteractable { get; set; }
     public string? QaWaitObjectGone { get; set; }
     public int QaWaitTimeout { get; set; } = ProtocolConstants.DefaultQaWaitUntilTimeoutMs;
+    public QaRunSequenceArgs? QaSequenceArgs { get; set; }
+    public int QaSequenceTimeoutMs { get; set; }
 
     public CommandEnvelope ToEnvelope()
     {
@@ -240,6 +243,7 @@ public sealed class ParsedCommand
                 CommandKind.QaUiDump => ProtocolConstants.CommandQaUiDump,
                 CommandKind.QaWorldDump => ProtocolConstants.CommandQaWorldDump,
                 CommandKind.QaWaitUntil => ProtocolConstants.CommandQaWaitUntil,
+                CommandKind.QaRunSequence => ProtocolConstants.CommandQaRunSequence,
                 CommandKind.AssetFind => ProtocolConstants.CommandAssetFind,
                 CommandKind.AssetTypes => ProtocolConstants.CommandAssetTypes,
                 CommandKind.AssetInfo => ProtocolConstants.CommandAssetInfo,
@@ -406,6 +410,7 @@ public sealed class ParsedCommand
                 objectGone = QaWaitObjectGone,
                 timeoutMs = QaWaitTimeout,
             },
+            CommandKind.QaRunSequence => BuildQaRunSequenceArgs(),
             CommandKind.AssetFind => new AssetFindArgs
             {
                 name = AssetName ?? string.Empty,
@@ -535,6 +540,17 @@ public sealed class ParsedCommand
         };
 
         return JsonSerializer.Serialize(payload, ProtocolJson.Default);
+    }
+
+    private QaRunSequenceArgs BuildQaRunSequenceArgs()
+    {
+        QaRunSequenceArgs args = QaSequenceArgs ?? new QaRunSequenceArgs();
+        if (QaSequenceTimeoutMs > 0)
+        {
+            args.timeoutMs = QaSequenceTimeoutMs;
+        }
+
+        return args;
     }
 
     private string BuildRawArgumentsJson(JsonElement root)
