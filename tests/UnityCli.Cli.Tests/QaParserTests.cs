@@ -28,6 +28,42 @@ public sealed class QaParserTests
     }
 
     [Fact]
+    public void Parse_QaClick_UsesDefaultLeftButton()
+    {
+        var parsed = CliArgumentParser.Parse(["qa", "click", "--qa-id", "test-btn"]);
+
+        var arguments = ParseArguments(parsed.ToEnvelope().argumentsJson);
+
+        Assert.Equal("left", parsed.QaButton);
+        Assert.Equal("left", arguments.GetProperty("button").GetString());
+    }
+
+    [Fact]
+    public void Parse_QaClick_AcceptsRightButton()
+    {
+        var parsed = CliArgumentParser.Parse(["qa", "click", "--qa-id", "test-btn", "--button", "right"]);
+
+        var arguments = ParseArguments(parsed.ToEnvelope().argumentsJson);
+
+        Assert.Equal("right", parsed.QaButton);
+        Assert.Equal("right", arguments.GetProperty("button").GetString());
+    }
+
+    [Fact]
+    public void Parse_QaClick_WithInvalidButton_ThrowsUsage()
+    {
+        var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "qa", "click",
+            "--qa-id", "test-btn",
+            "--button", "middle"
+        ]));
+
+        Assert.Contains("--button", ex.Message);
+        Assert.Contains("left", ex.Message);
+        Assert.Contains("right", ex.Message);
+    }
+
+    [Fact]
     public void Parse_QaTap_AcceptsCoordinates()
     {
         var parsed = CliArgumentParser.Parse(["qa", "tap", "--x", "100", "--y", "200"]);
@@ -35,6 +71,43 @@ public sealed class QaParserTests
         Assert.Equal(CommandKind.QaTap, parsed.Kind);
         Assert.Equal(100, parsed.QaTapX);
         Assert.Equal(200, parsed.QaTapY);
+    }
+
+    [Fact]
+    public void Parse_QaTap_UsesDefaultLeftButton()
+    {
+        var parsed = CliArgumentParser.Parse(["qa", "tap", "--x", "100", "--y", "200"]);
+
+        var arguments = ParseArguments(parsed.ToEnvelope().argumentsJson);
+
+        Assert.Equal("left", parsed.QaButton);
+        Assert.Equal("left", arguments.GetProperty("button").GetString());
+    }
+
+    [Fact]
+    public void Parse_QaTap_AcceptsRightButton()
+    {
+        var parsed = CliArgumentParser.Parse(["qa", "tap", "--x", "100", "--y", "200", "--button", "right"]);
+
+        var arguments = ParseArguments(parsed.ToEnvelope().argumentsJson);
+
+        Assert.Equal("right", parsed.QaButton);
+        Assert.Equal("right", arguments.GetProperty("button").GetString());
+    }
+
+    [Fact]
+    public void Parse_QaTap_WithInvalidButton_ThrowsUsage()
+    {
+        var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "qa", "tap",
+            "--x", "100",
+            "--y", "200",
+            "--button", "middle"
+        ]));
+
+        Assert.Contains("--button", ex.Message);
+        Assert.Contains("left", ex.Message);
+        Assert.Contains("right", ex.Message);
     }
 
     [Fact]
@@ -113,6 +186,43 @@ public sealed class QaParserTests
 
         Assert.Equal(CommandKind.QaSwipe, parsed.Kind);
         Assert.Equal(ProtocolConstants.DefaultQaSwipeDurationMs, parsed.QaSwipeDuration);
+    }
+
+    [Fact]
+    public void Parse_QaSwipe_UsesDefaultLeftButton()
+    {
+        var parsed = CliArgumentParser.Parse(["qa", "swipe", "--from", "100,200", "--to", "300,400"]);
+
+        var arguments = ParseArguments(parsed.ToEnvelope().argumentsJson);
+
+        Assert.Equal("left", parsed.QaButton);
+        Assert.Equal("left", arguments.GetProperty("button").GetString());
+    }
+
+    [Fact]
+    public void Parse_QaSwipe_AcceptsRightButton()
+    {
+        var parsed = CliArgumentParser.Parse(["qa", "swipe", "--from", "100,200", "--to", "300,400", "--button", "right"]);
+
+        var arguments = ParseArguments(parsed.ToEnvelope().argumentsJson);
+
+        Assert.Equal("right", parsed.QaButton);
+        Assert.Equal("right", arguments.GetProperty("button").GetString());
+    }
+
+    [Fact]
+    public void Parse_QaSwipe_WithInvalidButton_ThrowsUsage()
+    {
+        var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "qa", "swipe",
+            "--from", "100,200",
+            "--to", "300,400",
+            "--button", "middle"
+        ]));
+
+        Assert.Contains("--button", ex.Message);
+        Assert.Contains("left", ex.Message);
+        Assert.Contains("right", ex.Message);
     }
 
     [Fact]
@@ -516,7 +626,7 @@ public sealed class QaParserTests
 
         Assert.Contains("qa click", helpText);
         Assert.Contains("qa tap", helpText);
-        Assert.Contains("qa swipe [--target <path>] --from <x,y> --to <x,y> [--duration <ms>] [--screenshot-width <int> --screenshot-height <int>]", helpText);
+        Assert.Contains("qa swipe [--target <path>] --from <x,y> --to <x,y> [--duration <ms>] [--button left|right] [--screenshot-width <int> --screenshot-height <int>]", helpText);
         Assert.Contains("qa key", helpText);
         Assert.Contains("qa ui-dump", helpText);
         Assert.Contains("qa world-dump", helpText);

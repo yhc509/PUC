@@ -149,6 +149,17 @@ public static partial class CliArgumentParser
         throw new CliUsageException($"--mode 값은 {allowed} 중 하나여야 합니다.");
     }
 
+    private static string RequireQaButton(string value)
+    {
+        string normalized = value.ToLowerInvariant();
+        if (normalized is "left" or "right")
+        {
+            return normalized;
+        }
+
+        throw new CliUsageException("`--button` 값은 `left` 또는 `right` 중 하나여야 합니다.");
+    }
+
     private static string RequireSubcommand(Queue<string> tokens, string command)
     {
         if (tokens.Count == 0)
@@ -395,6 +406,11 @@ public static partial class CliArgumentParser
 
     private static void ValidateQaOptions(ParsedCommand parsed)
     {
+        if (parsed.Kind is CommandKind.QaClick or CommandKind.QaTap or CommandKind.QaSwipe)
+        {
+            parsed.QaButton = RequireQaButton(parsed.QaButton);
+        }
+
         switch (parsed.Kind)
         {
             case CommandKind.QaClick:

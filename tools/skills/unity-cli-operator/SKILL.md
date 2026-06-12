@@ -81,6 +81,7 @@ for (int i = 0; i < workItems.Count; i++)
 - root prefab 이름은 Unity 저장 규칙 때문에 파일 이름으로 정규화된다고 가정한다.
 - `screenshot`은 `--view` 생략 시 game이 기본이다. Scene View가 필요하면 `--view scene`을 명시한다.
 - `qa tap --x --y`에는 `screenshot`에서 확인한 이미지 좌표를 그대로 넣는다. 응답의 `imageOrigin`은 `top-left`, `coordinateOrigin`은 `bottom-left`다.
+- `qa click`, `qa tap`, `qa swipe`는 기본 좌클릭/좌드래그이며, 우클릭 입력 경로를 검증할 때는 `--button right`를 붙인다.
 - 별도 Y-flip이나 해상도 스케일 변환은 하지 않는다. Bridge가 마지막 `screenshot` 크기 또는 명시한 `--screenshot-width`/`--screenshot-height`를 기준으로 내부 처리한다.
 - 좌표를 추측하지 말고 탭 대상을 먼저 열거한다: uGUI 버튼은 `qa ui-dump`, 비-UI 월드 오브젝트(전투 그리드 유닛 등)는 `qa world-dump`. 둘 다 `centerX`/`centerY` 이미지 좌표를 그대로 반환한다.
 - `qa world-dump`는 게임이 opt-in한 오브젝트만 본다: 게임 컴포넌트가 `UnityCliBridge.Bridge.IQaTappable`을 구현하거나 `QaTappable` 마커를 부착해야 한다. 화면 밖은 `--include-offscreen`을 줄 때만 포함된다.

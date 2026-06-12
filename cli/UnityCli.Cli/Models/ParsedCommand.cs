@@ -167,6 +167,7 @@ public sealed class ParsedCommand
     public bool Force { get; set; }
     public string? QaId { get; set; }
     public string? QaTarget { get; set; }
+    public string QaButton { get; set; } = "left";
     public int? QaTapX { get; set; }
     public int? QaTapY { get; set; }
     public int? QaScreenshotWidth { get; set; }
@@ -366,6 +367,7 @@ public sealed class ParsedCommand
             {
                 qaId = QaId,
                 target = QaTarget,
+                button = QaButton,
             },
             CommandKind.QaTap => new QaTapArgs
             {
@@ -374,6 +376,7 @@ public sealed class ParsedCommand
                 screenshotWidth = QaScreenshotWidth ?? 0,
                 screenshotHeight = QaScreenshotHeight ?? 0,
                 target = QaTarget,
+                button = QaButton,
             },
             CommandKind.QaUiDump => new QaUiDumpArgs
             {
@@ -396,6 +399,7 @@ public sealed class ParsedCommand
                 durationMs = QaSwipeDuration,
                 screenshotWidth = QaScreenshotWidth ?? 0,
                 screenshotHeight = QaScreenshotHeight ?? 0,
+                button = QaButton,
             },
             CommandKind.QaKey => new QaKeyArgs
             {

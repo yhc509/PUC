@@ -198,7 +198,7 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             string resolvedPath = GetGameObjectPath(target);
-            ClickGameObject(target);
+            ClickGameObject(target, ResolvePointerButton(args.button));
 
             return ProtocolJson.Serialize(new QaClickPayload
             {
@@ -214,16 +214,17 @@ namespace UnityCliBridge.Bridge.Editor
 
             if (!string.IsNullOrWhiteSpace(args.target))
             {
-                return HandleTapTarget(args.target!);
+                return HandleTapTarget(args);
             }
 
             Vector2Int screenPosition = ResolveTapScreenPosition(args);
+            PointerEventData.InputButton pointerButton = ResolvePointerButton(args.button);
 
             EventSystem eventSystem = RequireEventSystem();
             var pointerData = new PointerEventData(eventSystem)
             {
                 position = new Vector2(screenPosition.x, screenPosition.y),
-                button = PointerEventData.InputButton.Left,
+                button = pointerButton,
             };
 
             var results = new List<RaycastResult>();
@@ -231,6 +232,13 @@ namespace UnityCliBridge.Bridge.Editor
 
             if (results.Count == 0)
             {
+#if ENABLE_INPUT_SYSTEM
+                if (pointerButton == PointerEventData.InputButton.Right)
+                {
+                    QaInputSimulator.SimulateTap(screenPosition, args.button);
+                    return ProtocolJson.Serialize(new QaTapPayload { completed = true });
+                }
+#endif
                 throw new CommandFailureException(
                     "QA_TAP_NO_TARGET",
                     $"No UI element found at screen coordinates ({screenPosition.x}, {screenPosition.y}).",
@@ -242,7 +250,7 @@ namespace UnityCliBridge.Bridge.Editor
             pointerData.pointerCurrentRaycast = results[0];
 
             GameObject clickTarget = ExecuteEvents.GetEventHandler<IPointerClickHandler>(rawTarget) ?? rawTarget;
-            ClickGameObject(clickTarget);
+            ClickGameObject(clickTarget, pointerButton);
 
             return ProtocolJson.Serialize(new QaTapPayload
             {
@@ -250,11 +258,20 @@ namespace UnityCliBridge.Bridge.Editor
             });
         }
 
-        private static string HandleTapTarget(string target)
+        private static string HandleTapTarget(QaTapArgs args)
         {
+            string target = args.target!;
             if (!QaTargetRegistry.TryResolvePath(target, out GameObject? gameObject) || gameObject == null)
             {
                 throw new CommandFailureException("QA_TARGET_NOT_FOUND", $"No active GameObject found at path '{target}'.", false, null);
+            }
+
+            PointerEventData.InputButton pointerButton = ResolvePointerButton(args.button);
+            if (pointerButton == PointerEventData.InputButton.Right
+                && TryResolvePointerEventTarget(gameObject, out GameObject pointerTarget))
+            {
+                ClickGameObject(pointerTarget, pointerButton);
+                return ProtocolJson.Serialize(new QaTapPayload { completed = true });
             }
 
             if (TryInvokeQaTappable(gameObject))
@@ -264,7 +281,7 @@ namespace UnityCliBridge.Bridge.Editor
 
 #if ENABLE_INPUT_SYSTEM
             Vector2 anchorScreenPosition = GetWorldTapScreenPosition(gameObject, target);
-            QaInputSimulator.SimulateTap(anchorScreenPosition);
+            QaInputSimulator.SimulateTap(anchorScreenPosition, args.button);
             return ProtocolJson.Serialize(new QaTapPayload { completed = true });
 #else
             throw CreateInputSystemRequiredException("qa tap --target (coordinate fallback)");
@@ -838,7 +855,8 @@ namespace UnityCliBridge.Bridge.Editor
             QaInputSimulator.SwipeOperation swipe = QaInputSimulator.BeginSwipe(
                 swipeScreenPositions.FromScreenPosition,
                 swipeScreenPositions.ToScreenPosition,
-                args.durationMs);
+                args.durationMs,
+                args.button);
             var stopwatch = Stopwatch.StartNew();
 
             void Poll()
@@ -982,7 +1000,7 @@ namespace UnityCliBridge.Bridge.Editor
             SwipeScreenPositions swipeScreenPositions = ResolveTargetSwipeScreenPositions(target, args);
             int steps = Mathf.Max(1, Mathf.CeilToInt(args.durationMs / 16f));
 
-            DragGameObject(target, swipeScreenPositions.FromScreenPosition, swipeScreenPositions.ToScreenPosition, steps);
+            DragGameObject(target, swipeScreenPositions.FromScreenPosition, swipeScreenPositions.ToScreenPosition, steps, args.button);
 
             return ProtocolJson.Serialize(new QaSwipePayload
             {
@@ -1049,14 +1067,14 @@ namespace UnityCliBridge.Bridge.Editor
                 targetCenterScreenPosition + new Vector2(args.toX, args.toY));
         }
 
-        private static void DragGameObject(GameObject target, Vector2 from, Vector2 to, int steps)
+        private static void DragGameObject(GameObject target, Vector2 from, Vector2 to, int steps, string? button)
         {
             EventSystem eventSystem = RequireEventSystem();
             var pointerData = new PointerEventData(eventSystem)
             {
                 position = from,
                 pressPosition = from,
-                button = PointerEventData.InputButton.Left,
+                button = ResolvePointerButton(button),
                 pointerDrag = target,
             };
 
@@ -1077,15 +1095,41 @@ namespace UnityCliBridge.Bridge.Editor
             ExecuteEvents.Execute(target, pointerData, ExecuteEvents.pointerUpHandler);
         }
 
-        private static void ClickGameObject(GameObject target)
+        private static void ClickGameObject(GameObject target, PointerEventData.InputButton button)
         {
             EventSystem eventSystem = RequireEventSystem();
             var pointerData = new PointerEventData(eventSystem)
             {
                 position = GetScreenPosition(target),
+                button = button,
             };
 
+            if (button == PointerEventData.InputButton.Right)
+            {
+                ExecuteEvents.Execute(target, pointerData, ExecuteEvents.pointerDownHandler);
+                ExecuteEvents.Execute(target, pointerData, ExecuteEvents.pointerUpHandler);
+            }
+
             ExecuteEvents.Execute(target, pointerData, ExecuteEvents.pointerClickHandler);
+        }
+
+        private static PointerEventData.InputButton ResolvePointerButton(string? button)
+        {
+            return string.Equals(button, "right", StringComparison.OrdinalIgnoreCase)
+                ? PointerEventData.InputButton.Right
+                : PointerEventData.InputButton.Left;
+        }
+
+        private static bool TryResolvePointerEventTarget(GameObject gameObject, out GameObject target)
+        {
+            target = ExecuteEvents.GetEventHandler<IPointerClickHandler>(gameObject)
+                ?? ExecuteEvents.GetEventHandler<IPointerDownHandler>(gameObject)
+                ?? ExecuteEvents.GetEventHandler<IPointerUpHandler>(gameObject)
+                ?? gameObject;
+
+            return ExecuteEvents.CanHandleEvent<IPointerClickHandler>(target)
+                || ExecuteEvents.CanHandleEvent<IPointerDownHandler>(target)
+                || ExecuteEvents.CanHandleEvent<IPointerUpHandler>(target);
         }
 
         private static EventSystem RequireEventSystem()
