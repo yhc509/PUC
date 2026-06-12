@@ -234,6 +234,7 @@ unity-cli qa key --key space
 unity-cli qa wait-until --scene GameScene --timeout 5000
 unity-cli qa wait-until --object-interactable StartButton --timeout 5000
 unity-cli qa wait-until --object-gone LoadingSpinner --timeout 5000
+unity-cli qa run-sequence --spec-json @seq.json --timeout 60000
 ```
 
 `qa ui-dump` returns clickable UI elements with hierarchy `path`, visible `text`, `interactable`, and image-space rect/center fields. Feed a returned `path` to `qa click --target`, or `centerX`/`centerY` to `qa tap --x --y`.
@@ -241,6 +242,26 @@ unity-cli qa wait-until --object-gone LoadingSpinner --timeout 5000
 `qa world-dump` lists non-UI world objects that opt in via `IQaTappable` (implement on your own component) or the `QaTappable` marker component. Each entry has a `label`, hierarchy `path`, image-space `centerX`/`centerY`, `onScreen`, and `hasAction`. Feed a `path` to `qa tap --target`: the bridge invokes the object's `TryQaTap()` action when present, otherwise simulates an Input System tap at the object's anchor — so it reaches games that poll the Input System directly. Off-screen objects are excluded unless `--include-offscreen` is passed.
 
 When multiple `qa wait-until` conditions are supplied, every condition must be satisfied (AND). `qa wait-until --object-interactable` waits for an active target whose effective interactable state is true; non-Selectable objects without that state are treated as interactable once active. `qa wait-until --object-gone` waits until an active target can no longer be resolved, which covers deactivated or destroyed objects.
+
+`qa run-sequence` sends a JSON `steps` array to the bridge in one deferred request. Each step waits for all conditions, then runs its actions without a per-step CLI round trip. Conditions can check `active`, `gone`, `transform`, `scene`, `log`, `interactable`, or game state exposed by `IQaQueryable`; `transform` and `query` conditions support `==`, `!=`, `>=`, `<=`, `near`, and `changed`. Actions support `key`, `tap`, `swipe`, `wait`, and `screenshot`. On timeout the response reports `completedSteps`, `failedStep.unmet`, and `failedStep.stateSnapshot`.
+
+```json
+{
+  "steps": [
+    {
+      "name": "confirm-ready",
+      "wait": [
+        { "target": "/State", "query": "phase", "op": "==", "value": "Ready" }
+      ],
+      "actions": [
+        { "key": "space" }
+      ]
+    }
+  ]
+}
+```
+
+Implement `UnityCliBridge.Bridge.IQaQueryable` on a game component to expose state values for `query` conditions. Supported return values are numbers, bool, string, `Vector2`, and `Vector3`; unknown keys should return `false`.
 
 Same-named sibling world objects share a path and resolve to the first match; give tappable objects unique names/labels to target them individually.
 
