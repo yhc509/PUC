@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-06-12
+
+### Added
+- `qa world-dump` lists non-UI world objects (3D/2D scene objects, not Canvas UI) that a game opts in to exposing — through the `IQaTappable` interface in code or the `QaTappable` marker component in the inspector. Each entry returns a `label`, hierarchy `path`, image-space center, an `onScreen` flag, and whether it has a tap action. Feed a `path` to `qa tap --target`, which runs the object's own `TryQaTap()` action first and otherwise falls back to an Input System pointer tap at the object's screen anchor — reaching raw Input System polling that coordinate-based `qa tap` and the EventSystem cannot. Off-screen objects are excluded unless `--include-offscreen` is passed. Play Mode is required.
+- `qa run-sequence --spec-json <json|@file>` runs a condition-gated, multi-step action sequence in a single call, removing the screenshot → reason → act round-trip that makes deep turn-based and real-time flows tedious. Each step waits until its conditions hold — built-in checks (`active`, `gone`, `transform`, `scene`, `log`, `interactable`) or values the game exposes through the new `IQaQueryable` interface — then runs `key`/`tap`/`swipe`/`wait`/`screenshot` actions. Conditions within a step are ANDed; comparison operators are `==`, `!=`, `>=`, `<=`, `near` (with epsilon), and `changed`. On timeout the response reports which step's conditions went unmet plus a state snapshot for diagnosis. Play Mode is required.
+
 ### Fixed
 - The **Unity CLI Manager** window (`Window > Unity CLI Manager`) now installs and updates against the latest *published* GitHub release instead of building the download URL from the package version. Previously, when the matching release was still a draft, the installer tried to fetch a draft asset and failed with an error dialog. Draft and pre-release versions are now ignored.
 - The installer now tells a failed release check (network error, timeout, GitHub rate limit) apart from "no published release available". A transient failure no longer locks the window into a false "no release" state for up to an hour — it surfaces a retryable "Check failed" status and keeps using the cached release version. An installed CLI whose version is unknown is once again offered a reinstall path.
