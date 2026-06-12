@@ -32,7 +32,8 @@ namespace UnityCliBridge.Bridge.Editor
                 || string.Equals(command, ProtocolConstants.CommandQaKey, StringComparison.Ordinal)
                 || string.Equals(command, ProtocolConstants.CommandQaUiDump, StringComparison.Ordinal)
                 || string.Equals(command, ProtocolConstants.CommandQaWorldDump, StringComparison.Ordinal)
-                || string.Equals(command, ProtocolConstants.CommandQaWaitUntil, StringComparison.Ordinal);
+                || string.Equals(command, ProtocolConstants.CommandQaWaitUntil, StringComparison.Ordinal)
+                || string.Equals(command, ProtocolConstants.CommandQaRunSequence, StringComparison.Ordinal);
         }
 
         public string Handle(string command, string argumentsJson)
@@ -80,7 +81,8 @@ namespace UnityCliBridge.Bridge.Editor
         // argumentsJson is retained for interface compatibility with BridgeHost command dispatch.
         public bool IsDeferred(string command, string? argumentsJson = null)
         {
-            if (string.Equals(command, ProtocolConstants.CommandQaWaitUntil, StringComparison.Ordinal))
+            if (string.Equals(command, ProtocolConstants.CommandQaWaitUntil, StringComparison.Ordinal)
+                || string.Equals(command, ProtocolConstants.CommandQaRunSequence, StringComparison.Ordinal))
             {
                 return true;
             }
@@ -123,6 +125,12 @@ namespace UnityCliBridge.Bridge.Editor
             if (string.Equals(command, ProtocolConstants.CommandQaWaitUntil, StringComparison.Ordinal))
             {
                 StartWaitUntilDeferred(argumentsJson, completion, projectHash, requestId);
+                return;
+            }
+
+            if (string.Equals(command, ProtocolConstants.CommandQaRunSequence, StringComparison.Ordinal))
+            {
+                StartRunSequenceDeferred(argumentsJson, completion, projectHash, requestId);
                 return;
             }
 
