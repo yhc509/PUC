@@ -308,7 +308,7 @@ namespace UnityCli.Protocol
 
             try
             {
-                using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (var stream = CreateOwnerOnlyTempFileForAtomicWrite(tempPath))
                 using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
                 {
                     writer.Write(ProtocolJson.Serialize(registry));
@@ -322,6 +322,8 @@ namespace UnityCli.Protocol
                 {
                     File.Move(tempPath, fullPath);
                 }
+
+                TryApplyOwnerOnlyFileMode(fullPath);
             }
             finally
             {
@@ -330,6 +332,13 @@ namespace UnityCli.Protocol
                     File.Delete(tempPath);
                 }
             }
+        }
+
+        internal static FileStream CreateOwnerOnlyTempFileForAtomicWrite(string tempPath)
+        {
+            var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None);
+            TryApplyOwnerOnlyFileMode(tempPath);
+            return stream;
         }
 
         private static InstanceRegistry LoadUnlocked(string fullPath)
@@ -379,6 +388,74 @@ namespace UnityCli.Protocol
 
             return registry;
         }
+
+        private static void TryApplyOwnerOnlyFileMode(string fullPath)
+        {
+#if UNITY_5_3_OR_NEWER
+            if (Path.DirectorySeparatorChar == '\\' || string.IsNullOrWhiteSpace(fullPath))
+            {
+                return;
+            }
+
+            try
+            {
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = "chmod",
+                    Arguments = "600 " + QuoteProcessArgument(fullPath),
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+
+                Process? process = null;
+                try
+                {
+                    process = Process.Start(startInfo);
+                    if (process == null || !process.WaitForExit(1000))
+                    {
+                        UnityEngine.Debug.LogWarning("Unity CLI bridge registry 권한 보정 실패: chmod timed out.");
+                    }
+                    else if (process.ExitCode != 0)
+                    {
+                        UnityEngine.Debug.LogWarning(string.Format(
+                            "Unity CLI bridge registry 권한 보정 실패: chmod exited with {0}.",
+                            process.ExitCode));
+                    }
+                }
+                finally
+                {
+                    if (process != null)
+                    {
+                        process.Dispose();
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                UnityEngine.Debug.LogWarning(string.Format(
+                    "Unity CLI bridge registry 권한 보정 실패: {0}",
+                    exception.Message));
+            }
+#else
+            try
+            {
+                if (!OperatingSystem.IsWindows())
+                {
+                    File.SetUnixFileMode(fullPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                }
+            }
+            catch
+            {
+            }
+#endif
+        }
+
+#if UNITY_5_3_OR_NEWER
+        private static string QuoteProcessArgument(string value)
+        {
+            return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+        }
+#endif
 
         private static string EnsureDirectory(string filePath)
         {
