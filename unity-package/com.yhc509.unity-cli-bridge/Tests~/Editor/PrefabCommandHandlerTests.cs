@@ -108,6 +108,26 @@ namespace UnityCliBridge.Bridge.Editor.Tests
             AssertPrefabHasChild(prefabPath, "CliChild");
         }
 
+        [Test]
+        public void Patch_WhenNestedParentPrefabStageIsDirtyAndChildIsCurrent_RefusesBeforeMutation()
+        {
+            CreateNestedPrefabAssets(out string parentPath, out string childPath);
+            PrefabStage parentStage = OpenDirtyPrefabStage(parentPath);
+            Transform nestedInstanceTransform = parentStage.prefabContentsRoot.transform.Find("NestedInner");
+            Assert.That(nestedInstanceTransform, Is.Not.Null);
+            GameObject nestedInstanceInStage = nestedInstanceTransform.gameObject;
+            PrefabStage childStage = PrefabStageUtility.OpenPrefab(childPath, nestedInstanceInStage);
+
+            Assert.That(PrefabStageUtility.GetCurrentPrefabStage(), Is.EqualTo(childStage));
+            Assert.That(parentStage.scene.isDirty, Is.True);
+
+            CommandFailureException failure = Assert.Throws<CommandFailureException>(() =>
+                PatchAddChild(parentPath, "NestedOuter", "CliChild"))!;
+
+            AssertPrefabStageDirtyFailure(failure, parentPath);
+            AssertPrefabDoesNotHaveChild(parentPath, "CliChild");
+        }
+
         private static void PatchAddChild(string prefabPath, string rootName, string childName)
         {
             var args = new PrefabPatchArgs
@@ -152,6 +172,31 @@ namespace UnityCliBridge.Bridge.Editor.Tests
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             return prefabPath;
+        }
+
+        private static void CreateNestedPrefabAssets(out string parentPath, out string childPath)
+        {
+            childPath = CreatePrefabAsset("NestedInner", "NestedInner");
+            parentPath = AssetDatabase.GenerateUniqueAssetPath(TestFolder + "/NestedOuter.prefab");
+            var parentRoot = new GameObject("NestedOuter");
+            try
+            {
+                GameObject childAsset = AssetDatabase.LoadAssetAtPath<GameObject>(childPath);
+                Assert.That(childAsset, Is.Not.Null);
+                var childInstance = (GameObject)PrefabUtility.InstantiatePrefab(childAsset);
+                Assert.That(childInstance, Is.Not.Null);
+                childInstance.transform.SetParent(parentRoot.transform, false);
+
+                GameObject saved = PrefabUtility.SaveAsPrefabAsset(parentRoot, parentPath);
+                Assert.That(saved, Is.Not.Null);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(parentRoot);
+            }
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
         }
 
         private static void AssertPrefabStageDirtyFailure(CommandFailureException failure, string prefabPath)

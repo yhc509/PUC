@@ -1,5 +1,8 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityCli.Protocol;
@@ -259,26 +262,71 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static void EnsureCurrentPrefabStageCleanForWrite(string prefabPath)
         {
-            PrefabStage? prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-            if (prefabStage == null || !prefabStage.scene.isDirty)
-            {
-                return;
-            }
-
             string normalizedPath = AssetCommandSupport.NormalizeAssetPath(prefabPath);
-            string stageGuid = AssetDatabase.AssetPathToGUID(prefabStage.assetPath);
             string targetGuid = AssetDatabase.AssetPathToGUID(normalizedPath);
-            bool isSamePrefab = !string.IsNullOrEmpty(stageGuid)
-                && !string.IsNullOrEmpty(targetGuid)
-                && string.Equals(stageGuid, targetGuid, StringComparison.Ordinal);
-            if (!isSamePrefab)
+            if (string.IsNullOrEmpty(targetGuid))
             {
                 return;
             }
 
-            throw new CommandFailureException(
-                ProtocolConstants.ErrorPrefabStageDirty,
-                "'" + normalizedPath + "' prefab이 Prefab Stage에서 저장하지 않은 변경과 함께 열려 있어 진행할 수 없습니다. Prefab Stage에서 저장하거나 폐기한 뒤 다시 시도하세요.");
+            foreach (PrefabStage prefabStage in CollectOpenPrefabStages())
+            {
+                if (prefabStage == null || !prefabStage.scene.isDirty)
+                {
+                    continue;
+                }
+
+                string stageGuid = AssetDatabase.AssetPathToGUID(prefabStage.assetPath);
+                bool isSamePrefab = !string.IsNullOrEmpty(stageGuid)
+                    && string.Equals(stageGuid, targetGuid, StringComparison.Ordinal);
+                if (isSamePrefab)
+                {
+                    throw new CommandFailureException(
+                        ProtocolConstants.ErrorPrefabStageDirty,
+                        "'" + normalizedPath + "' prefab이 Prefab Stage에서 저장하지 않은 변경과 함께 열려 있어 진행할 수 없습니다. Prefab Stage에서 저장하거나 폐기한 뒤 다시 시도하세요.");
+                }
+            }
+        }
+
+        private static List<PrefabStage> CollectOpenPrefabStages()
+        {
+            var stages = new List<PrefabStage>();
+
+            // 공개·안정 경로: 현재 stage는 리플렉션 없이 항상 잡는다(리플렉션 실패 시에도 #79 동작 보존).
+            PrefabStage current = PrefabStageUtility.GetCurrentPrefabStage();
+            if (current != null)
+            {
+                stages.Add(current);
+            }
+
+            // 확장 경로: breadcrumb history의 부모 stage들(중첩 편집). internal API라 best-effort.
+            try
+            {
+                Type managerType = typeof(PrefabStage).Assembly
+                    .GetType("UnityEditor.SceneManagement.StageNavigationManager");
+                PropertyInfo instanceProperty = managerType?.GetProperty(
+                    "instance", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
+                object manager = instanceProperty?.GetValue(null);
+                PropertyInfo historyProperty = managerType?.GetProperty(
+                    "stageHistory", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (manager != null && historyProperty?.GetValue(manager) is IEnumerable history)
+                {
+                    foreach (object item in history)
+                    {
+                        if (item is PrefabStage prefabStage && !stages.Contains(prefabStage))
+                        {
+                            stages.Add(prefabStage);
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // StageNavigationManager는 internal API라 Unity 버전 간 형태가 바뀔 수 있다.
+                // 형태가 달라지면 현재 stage 단독 검사(#79 동작)로 안전하게 degrade한다 — 크래시/오탐 차단 없음.
+            }
+
+            return stages;
         }
 
         private static string RequireExistingPrefabPath(string? path, string commandName)
