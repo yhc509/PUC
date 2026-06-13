@@ -19,6 +19,7 @@ namespace UnityCli.Protocol
         public string projectName = string.Empty;
         public string projectHash = string.Empty;
         public string pipeName = string.Empty;
+        public string token = string.Empty;
         public int editorProcessId;
         public string unityVersion = string.Empty;
         public string state = "offline";

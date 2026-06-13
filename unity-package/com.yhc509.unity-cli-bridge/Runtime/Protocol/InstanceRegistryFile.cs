@@ -308,7 +308,7 @@ namespace UnityCli.Protocol
 
             try
             {
-                using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (var stream = CreateOwnerOnlyTempFileForAtomicWrite(tempPath))
                 using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
                 {
                     writer.Write(ProtocolJson.Serialize(registry));
@@ -322,6 +322,8 @@ namespace UnityCli.Protocol
                 {
                     File.Move(tempPath, fullPath);
                 }
+
+                TryApplyOwnerOnlyFileMode(fullPath);
             }
             finally
             {
@@ -330,6 +332,13 @@ namespace UnityCli.Protocol
                     File.Delete(tempPath);
                 }
             }
+        }
+
+        internal static FileStream CreateOwnerOnlyTempFileForAtomicWrite(string tempPath)
+        {
+            var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None);
+            TryApplyOwnerOnlyFileMode(tempPath);
+            return stream;
         }
 
         private static InstanceRegistry LoadUnlocked(string fullPath)
@@ -378,6 +387,24 @@ namespace UnityCli.Protocol
             registry.activeProjectHash = null;
 
             return registry;
+        }
+
+        private static void TryApplyOwnerOnlyFileMode(string fullPath)
+        {
+#if UNITY_5_3_OR_NEWER
+            _ = fullPath;
+#else
+            try
+            {
+                if (!OperatingSystem.IsWindows())
+                {
+                    File.SetUnixFileMode(fullPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                }
+            }
+            catch
+            {
+            }
+#endif
         }
 
         private static string EnsureDirectory(string filePath)
