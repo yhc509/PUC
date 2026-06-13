@@ -143,8 +143,17 @@ namespace UnityCliBridge.Bridge.Editor
                 throw new InvalidOperationException("Unity 프로젝트 루트를 찾지 못했습니다.");
             }
 
+            string canonicalProjectRoot = Path.GetFullPath(projectRoot);
             string relativePath = normalizedPath.Replace('/', Path.DirectorySeparatorChar);
-            return Path.GetFullPath(Path.Combine(projectRoot, relativePath));
+            string physicalPath = Path.GetFullPath(Path.Combine(canonicalProjectRoot, relativePath));
+            string expectedRoot = AssetPathUtility.IsPackagesPath(normalizedPath) ? "Packages" : "Assets";
+            string allowedRoot = Path.GetFullPath(Path.Combine(canonicalProjectRoot, expectedRoot));
+            if (!AssetPathUtility.IsPhysicalPathWithinRoot(physicalPath, allowedRoot))
+            {
+                throw new InvalidOperationException("asset 경로가 Unity 프로젝트 asset 루트 밖을 가리킵니다: " + normalizedPath);
+            }
+
+            return physicalPath;
         }
 
         private static bool DoesAssetPathExistOnDisk(string assetPath, bool allowPackages = false)
