@@ -478,6 +478,7 @@ namespace UnityCli.Protocol
     {
         public string? qaId;
         public string? target;
+        public string button = string.Empty;
     }
 
     [Serializable]
@@ -496,6 +497,7 @@ namespace UnityCli.Protocol
         public int screenshotWidth;
         public int screenshotHeight;
         public string? target;
+        public string button = string.Empty;
     }
 
     [Serializable]
@@ -568,6 +570,7 @@ namespace UnityCli.Protocol
         public int durationMs = ProtocolConstants.DefaultQaSwipeDurationMs;
         public int screenshotWidth;
         public int screenshotHeight;
+        public string button = string.Empty;
     }
 
     [Serializable]

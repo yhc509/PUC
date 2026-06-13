@@ -546,6 +546,11 @@ public static partial class CliArgumentParser
                 case CommandKind.QaTap when token == "--target":
                     parsed.QaTarget = RequireValue(tokens, "--target");
                     break;
+                case CommandKind.QaClick when token == "--button":
+                case CommandKind.QaTap when token == "--button":
+                case CommandKind.QaSwipe when token == "--button":
+                    parsed.QaButton = RequireQaButton(RequireValue(tokens, "--button"));
+                    break;
                 case CommandKind.QaTap when token == "--x":
                     parsed.QaTapX = RequireInt(RequireValue(tokens, "--x"), "--x", minimumValue: null);
                     break;

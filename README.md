@@ -228,6 +228,7 @@ unity-cli qa ui-dump --json
 unity-cli qa world-dump --json
 unity-cli qa tap --x 400 --y 300
 unity-cli qa tap --target /Battle/Units/Unit_Erich
+unity-cli qa tap --target /Battle/EndTurnZone --button right
 unity-cli qa swipe --from 100,200 --to 300,400
 unity-cli qa swipe --target ... --from 0,0 --to 100,0 --duration 500
 unity-cli qa key --key space
@@ -239,7 +240,9 @@ unity-cli qa run-sequence --spec-json @seq.json --timeout 60000
 
 `qa ui-dump` returns clickable UI elements with hierarchy `path`, visible `text`, `interactable`, and image-space rect/center fields. Feed a returned `path` to `qa click --target`, or `centerX`/`centerY` to `qa tap --x --y`.
 
-`qa world-dump` lists non-UI world objects that opt in via `IQaTappable` (implement on your own component) or the `QaTappable` marker component. Each entry has a `label`, hierarchy `path`, image-space `centerX`/`centerY`, `onScreen`, and `hasAction`. Feed a `path` to `qa tap --target`: the bridge invokes the object's `TryQaTap()` action when present, otherwise simulates an Input System tap at the object's anchor — so it reaches games that poll the Input System directly. Off-screen objects are excluded unless `--include-offscreen` is passed.
+`qa world-dump` lists non-UI world objects that opt in via `IQaTappable` (implement on your own component) or the `QaTappable` marker component. Each entry has a `label`, hierarchy `path`, image-space `centerX`/`centerY`, `onScreen`, and `hasAction`. Feed a `path` to `qa tap --target`: left click invokes the object's `TryQaTap()` action when present, otherwise simulates an Input System tap at the object's anchor; right click uses pointer handlers when available and otherwise simulates right-button Input System input. Off-screen objects are excluded unless `--include-offscreen` is passed.
+
+`qa click`, `qa tap`, and `qa swipe` default to `--button left`; pass `--button right` to drive right-click or right-drag input paths.
 
 When multiple `qa wait-until` conditions are supplied, every condition must be satisfied (AND). `qa wait-until --object-interactable` waits for an active target whose effective interactable state is true; non-Selectable objects without that state are treated as interactable once active. `qa wait-until --object-gone` waits until an active target can no longer be resolved, which covers deactivated or destroyed objects.
 

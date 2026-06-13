@@ -41,11 +41,17 @@ namespace UnityCliBridge.Bridge.Editor
         /// </summary>
         public static SwipeOperation BeginSwipe(Vector2 fromScreenPosition, Vector2 toScreenPosition, int durationMs)
         {
+            return BeginSwipe(fromScreenPosition, toScreenPosition, durationMs, string.Empty);
+        }
+
+        public static SwipeOperation BeginSwipe(Vector2 fromScreenPosition, Vector2 toScreenPosition, int durationMs, string? button)
+        {
             int normalizedDurationMs = durationMs > 0 ? durationMs : ProtocolConstants.DefaultQaSwipeDurationMs;
             int totalSteps = Mathf.Max(1, Mathf.CeilToInt(normalizedDurationMs / (float)DefaultFrameDurationMs));
+            bool isRightButton = IsRightButton(button);
 
             Touchscreen? touchscreen = Touchscreen.current;
-            if (touchscreen != null)
+            if (!isRightButton && touchscreen != null)
             {
                 return new SwipeOperation(fromScreenPosition, toScreenPosition, totalSteps, touchscreen);
             }
@@ -53,7 +59,7 @@ namespace UnityCliBridge.Bridge.Editor
             Mouse? mouse = Mouse.current;
             if (mouse != null)
             {
-                return new SwipeOperation(fromScreenPosition, toScreenPosition, totalSteps, mouse);
+                return new SwipeOperation(fromScreenPosition, toScreenPosition, totalSteps, mouse, isRightButton);
             }
 
             throw new CommandFailureException("QA_NO_POINTER_DEVICE", "No pointer device found in Input System.", false, null);
@@ -66,8 +72,14 @@ namespace UnityCliBridge.Bridge.Editor
         /// </summary>
         public static void SimulateTap(Vector2 screenPosition)
         {
+            SimulateTap(screenPosition, string.Empty);
+        }
+
+        public static void SimulateTap(Vector2 screenPosition, string? button)
+        {
+            bool isRightButton = IsRightButton(button);
             Touchscreen? touchscreen = Touchscreen.current;
-            if (touchscreen != null)
+            if (!isRightButton && touchscreen != null)
             {
                 QueueTouchState(touchscreen, screenPosition, UnityEngine.InputSystem.TouchPhase.Began);
                 QueueTouchState(touchscreen, screenPosition, UnityEngine.InputSystem.TouchPhase.Ended);
@@ -77,12 +89,17 @@ namespace UnityCliBridge.Bridge.Editor
             Mouse? mouse = Mouse.current;
             if (mouse != null)
             {
-                QueueMouseState(mouse, screenPosition, true);
-                QueueMouseState(mouse, screenPosition, false);
+                QueueMouseState(mouse, screenPosition, true, isRightButton);
+                QueueMouseState(mouse, screenPosition, false, isRightButton);
                 return;
             }
 
             throw new CommandFailureException("QA_NO_POINTER_DEVICE", "No pointer device found in Input System.", false, null);
+        }
+
+        private static bool IsRightButton(string? button)
+        {
+            return string.Equals(button, "right", StringComparison.OrdinalIgnoreCase);
         }
 
         private static Keyboard RequireKeyboard()
@@ -106,13 +123,21 @@ namespace UnityCliBridge.Bridge.Editor
             }
         }
 
-        private static void QueueMouseState(Mouse mouse, Vector2 screenPosition, bool isPressed)
+        private static void QueueMouseState(Mouse mouse, Vector2 screenPosition, bool isPressed, bool isRightButton)
         {
             InputEventPtr eventPtr;
             using (StateEvent.From(mouse, out eventPtr))
             {
                 mouse.position.WriteValueIntoEvent(screenPosition, eventPtr);
-                mouse.leftButton.WriteValueIntoEvent(isPressed ? PressedValue : ReleasedValue, eventPtr);
+                if (isRightButton)
+                {
+                    mouse.rightButton.WriteValueIntoEvent(isPressed ? PressedValue : ReleasedValue, eventPtr);
+                }
+                else
+                {
+                    mouse.leftButton.WriteValueIntoEvent(isPressed ? PressedValue : ReleasedValue, eventPtr);
+                }
+
                 InputSystem.QueueEvent(eventPtr);
             }
         }
@@ -134,6 +159,7 @@ namespace UnityCliBridge.Bridge.Editor
             private readonly int _totalSteps;
             private readonly Touchscreen? _touchscreen;
             private readonly Mouse? _mouse;
+            private readonly bool _isRightButton;
             private Vector2 _lastPosition;
             private int _currentStep;
             private bool _isAborted;
@@ -147,12 +173,13 @@ namespace UnityCliBridge.Bridge.Editor
                 _lastPosition = from;
             }
 
-            public SwipeOperation(Vector2 from, Vector2 to, int totalSteps, Mouse mouse)
+            public SwipeOperation(Vector2 from, Vector2 to, int totalSteps, Mouse mouse, bool isRightButton)
             {
                 _from = from;
                 _to = to;
                 _totalSteps = totalSteps;
                 _mouse = mouse;
+                _isRightButton = isRightButton;
                 _lastPosition = from;
             }
 
@@ -173,7 +200,7 @@ namespace UnityCliBridge.Bridge.Editor
                 }
                 else if (_mouse != null)
                 {
-                    QueueMouseState(_mouse, position, _currentStep < _totalSteps);
+                    QueueMouseState(_mouse, position, _currentStep < _totalSteps, _isRightButton);
                 }
                 else
                 {
@@ -202,7 +229,7 @@ namespace UnityCliBridge.Bridge.Editor
 
                 if (_mouse != null)
                 {
-                    QueueMouseState(_mouse, _lastPosition, false);
+                    QueueMouseState(_mouse, _lastPosition, false, _isRightButton);
                 }
             }
 

@@ -483,7 +483,7 @@ namespace UnityCliBridge.Bridge.Editor
 #endif
                     }
 
-                    HandleTapTarget(action.target);
+                    HandleTapTarget(new QaTapArgs { target = action.target });
                     return true;
                 case "wait":
                     if (actionDelayUntilMs == 0)
