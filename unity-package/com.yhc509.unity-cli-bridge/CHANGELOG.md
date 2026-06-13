@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- `qa ui-dump` text extraction now stays within each clickable element's owned label subtree, preventing nested clickable controls from borrowing each other's labels.
+
 ## [0.1.13] - 2026-05-13
 
 ### Added
