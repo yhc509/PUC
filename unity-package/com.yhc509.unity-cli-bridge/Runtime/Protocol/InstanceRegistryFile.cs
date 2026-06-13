@@ -392,7 +392,50 @@ namespace UnityCli.Protocol
         private static void TryApplyOwnerOnlyFileMode(string fullPath)
         {
 #if UNITY_5_3_OR_NEWER
-            _ = fullPath;
+            if (Path.DirectorySeparatorChar == '\\' || string.IsNullOrWhiteSpace(fullPath))
+            {
+                return;
+            }
+
+            try
+            {
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = "chmod",
+                    Arguments = "600 " + QuoteProcessArgument(fullPath),
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+
+                Process? process = null;
+                try
+                {
+                    process = Process.Start(startInfo);
+                    if (process == null || !process.WaitForExit(1000))
+                    {
+                        UnityEngine.Debug.LogWarning("Unity CLI bridge registry 권한 보정 실패: chmod timed out.");
+                    }
+                    else if (process.ExitCode != 0)
+                    {
+                        UnityEngine.Debug.LogWarning(string.Format(
+                            "Unity CLI bridge registry 권한 보정 실패: chmod exited with {0}.",
+                            process.ExitCode));
+                    }
+                }
+                finally
+                {
+                    if (process != null)
+                    {
+                        process.Dispose();
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                UnityEngine.Debug.LogWarning(string.Format(
+                    "Unity CLI bridge registry 권한 보정 실패: {0}",
+                    exception.Message));
+            }
 #else
             try
             {
@@ -406,6 +449,13 @@ namespace UnityCli.Protocol
             }
 #endif
         }
+
+#if UNITY_5_3_OR_NEWER
+        private static string QuoteProcessArgument(string value)
+        {
+            return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+        }
+#endif
 
         private static string EnsureDirectory(string filePath)
         {
