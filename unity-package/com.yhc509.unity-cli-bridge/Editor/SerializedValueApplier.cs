@@ -66,6 +66,7 @@ namespace UnityCliBridge.Bridge.Editor
                         + "'). list-components로 유효한 property 이름을 확인하세요.");
                 }
 
+                EnsurePatchableProperty(serializedProperty, property.Name);
                 ApplyToken(serializedProperty, property.Value, property.Name);
             }
 
@@ -105,6 +106,22 @@ namespace UnityCliBridge.Bridge.Editor
             return !property.editable
                 || _skippedPropertyPaths.Contains(property.propertyPath)
                 || property.propertyPath.StartsWith("m_GameObject.", StringComparison.Ordinal);
+        }
+
+        private static void EnsurePatchableProperty(SerializedProperty property, string keyOrPath)
+        {
+            if (!IsPropertySkippable(property))
+            {
+                return;
+            }
+
+            throw new CommandFailureException(
+                "COMPONENT_VALUE_KEY_INVALID",
+                "필드 '"
+                + keyOrPath
+                + "'는 inspect에 노출되지 않아 patch할 수 없습니다 (path: "
+                + property.propertyPath
+                + ").");
         }
 
         private static string ToPascalCase(string key)
@@ -304,6 +321,7 @@ namespace UnityCliBridge.Bridge.Editor
                     throw new CommandFailureException("PREFAB_FIELD_INVALID", "serialized field를 찾지 못했습니다: " + propertyPath + "." + child.Name);
                 }
 
+                EnsurePatchableProperty(childProperty, propertyPath + "." + child.Name);
                 ApplyToken(childProperty, child.Value, childProperty.propertyPath);
             }
         }

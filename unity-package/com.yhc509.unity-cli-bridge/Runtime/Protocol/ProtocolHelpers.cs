@@ -62,6 +62,30 @@ namespace UnityCli.Protocol
             return fullName.IndexOf(substringFilter, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
+        public static string NormalizeManagedReferenceTypeNameForClrLookup(string typeName)
+        {
+            if (string.IsNullOrEmpty(typeName))
+            {
+                return typeName;
+            }
+
+            int commaIndex = FindTopLevelComma(typeName);
+            if (commaIndex >= 0)
+            {
+                return NormalizeTypeNamePart(typeName, 0, commaIndex)
+                    + typeName.Substring(commaIndex);
+            }
+
+            int spaceIndex = typeName.IndexOf(' ');
+            if (spaceIndex > 0)
+            {
+                return typeName.Substring(0, spaceIndex + 1)
+                    + NormalizeTypeNamePart(typeName, spaceIndex + 1, typeName.Length);
+            }
+
+            return typeName.Replace('/', '+');
+        }
+
         public static bool IsTestRunResultStatusError(string status)
         {
             if (string.IsNullOrWhiteSpace(status))
@@ -136,6 +160,34 @@ namespace UnityCli.Protocol
             }
 
             return false;
+        }
+
+        private static int FindTopLevelComma(string value)
+        {
+            int bracketDepth = 0;
+            for (int index = 0; index < value.Length; index++)
+            {
+                char currentCharacter = value[index];
+                if (currentCharacter == '[')
+                {
+                    bracketDepth++;
+                }
+                else if (currentCharacter == ']')
+                {
+                    bracketDepth--;
+                }
+                else if (currentCharacter == ',' && bracketDepth == 0)
+                {
+                    return index;
+                }
+            }
+
+            return -1;
+        }
+
+        private static string NormalizeTypeNamePart(string value, int startIndex, int endIndex)
+        {
+            return value.Substring(startIndex, endIndex - startIndex).Replace('/', '+');
         }
 
         private static string FirstWarning(string[] warnings)

@@ -2,6 +2,7 @@ using System;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using UnityCli.Protocol;
 
 namespace UnityCliBridge.Bridge.Editor
 {
@@ -153,6 +154,8 @@ namespace UnityCliBridge.Bridge.Editor
                 string typeName = ReadString(typeToken, propertyPath + ".$type");
                 System.Reflection.Assembly[] assemblies = GetManagedReferenceAssemblies();
                 Type managedReferenceType = ResolveManagedReferenceType(typeName, propertyPath, assemblies);
+                ValidateManagedReferenceAssignment(property, managedReferenceType, typeName, propertyPath, assemblies);
+
                 bool reuseExistingInstance = false;
                 if (property.managedReferenceValue != null)
                 {
@@ -217,6 +220,7 @@ namespace UnityCliBridge.Bridge.Editor
                     throw new CommandFailureException("PREFAB_FIELD_INVALID", "serialized field를 찾지 못했습니다: " + propertyPath + "." + child.Name);
                 }
 
+                EnsurePatchableProperty(childProperty, propertyPath + "." + child.Name);
                 ApplyToken(childProperty, child.Value, childProperty.propertyPath);
             }
         }
@@ -396,13 +400,14 @@ namespace UnityCliBridge.Bridge.Editor
                 return null;
             }
 
-            Type resolvedType = Type.GetType(typeName, false);
+            string normalizedTypeName = ProtocolHelpers.NormalizeManagedReferenceTypeNameForClrLookup(typeName);
+            Type resolvedType = Type.GetType(normalizedTypeName, false);
             if (resolvedType != null)
             {
                 return resolvedType;
             }
 
-            if (!TryParseManagedReferenceTypeName(typeName, out string assemblyName, out string fullTypeName))
+            if (!TryParseManagedReferenceTypeName(normalizedTypeName, out string assemblyName, out string fullTypeName))
             {
                 return null;
             }
@@ -485,6 +490,60 @@ namespace UnityCliBridge.Bridge.Editor
                 throw new CommandFailureException(
                     "PREFAB_FIELD_INVALID",
                     "SerializeReference는 UnityEngine.Object 파생 타입을 지원하지 않습니다: " + propertyPath + " (" + typeName + ")");
+            }
+
+            if (type.IsAbstract || type.IsInterface)
+            {
+                throw new CommandFailureException(
+                    "PREFAB_FIELD_INVALID",
+                    "managed reference 타입은 추상 클래스나 interface일 수 없습니다: " + propertyPath + " (" + typeName + ")");
+            }
+
+            if (!type.IsValueType && type.GetConstructor(Type.EmptyTypes) == null)
+            {
+                throw new CommandFailureException(
+                    "PREFAB_FIELD_INVALID",
+                    "managed reference 타입은 public parameterless 생성자가 필요합니다: " + propertyPath + " (" + typeName + ")");
+            }
+        }
+
+        private static void ValidateManagedReferenceAssignment(
+            SerializedProperty property,
+            Type type,
+            string typeName,
+            string propertyPath,
+            System.Reflection.Assembly[] assemblies)
+        {
+            string declaredFieldTypeName = property.managedReferenceFieldTypename;
+            if (string.IsNullOrWhiteSpace(declaredFieldTypeName))
+            {
+                return;
+            }
+
+            Type declaredFieldType = TryResolveManagedReferenceType(declaredFieldTypeName, assemblies);
+            if (declaredFieldType == null)
+            {
+                declaredFieldType = TryResolveManagedReferenceType(declaredFieldTypeName, GetManagedReferenceAssemblies(refresh: true));
+            }
+
+            if (declaredFieldType == null)
+            {
+                throw new CommandFailureException(
+                    "PREFAB_FIELD_INVALID",
+                    "managed reference 선언 타입을 찾지 못했습니다: " + propertyPath + " (" + declaredFieldTypeName + ")");
+            }
+
+            if (!declaredFieldType.IsAssignableFrom(type))
+            {
+                throw new CommandFailureException(
+                    "PREFAB_FIELD_INVALID",
+                    "managed reference 타입이 필드 선언 타입과 호환되지 않습니다: "
+                    + propertyPath
+                    + " ($type: "
+                    + typeName
+                    + ", declared: "
+                    + declaredFieldTypeName
+                    + ")");
             }
         }
 

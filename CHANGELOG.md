@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 - Live IPC now requires a per-Editor authentication token from the instance registry. The wire protocol is bumped to `5`, so the CLI binary and Unity package must be upgraded together; mixed versions are rejected before commands run.
+- Scene and prefab component patching now refuses serialized fields that are hidden from `inspect`, so the patchable surface matches what `inspect` shows instead of letting hand-written property paths reach internal or non-editable fields. `SerializeReference` (`$type`) assignments are validated against the field's declared type and must be a constructible, assignable type.
 
 ## [0.3.1] - 2026-06-12
 
