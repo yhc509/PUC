@@ -249,7 +249,7 @@ public sealed class InstanceRegistryStore
             or >= 'A' and <= 'F';
     }
 
-    private static InstanceRegistry Sanitize(InstanceRegistry registry)
+    private InstanceRegistry Sanitize(InstanceRegistry registry)
     {
         var changed = false;
         registry.instances ??= Array.Empty<InstanceRecord>();
@@ -265,15 +265,16 @@ public sealed class InstanceRegistryStore
 
             var projectRoot = ProtocolConstants.GetCanonicalPath(instance.projectRoot);
             var projectHash = ProtocolConstants.ComputeProjectHash(projectRoot);
+            var normalizedProjectHash = string.IsNullOrWhiteSpace(instance.projectHash) ? projectHash : instance.projectHash;
             var normalized = new InstanceRecord
             {
                 projectRoot = projectRoot,
                 projectName = string.IsNullOrWhiteSpace(instance.projectName) ? Path.GetFileName(projectRoot) : instance.projectName,
-                projectHash = string.IsNullOrWhiteSpace(instance.projectHash) ? projectHash : instance.projectHash,
+                projectHash = normalizedProjectHash,
                 pipeName = string.IsNullOrWhiteSpace(instance.pipeName)
-                    ? ProtocolConstants.BuildPipeName(string.IsNullOrWhiteSpace(instance.projectHash) ? projectHash : instance.projectHash)
+                    ? ProtocolConstants.BuildPipeName(normalizedProjectHash)
                     : instance.pipeName,
-                token = instance.token ?? string.Empty,
+                token = InstanceRegistryFile.ReadTokenSidecar(_registryPath, normalizedProjectHash),
                 editorProcessId = instance.editorProcessId,
                 unityVersion = instance.unityVersion ?? string.Empty,
                 state = instance.state ?? "offline",
