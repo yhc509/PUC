@@ -450,11 +450,7 @@ namespace UnityCliBridge.Bridge.Editor
 #endif
             foreach (MonoBehaviour behaviour in behaviours)
             {
-                if (behaviour == null
-                    || behaviour is not IPointerClickHandler
-                    || !behaviour.isActiveAndEnabled
-                    || !behaviour.gameObject.activeInHierarchy
-                    || !behaviour.gameObject.TryGetComponent<RectTransform>(out _))
+                if (!IsClickableUiElementBehaviour(behaviour))
                 {
                     continue;
                 }
@@ -469,6 +465,29 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             return elements;
+        }
+
+        private static bool IsClickableUiElementBehaviour(MonoBehaviour? behaviour)
+        {
+            return behaviour != null
+                && behaviour is IPointerClickHandler
+                && behaviour.isActiveAndEnabled
+                && behaviour.gameObject.activeInHierarchy
+                && behaviour.gameObject.TryGetComponent<RectTransform>(out _);
+        }
+
+        private static bool IsClickableUiElement(GameObject gameObject)
+        {
+            MonoBehaviour[] behaviours = gameObject.GetComponents<MonoBehaviour>();
+            foreach (MonoBehaviour behaviour in behaviours)
+            {
+                if (IsClickableUiElementBehaviour(behaviour))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static QaUiElement CreateUiElement(
@@ -508,9 +527,52 @@ namespace UnityCliBridge.Bridge.Editor
             return fallbackTypeName;
         }
 
-        private static string GetFirstTextValue(GameObject gameObject)
+        internal static string GetFirstTextValue(GameObject gameObject)
         {
-            Component[] components = gameObject.GetComponentsInChildren<Component>(includeInactive: true);
+            if (TryGetFirstTextValueOnGameObject(gameObject, out string value))
+            {
+                return value;
+            }
+
+            foreach (Transform child in gameObject.transform)
+            {
+                if (TryGetFirstTextValueInOwnedSubtree(child.gameObject, out value))
+                {
+                    return value;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static bool TryGetFirstTextValueInOwnedSubtree(GameObject gameObject, out string value)
+        {
+            if (IsClickableUiElement(gameObject))
+            {
+                value = string.Empty;
+                return false;
+            }
+
+            if (TryGetFirstTextValueOnGameObject(gameObject, out value))
+            {
+                return true;
+            }
+
+            foreach (Transform child in gameObject.transform)
+            {
+                if (TryGetFirstTextValueInOwnedSubtree(child.gameObject, out value))
+                {
+                    return true;
+                }
+            }
+
+            value = string.Empty;
+            return false;
+        }
+
+        private static bool TryGetFirstTextValueOnGameObject(GameObject gameObject, out string value)
+        {
+            Component[] components = gameObject.GetComponents<Component>();
             foreach (Component component in components)
             {
                 if (component == null)
@@ -526,9 +588,10 @@ namespace UnityCliBridge.Bridge.Editor
 
                 try
                 {
-                    if (property.GetValue(component) is string value && !string.IsNullOrEmpty(value))
+                    if (property.GetValue(component) is string textValue && !string.IsNullOrEmpty(textValue))
                     {
-                        return value;
+                        value = textValue;
+                        return true;
                     }
                 }
                 catch (Exception)
@@ -536,7 +599,8 @@ namespace UnityCliBridge.Bridge.Editor
                 }
             }
 
-            return string.Empty;
+            value = string.Empty;
+            return false;
         }
 
         private static bool GetInteractableValue(GameObject gameObject)
