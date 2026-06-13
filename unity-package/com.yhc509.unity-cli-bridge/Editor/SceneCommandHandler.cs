@@ -80,7 +80,7 @@ namespace UnityCliBridge.Bridge.Editor
         {
             ScenePatchArgs args = ProtocolJson.Deserialize<ScenePatchArgs>(argumentsJson) ?? new ScenePatchArgs();
             string path = RequireExistingScenePath(args.path, "scene-patch");
-            EnsureScenePatchTargetClean(path);
+            EnsureScenePatchTargetClean(path, "scene patch");
 
             ScenePatchSpec spec = DeserializeSpec<ScenePatchSpec>(args.specJson, "scene-patch");
             ValidateVersion(spec.Version, "scene-patch");
@@ -146,7 +146,7 @@ namespace UnityCliBridge.Bridge.Editor
         private static string HandleAssignMaterial(string argumentsJson)
         {
             SceneAssignMaterialArgs args = ProtocolJson.Deserialize<SceneAssignMaterialArgs>(argumentsJson) ?? new SceneAssignMaterialArgs();
-            Scene scene = RequireActiveSavedScene("scene assign-material");
+            Scene scene = RequireActiveSavedScene("scene assign-material", requireClean: true);
             GameObject node = SceneInspector.ResolveNode(scene, args.node, "scene assign-material");
 
             MeshRenderer meshRenderer = node.GetComponent<MeshRenderer>();
@@ -215,7 +215,7 @@ namespace UnityCliBridge.Bridge.Editor
                 throw new CommandFailureException("SCENE_TRANSFORM_INVALID", "scene set-transform에는 position, rotation, scale 중 하나 이상이 필요합니다.");
             }
 
-            Scene scene = RequireActiveSavedScene("scene set-transform");
+            Scene scene = RequireActiveSavedScene("scene set-transform", requireClean: true);
             GameObject node = SceneInspector.ResolveNode(scene, args.node, "scene set-transform");
             ApplySerializedTransform(node.transform, args.position, args.rotation, args.scale);
 
@@ -297,14 +297,14 @@ namespace UnityCliBridge.Bridge.Editor
             }
         }
 
-        private static void EnsureScenePatchTargetClean(string path)
+        private static void EnsureScenePatchTargetClean(string path, string commandName)
         {
             Scene scene = SceneManager.GetSceneByPath(path);
             if (scene.IsValid() && scene.isLoaded && scene.isDirty)
             {
                 throw new CommandFailureException(
                     ProtocolConstants.ErrorSceneDirty,
-                    path + " scene에 저장하지 않은 변경이 있어 patch를 진행할 수 없습니다. 먼저 저장하거나 폐기한 뒤 다시 시도하세요.");
+                    commandName + " 대상 '" + path + "' scene에 저장하지 않은 변경이 있어 진행할 수 없습니다. 먼저 저장하거나 폐기한 뒤 다시 시도하세요.");
             }
         }
 
@@ -421,7 +421,7 @@ namespace UnityCliBridge.Bridge.Editor
             }
         }
 
-        private static Scene RequireActiveSavedScene(string commandName)
+        private static Scene RequireActiveSavedScene(string commandName, bool requireClean = false)
         {
             Scene scene = EditorSceneManager.GetActiveScene();
             if (!scene.IsValid() || !scene.isLoaded)
@@ -432,6 +432,11 @@ namespace UnityCliBridge.Bridge.Editor
             if (string.IsNullOrWhiteSpace(scene.path))
             {
                 throw new CommandFailureException("SCENE_PATH_INVALID", commandName + " 대상 active scene이 저장되지 않았습니다. 먼저 scene asset으로 저장하세요.");
+            }
+
+            if (requireClean)
+            {
+                EnsureScenePatchTargetClean(scene.path, commandName);
             }
 
             return scene;
