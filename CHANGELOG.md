@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 - `scene set-transform` and `scene assign-material` now refuse to run when the active scene already has unsaved changes, instead of silently saving those unrelated edits along with the requested change. This matches the existing `scene patch` behavior; save or discard first.
+- `prefab patch` and `prefab create` (overwrite) now refuse to write when the target prefab is open in the Prefab Stage with unsaved changes, instead of silently overwriting your in-editor edits. Save or discard the Prefab Stage first.
 
 ### Security
 - Live IPC now requires a per-Editor authentication token from the instance registry. The wire protocol is bumped to `5`, so the CLI binary and Unity package must be upgraded together; mixed versions are rejected before commands run.
