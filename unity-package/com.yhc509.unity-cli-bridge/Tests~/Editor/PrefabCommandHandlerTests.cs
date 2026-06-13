@@ -108,6 +108,46 @@ namespace UnityCliBridge.Bridge.Editor.Tests
             AssertPrefabHasChild(prefabPath, "CliChild");
         }
 
+        [Test]
+        public void Patch_WhenNestedParentPrefabStageIsDirtyAndChildIsCurrent_RefusesBeforeMutation()
+        {
+            CreateNestedPrefabAssets(out string parentPath, out string childPath);
+            PrefabStage parentStage = OpenDirtyPrefabStage(parentPath);
+            PrefabStage? childStage = null;
+            try
+            {
+                Transform nestedInstanceTransform = parentStage.prefabContentsRoot.transform.Find("NestedInner");
+                Assert.That(nestedInstanceTransform, Is.Not.Null);
+                GameObject nestedInstanceInStage = nestedInstanceTransform.gameObject;
+                childStage = PrefabStageUtility.OpenPrefab(childPath, nestedInstanceInStage);
+
+                Assert.That(PrefabStageUtility.GetCurrentPrefabStage(), Is.EqualTo(childStage));
+                Assert.That(parentStage.scene.isDirty, Is.True);
+
+                CommandFailureException failure = Assert.Throws<CommandFailureException>(() =>
+                    PatchAddChild(parentPath, "NestedOuter", "CliChild"))!;
+
+                AssertPrefabStageDirtyFailure(failure, parentPath);
+                AssertPrefabDoesNotHaveChild(parentPath, "CliChild");
+            }
+            finally
+            {
+                // 의도적으로 만든 nested dirty stack을 결정적으로 unwind한다(단언 실패 시에도).
+                // 공용 teardown의 CloseCurrentPrefabStage는 current stage 하나만 정리하므로,
+                // dirty 부모가 GoToMainStage의 undocumented 동작(save prompt/누수)에 의존하지 않도록
+                // 자식·부모 stage의 dirty를 직접 비우고 main으로 복귀해 다음 테스트로의 누수를 막는다.
+                if (childStage != null)
+                {
+                    childStage.ClearDirtiness();
+                }
+
+                parentStage.ClearDirtiness();
+                StageUtility.GoToMainStage();
+            }
+
+            Assert.That(PrefabStageUtility.GetCurrentPrefabStage(), Is.Null);
+        }
+
         private static void PatchAddChild(string prefabPath, string rootName, string childName)
         {
             var args = new PrefabPatchArgs
@@ -152,6 +192,31 @@ namespace UnityCliBridge.Bridge.Editor.Tests
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             return prefabPath;
+        }
+
+        private static void CreateNestedPrefabAssets(out string parentPath, out string childPath)
+        {
+            childPath = CreatePrefabAsset("NestedInner", "NestedInner");
+            parentPath = AssetDatabase.GenerateUniqueAssetPath(TestFolder + "/NestedOuter.prefab");
+            var parentRoot = new GameObject("NestedOuter");
+            try
+            {
+                GameObject childAsset = AssetDatabase.LoadAssetAtPath<GameObject>(childPath);
+                Assert.That(childAsset, Is.Not.Null);
+                var childInstance = (GameObject)PrefabUtility.InstantiatePrefab(childAsset);
+                Assert.That(childInstance, Is.Not.Null);
+                childInstance.transform.SetParent(parentRoot.transform, false);
+
+                GameObject saved = PrefabUtility.SaveAsPrefabAsset(parentRoot, parentPath);
+                Assert.That(saved, Is.Not.Null);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(parentRoot);
+            }
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
         }
 
         private static void AssertPrefabStageDirtyFailure(CommandFailureException failure, string prefabPath)

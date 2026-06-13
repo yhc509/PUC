@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Auth tokens are now stored in a per-instance owner-only sidecar file instead of the shared instance registry, so an Editor running an older package version can no longer strip a newer Editor's token and cause intermittent `UNAUTHORIZED` failures in mixed-version setups (#115).
 - Fixed #78: queued IPC commands that have not started yet are now cancelled when the CLI disconnects or times out, preventing delayed writes after the caller has already failed. Commands that have started still use at-least-once semantics, so check state before retrying mutation commands after a timeout.
 - `scene set-transform` and `scene assign-material` now refuse to run when the active scene already has unsaved changes, instead of silently saving those unrelated edits along with the requested change. This matches the existing `scene patch` behavior; save or discard first.
-- `prefab patch` and `prefab create` (overwrite) now refuse to write when the target prefab is open in the Prefab Stage with unsaved changes, instead of silently overwriting your in-editor edits. Save or discard the Prefab Stage first.
+- `prefab patch` and `prefab create` (overwrite) now refuse to write when the target prefab is open in a Prefab Stage with unsaved changes — including a parent stage left dirty while you edit a nested Prefab — instead of silently overwriting your in-editor edits. Save or discard the Prefab Stage first (#119).
 
 ### Security
 - Live IPC now requires a per-Editor authentication token from the instance registry. The wire protocol is bumped to `5`, so the CLI binary and Unity package must be upgraded together; mixed versions are rejected before commands run.
