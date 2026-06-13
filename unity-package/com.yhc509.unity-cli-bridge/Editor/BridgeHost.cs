@@ -742,6 +742,7 @@ namespace UnityCliBridge.Bridge.Editor
 
             if (!_isInstanceRegistered && _isListenerReady)
             {
+                WriteTokenSidecarSafely();
                 RegisterInstance();
                 _isInstanceRegistered = true;
                 _lastHeartbeatTime = EditorApplication.timeSinceStartup;
@@ -1287,6 +1288,7 @@ namespace UnityCliBridge.Bridge.Editor
                 registry.activeProjectHash = null;
                 return registry;
             });
+            InstanceRegistryFile.DeleteTokenSidecar(_registryFilePath, _projectHash);
         }
 
         private InstanceRecord BuildInstanceRecord()
@@ -1297,7 +1299,6 @@ namespace UnityCliBridge.Bridge.Editor
                 projectName = _projectName,
                 projectHash = _projectHash,
                 pipeName = _pipeName,
-                token = _authToken,
                 editorProcessId = Process.GetCurrentProcess().Id,
                 unityVersion = Application.unityVersion,
                 state = BuildStateLabel(),
@@ -1393,6 +1394,18 @@ namespace UnityCliBridge.Bridge.Editor
             catch (Exception exception)
             {
                 UnityEngine.Debug.LogWarning(string.Format("Unity CLI bridge registry 갱신 실패: {0}", exception));
+            }
+        }
+
+        private void WriteTokenSidecarSafely()
+        {
+            try
+            {
+                InstanceRegistryFile.WriteTokenSidecar(_registryFilePath, _projectHash, _authToken);
+            }
+            catch (Exception exception)
+            {
+                UnityEngine.Debug.LogWarning(string.Format("Unity CLI bridge auth token 저장 실패: {0}", exception));
             }
         }
 

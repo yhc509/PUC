@@ -58,7 +58,7 @@ public sealed class RegistryModelsTests
     }
 
     [Fact]
-    public void InstanceRecord_Token_RoundTripsThroughJson()
+    public void InstanceRecord_Token_DoesNotRoundTripThroughJson()
     {
         var registry = new InstanceRegistry
         {
@@ -82,11 +82,10 @@ public sealed class RegistryModelsTests
         string json = ProtocolJson.Serialize(registry);
         var deserialized = ProtocolJson.Deserialize<InstanceRegistry>(json);
 
+        Assert.DoesNotContain("\"token\"", json, StringComparison.OrdinalIgnoreCase);
         Assert.NotNull(deserialized);
         Assert.Single(deserialized!.instances);
-        Assert.Equal(
-            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-            deserialized.instances[0].token);
+        Assert.Equal(string.Empty, deserialized.instances[0].token);
     }
 
     [Fact]
