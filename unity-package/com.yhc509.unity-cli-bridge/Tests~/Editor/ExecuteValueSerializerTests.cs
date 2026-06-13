@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
+using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -113,5 +114,327 @@ namespace UnityCliBridge.Bridge.Editor.Tests
                 return GetEnumerator();
             }
         }
+    }
+
+    public sealed class SerializedValueApplierTests
+    {
+        [Test]
+        public void Apply_RejectsHiddenTopLevelProperty()
+        {
+            GameObject gameObject = CreateGameObject();
+            try
+            {
+                var values = new JObject
+                {
+                    ["m_GameObject"] = JValue.CreateNull(),
+                };
+
+                CommandFailureException ex = Assert.Throws<CommandFailureException>(
+                    () => SerializedValueApplier.Apply(gameObject.transform, values));
+
+                Assert.AreEqual("COMPONENT_VALUE_KEY_INVALID", ex.ErrorCode);
+                StringAssert.Contains("inspect에 노출되지 않아 patch할 수 없습니다", ex.Message);
+                StringAssert.Contains("m_GameObject", ex.Message);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void Apply_KeepsFriendlyKeyFallbackForEditableField()
+        {
+            GameObject gameObject = CreateGameObject();
+            try
+            {
+                Rigidbody rigidbody = gameObject.AddComponent<Rigidbody>();
+                var values = new JObject
+                {
+                    ["mass"] = 3.5f,
+                };
+
+                SerializedValueApplier.Apply(rigidbody, values);
+
+                Assert.AreEqual(3.5f, rigidbody.mass);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void Apply_AllowsEditableNestedObjectChild()
+        {
+            GameObject gameObject = CreateGameObject();
+            try
+            {
+                SerializedValueApplierNestedObjectHost host = gameObject.AddComponent<SerializedValueApplierNestedObjectHost>();
+                var values = new JObject
+                {
+                    ["nested"] = new JObject
+                    {
+                        ["visible"] = 11,
+                    },
+                };
+
+                SerializedValueApplier.Apply(host, values);
+
+                Assert.AreEqual(11, host.nested.visible);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void Apply_RejectsHiddenNestedObjectChild()
+        {
+            GameObject gameObject = CreateGameObject();
+            try
+            {
+                SerializedValueApplierNestedObjectHost host = gameObject.AddComponent<SerializedValueApplierNestedObjectHost>();
+                var values = new JObject
+                {
+                    ["nested"] = new JObject
+                    {
+                        ["hidden"] = 12,
+                    },
+                };
+
+                CommandFailureException ex = Assert.Throws<CommandFailureException>(
+                    () => SerializedValueApplier.Apply(host, values));
+
+                Assert.AreEqual("COMPONENT_VALUE_KEY_INVALID", ex.ErrorCode);
+                StringAssert.Contains("inspect에 노출되지 않아 patch할 수 없습니다", ex.Message);
+                Assert.AreEqual(0, host.nested.hidden);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void Apply_AllowsManagedReferenceAssignableToDeclaredFieldType()
+        {
+            GameObject gameObject = CreateGameObject();
+            try
+            {
+                SerializedValueApplierManagedReferenceHost host = gameObject.AddComponent<SerializedValueApplierManagedReferenceHost>();
+                var values = new JObject
+                {
+                    ["reference"] = new JObject
+                    {
+                        ["$type"] = BuildManagedReferenceTypeName(typeof(SerializedValueApplierValidManagedReference)),
+                        ["number"] = 42,
+                    },
+                };
+
+                SerializedValueApplier.Apply(host, values);
+
+                Assert.IsInstanceOf<SerializedValueApplierValidManagedReference>(host.reference);
+                Assert.AreEqual(42, ((SerializedValueApplierValidManagedReference)host.reference!).number);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void Apply_AllowsNestedManagedReferenceDeclaredBaseType()
+        {
+            GameObject gameObject = CreateGameObject();
+            try
+            {
+                SerializedValueApplierNestedManagedReferenceHost host = gameObject.AddComponent<SerializedValueApplierNestedManagedReferenceHost>();
+                var values = new JObject
+                {
+                    ["reference"] = new JObject
+                    {
+                        ["$type"] = BuildUnityManagedReferenceTypeName(typeof(SerializedValueApplierNestedManagedReferenceTypes.ValidReference)),
+                        ["number"] = 43,
+                    },
+                };
+
+                SerializedValueApplier.Apply(host, values);
+
+                Assert.IsInstanceOf<SerializedValueApplierNestedManagedReferenceTypes.ValidReference>(host.reference);
+                Assert.AreEqual(43, ((SerializedValueApplierNestedManagedReferenceTypes.ValidReference)host.reference!).number);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void Apply_RejectsHiddenManagedReferenceChild()
+        {
+            GameObject gameObject = CreateGameObject();
+            try
+            {
+                SerializedValueApplierNestedManagedReferenceHost host = gameObject.AddComponent<SerializedValueApplierNestedManagedReferenceHost>();
+                var values = new JObject
+                {
+                    ["reference"] = new JObject
+                    {
+                        ["$type"] = BuildManagedReferenceTypeName(typeof(SerializedValueApplierNestedManagedReferenceTypes.ValidReference)),
+                        ["hidden"] = 44,
+                    },
+                };
+
+                CommandFailureException ex = Assert.Throws<CommandFailureException>(
+                    () => SerializedValueApplier.Apply(host, values));
+
+                Assert.AreEqual("COMPONENT_VALUE_KEY_INVALID", ex.ErrorCode);
+                StringAssert.Contains("inspect에 노출되지 않아 patch할 수 없습니다", ex.Message);
+                Assert.IsInstanceOf<SerializedValueApplierNestedManagedReferenceTypes.ValidReference>(host.reference);
+                Assert.AreEqual(0, ((SerializedValueApplierNestedManagedReferenceTypes.ValidReference)host.reference!).hidden);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void Apply_RejectsManagedReferenceNotAssignableToDeclaredFieldType()
+        {
+            GameObject gameObject = CreateGameObject();
+            try
+            {
+                SerializedValueApplierManagedReferenceHost host = gameObject.AddComponent<SerializedValueApplierManagedReferenceHost>();
+                var values = new JObject
+                {
+                    ["reference"] = new JObject
+                    {
+                        ["$type"] = BuildManagedReferenceTypeName(typeof(SerializedValueApplierIncompatibleManagedReference)),
+                    },
+                };
+
+                CommandFailureException ex = Assert.Throws<CommandFailureException>(
+                    () => SerializedValueApplier.Apply(host, values));
+
+                Assert.AreEqual("PREFAB_FIELD_INVALID", ex.ErrorCode);
+                StringAssert.Contains("필드 선언 타입과 호환되지 않습니다", ex.Message);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void Apply_RejectsManagedReferenceWithoutPublicParameterlessConstructor()
+        {
+            GameObject gameObject = CreateGameObject();
+            try
+            {
+                SerializedValueApplierManagedReferenceHost host = gameObject.AddComponent<SerializedValueApplierManagedReferenceHost>();
+                var values = new JObject
+                {
+                    ["reference"] = new JObject
+                    {
+                        ["$type"] = BuildManagedReferenceTypeName(typeof(SerializedValueApplierNoDefaultConstructorManagedReference)),
+                    },
+                };
+
+                CommandFailureException ex = Assert.Throws<CommandFailureException>(
+                    () => SerializedValueApplier.Apply(host, values));
+
+                Assert.AreEqual("PREFAB_FIELD_INVALID", ex.ErrorCode);
+                StringAssert.Contains("public parameterless 생성자가 필요합니다", ex.Message);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        private static GameObject CreateGameObject()
+        {
+            return new GameObject("SerializedValueApplierTests");
+        }
+
+        private static string BuildManagedReferenceTypeName(Type type)
+        {
+            return type.FullName + ", " + type.Assembly.GetName().Name;
+        }
+
+        private static string BuildUnityManagedReferenceTypeName(Type type)
+        {
+            string fullName = type.FullName ?? throw new InvalidOperationException("Type full name is unavailable: " + type.Name);
+            return type.Assembly.GetName().Name + " " + fullName.Replace('+', '/');
+        }
+    }
+
+    public sealed class SerializedValueApplierNestedObjectHost : MonoBehaviour
+    {
+        public SerializedValueApplierNestedObject nested = new SerializedValueApplierNestedObject();
+    }
+
+    [Serializable]
+    public sealed class SerializedValueApplierNestedObject
+    {
+        public int visible;
+
+        [HideInInspector] public int hidden;
+    }
+
+    public sealed class SerializedValueApplierManagedReferenceHost : MonoBehaviour
+    {
+        [SerializeReference] public SerializedValueApplierManagedReferenceBase? reference;
+    }
+
+    public sealed class SerializedValueApplierNestedManagedReferenceHost : MonoBehaviour
+    {
+        [SerializeReference] public SerializedValueApplierNestedManagedReferenceTypes.BaseReference? reference;
+    }
+
+    public static class SerializedValueApplierNestedManagedReferenceTypes
+    {
+        [Serializable]
+        public abstract class BaseReference
+        {
+        }
+
+        [Serializable]
+        public sealed class ValidReference : BaseReference
+        {
+            public int number;
+
+            [HideInInspector] public int hidden;
+        }
+    }
+
+    [Serializable]
+    public abstract class SerializedValueApplierManagedReferenceBase
+    {
+    }
+
+    [Serializable]
+    public sealed class SerializedValueApplierValidManagedReference : SerializedValueApplierManagedReferenceBase
+    {
+        public int number;
+    }
+
+    [Serializable]
+    public sealed class SerializedValueApplierNoDefaultConstructorManagedReference : SerializedValueApplierManagedReferenceBase
+    {
+        public SerializedValueApplierNoDefaultConstructorManagedReference(int number)
+        {
+            this.number = number;
+        }
+
+        public int number;
+    }
+
+    [Serializable]
+    public sealed class SerializedValueApplierIncompatibleManagedReference
+    {
     }
 }

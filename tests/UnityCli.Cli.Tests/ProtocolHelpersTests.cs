@@ -73,6 +73,18 @@ public sealed class ProtocolHelpersTests
     }
 
     [Theory]
+    [InlineData("Game.Assembly Some.Ns.Outer/InnerBase", "Game.Assembly Some.Ns.Outer+InnerBase")]
+    [InlineData("Some.Ns.Outer/InnerBase, Game.Assembly", "Some.Ns.Outer+InnerBase, Game.Assembly")]
+    [InlineData("Some.Ns.PlainType, Game.Assembly", "Some.Ns.PlainType, Game.Assembly")]
+    [InlineData("Game/Assembly Some.Ns.Outer/InnerBase", "Game/Assembly Some.Ns.Outer+InnerBase")]
+    [InlineData("", "")]
+    [InlineData("/", "+")]
+    public void NormalizeManagedReferenceTypeNameForClrLookup_NormalizesOnlyTypePart(string input, string expected)
+    {
+        Assert.Equal(expected, ProtocolHelpers.NormalizeManagedReferenceTypeNameForClrLookup(input));
+    }
+
+    [Theory]
     [InlineData("Completed", false)]
     [InlineData("Running", false)]
     [InlineData("STARTED", false)]
