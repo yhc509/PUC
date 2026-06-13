@@ -656,6 +656,8 @@ namespace UnityCliBridge.Bridge.Editor
 
                 using (cancellationToken.Register(CancelPendingRequest, pending))
                 {
+                    _ = MonitorClientDisconnectAsync(reader, pending);
+
                     ResponseEnvelope response;
                     try
                     {
@@ -663,6 +665,11 @@ namespace UnityCliBridge.Bridge.Editor
                     }
                     catch (TaskCanceledException)
                     {
+                        if (pending.State.CancelReason == PendingRequestCancelReason.ClientDisconnected)
+                        {
+                            return;
+                        }
+
                         response = ResponseEnvelope.Failure(
                             command.requestId,
                             _projectHash,
@@ -687,7 +694,19 @@ namespace UnityCliBridge.Bridge.Editor
                 return;
             }
 
-            pending.Completion.TrySetCanceled();
+            if (pending.State.TryCancelForHostShutdown())
+            {
+                pending.Completion.TrySetCanceled();
+            }
+        }
+
+        private static async Task MonitorClientDisconnectAsync(TextReader reader, PendingRequest pending)
+        {
+            bool disconnected = await ClientDisconnectMonitor.WaitForDisconnectAsync(reader).ConfigureAwait(false);
+            if (disconnected && pending.State.TryCancelForClientDisconnect())
+            {
+                pending.Completion.TrySetCanceled();
+            }
         }
 
         private static async Task WriteResponseAsync(StreamWriter writer, ResponseEnvelope response)
@@ -736,7 +755,7 @@ namespace UnityCliBridge.Bridge.Editor
 
             while (_pendingRequests.TryDequeue(out PendingRequest pending))
             {
-                if (pending.Completion.Task.IsCompleted)
+                if (!pending.State.TryClaimForDispatch())
                 {
                     continue;
                 }
@@ -1453,12 +1472,14 @@ namespace UnityCliBridge.Bridge.Editor
             public PendingRequest(CommandEnvelope command)
             {
                 Command = command;
+                State = new PendingRequestState();
                 Completion = new TaskCompletionSource<ResponseEnvelope>(
                     command.requestId,
                     TaskCreationOptions.RunContinuationsAsynchronously);
             }
 
             public CommandEnvelope Command { get; private set; }
+            public PendingRequestState State { get; private set; }
             public TaskCompletionSource<ResponseEnvelope> Completion { get; private set; }
         }
 

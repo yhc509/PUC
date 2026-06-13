@@ -43,6 +43,7 @@ The repo is a single solution (`UnityCliBridge.sln`) split across four projects:
 
 **Bridge runtime (`unity-package/com.yhc509.unity-cli-bridge/Editor/`)** — Hosted in the Unity Editor.
 - `BridgeHost.cs` is the bootstrap and dispatcher: it registers the project in the instance registry, starts the IPC listener (Named Pipe on Windows / Unix socket on macOS+Linux), and routes commands to one of the `*CommandHandler` classes (`Asset`, `AssetCreate`, `Scene`, `Prefab`, `Material`, `Package`, `Qa`, `Screenshot`, `ExecuteCode`, `Custom`).
+- `ClientDisconnectMonitor.cs` is the `.NET`-testable stream watcher that lets `BridgeHost` cancel queued requests when the CLI connection closes before dispatch.
 - Scene/prefab patch logic is deliberately split across `SceneCommandHandler.Patching.cs` and `PrefabCommandHandler.Patching.cs` (partial classes) so the entry-point file stays small and the op-application code lives next to its inspector.
 - `SerializedValueApplier.cs` (+ `.ComplexTypes.cs` partial) is the most fragile layer — it translates JSON values into `SerializedProperty.propertyPath` mutations with friendly-key fallback. Run `*-inspect --with-values` before patching to verify paths.
 - `ExecuteValueSerializer.cs` serializes values returned from `execute` and custom commands with a safe whitelist and round-trip float/double formatting.
@@ -56,6 +57,7 @@ Tests live in `tests/UnityCli.Cli.Tests/` (xUnit, `.NET`-testable surface only).
 ## Key Conventions
 
 - **Nullable references enabled** throughout (`#nullable enable`, implicit usings).
+- **IPC request semantics:** queued requests are best-effort cancelled if the client disconnects before dispatch, but once a command starts running it cannot be interrupted. Mutation commands are therefore at-least-once: after a CLI timeout, check Editor/project state before retrying.
 - **Asset paths** always use `Assets/...` format.
 - **Destructive/dangerous ops require `--force`:** `asset delete` (always), `asset move/rename/create` (when overwriting), destructive scene/prefab patches, scene/prefab `remove-component`, `package remove`, and `execute`.
 - **`execute` cooperative timeout:** `--timeout <초>` (default 30, max 600) 협력적 cancel. 사용자 코드가 `__pucToken` 체크해야 강제 종료. 비협조 코드는 main thread 점유 — force 사용자 책임.
