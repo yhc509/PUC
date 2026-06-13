@@ -29,6 +29,7 @@ namespace UnityCli.Protocol
         public const string ErrorExecuteForceRequired = "EXECUTE_FORCE_REQUIRED";
         public const string ErrorExecuteTimeout = "EXECUTE_TIMEOUT";
         public const string ErrorPrefabForceRequired = "PREFAB_FORCE_REQUIRED";
+        public const string ErrorPrefabStageDirty = "PREFAB_STAGE_DIRTY";
         public const string ErrorPackageForceRequired = "PACKAGE_FORCE_REQUIRED";
         public const string ErrorPackageBusy = "PACKAGE_BUSY";
         public const string PackageBusyMessage = "다른 패키지 명령이 진행 중입니다. 완료 후 다시 시도하세요.";

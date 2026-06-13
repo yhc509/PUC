@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityCli.Protocol;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 
 namespace UnityCliBridge.Bridge.Editor
@@ -73,6 +74,11 @@ namespace UnityCliBridge.Bridge.Editor
                 throw new CommandFailureException(ProtocolConstants.ErrorPrefabForceRequired, "prefab 덮어쓰기에는 --force가 필요합니다.");
             }
 
+            if (isOverwritten)
+            {
+                EnsureCurrentPrefabStageCleanForWrite(path);
+            }
+
             // Non-overwrite creates still use the transaction so failed saves remove partial body/.meta artifacts.
             return AssetBackupTransaction.RunWithMovedBackup(path, "prefab-create", () => CreatePrefab(path, spec, isOverwritten));
         }
@@ -131,12 +137,12 @@ namespace UnityCliBridge.Bridge.Editor
                 throw new CommandFailureException(ProtocolConstants.ErrorPrefabForceRequired, "`remove-node` 또는 `remove-component`를 쓰려면 --force가 필요합니다.");
             }
 
+            EnsureCurrentPrefabStageCleanForWrite(path);
             return AssetBackupTransaction.RunWithBackup(path, "prefab-patch", () => PatchPrefab(path, spec));
         }
 
         private static string PatchPrefab(string path, PrefabPatchSpec spec)
         {
-            // Prefab Edit Mode dirtiness is out of scope; LoadPrefabContents edits an isolated instance.
             GameObject root = PrefabUtility.LoadPrefabContents(path);
             PrefabPatchApplyResult patchResult;
             try
@@ -249,6 +255,30 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             return normalizedPath;
+        }
+
+        private static void EnsureCurrentPrefabStageCleanForWrite(string prefabPath)
+        {
+            PrefabStage? prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+            if (prefabStage == null || !prefabStage.scene.isDirty)
+            {
+                return;
+            }
+
+            string normalizedPath = AssetCommandSupport.NormalizeAssetPath(prefabPath);
+            string stageGuid = AssetDatabase.AssetPathToGUID(prefabStage.assetPath);
+            string targetGuid = AssetDatabase.AssetPathToGUID(normalizedPath);
+            bool isSamePrefab = !string.IsNullOrEmpty(stageGuid)
+                && !string.IsNullOrEmpty(targetGuid)
+                && string.Equals(stageGuid, targetGuid, StringComparison.Ordinal);
+            if (!isSamePrefab)
+            {
+                return;
+            }
+
+            throw new CommandFailureException(
+                ProtocolConstants.ErrorPrefabStageDirty,
+                "'" + normalizedPath + "' prefab이 Prefab Stage에서 저장하지 않은 변경과 함께 열려 있어 진행할 수 없습니다. Prefab Stage에서 저장하거나 폐기한 뒤 다시 시도하세요.");
         }
 
         private static string RequireExistingPrefabPath(string? path, string commandName)
