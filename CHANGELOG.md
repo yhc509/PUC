@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `qa click`, `qa tap`, and `qa swipe` now accept `--button left|right` so Play Mode QA can drive right-click and right-drag input paths. The default remains `left`.
 
 ### Fixed
+- Fixed #78: queued IPC commands that have not started yet are now cancelled when the CLI disconnects or times out, preventing delayed writes after the caller has already failed. Commands that have started still use at-least-once semantics, so check state before retrying mutation commands after a timeout.
 - `scene set-transform` and `scene assign-material` now refuse to run when the active scene already has unsaved changes, instead of silently saving those unrelated edits along with the requested change. This matches the existing `scene patch` behavior; save or discard first.
 - `prefab patch` and `prefab create` (overwrite) now refuse to write when the target prefab is open in the Prefab Stage with unsaved changes, instead of silently overwriting your in-editor edits. Save or discard the Prefab Stage first.
 
