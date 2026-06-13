@@ -113,19 +113,39 @@ namespace UnityCliBridge.Bridge.Editor.Tests
         {
             CreateNestedPrefabAssets(out string parentPath, out string childPath);
             PrefabStage parentStage = OpenDirtyPrefabStage(parentPath);
-            Transform nestedInstanceTransform = parentStage.prefabContentsRoot.transform.Find("NestedInner");
-            Assert.That(nestedInstanceTransform, Is.Not.Null);
-            GameObject nestedInstanceInStage = nestedInstanceTransform.gameObject;
-            PrefabStage childStage = PrefabStageUtility.OpenPrefab(childPath, nestedInstanceInStage);
+            PrefabStage? childStage = null;
+            try
+            {
+                Transform nestedInstanceTransform = parentStage.prefabContentsRoot.transform.Find("NestedInner");
+                Assert.That(nestedInstanceTransform, Is.Not.Null);
+                GameObject nestedInstanceInStage = nestedInstanceTransform.gameObject;
+                childStage = PrefabStageUtility.OpenPrefab(childPath, nestedInstanceInStage);
 
-            Assert.That(PrefabStageUtility.GetCurrentPrefabStage(), Is.EqualTo(childStage));
-            Assert.That(parentStage.scene.isDirty, Is.True);
+                Assert.That(PrefabStageUtility.GetCurrentPrefabStage(), Is.EqualTo(childStage));
+                Assert.That(parentStage.scene.isDirty, Is.True);
 
-            CommandFailureException failure = Assert.Throws<CommandFailureException>(() =>
-                PatchAddChild(parentPath, "NestedOuter", "CliChild"))!;
+                CommandFailureException failure = Assert.Throws<CommandFailureException>(() =>
+                    PatchAddChild(parentPath, "NestedOuter", "CliChild"))!;
 
-            AssertPrefabStageDirtyFailure(failure, parentPath);
-            AssertPrefabDoesNotHaveChild(parentPath, "CliChild");
+                AssertPrefabStageDirtyFailure(failure, parentPath);
+                AssertPrefabDoesNotHaveChild(parentPath, "CliChild");
+            }
+            finally
+            {
+                // 의도적으로 만든 nested dirty stack을 결정적으로 unwind한다(단언 실패 시에도).
+                // 공용 teardown의 CloseCurrentPrefabStage는 current stage 하나만 정리하므로,
+                // dirty 부모가 GoToMainStage의 undocumented 동작(save prompt/누수)에 의존하지 않도록
+                // 자식·부모 stage의 dirty를 직접 비우고 main으로 복귀해 다음 테스트로의 누수를 막는다.
+                if (childStage != null)
+                {
+                    childStage.ClearDirtiness();
+                }
+
+                parentStage.ClearDirtiness();
+                StageUtility.GoToMainStage();
+            }
+
+            Assert.That(PrefabStageUtility.GetCurrentPrefabStage(), Is.Null);
         }
 
         private static void PatchAddChild(string prefabPath, string rootName, string childName)
