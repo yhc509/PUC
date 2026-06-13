@@ -87,6 +87,95 @@ public sealed class InstanceTokenSidecarTests
         Assert.Equal(expected, path);
     }
 
+    [Theory]
+    [InlineData("09da309b95f5")]
+    [InlineData("09DA309B95F5")]
+    [InlineData("09da309b95f5-1")]
+    [InlineData("09da309b95f5-123")]
+    public void GetTokenSidecarPath_WithValidProjectHash_ReturnsTokenPath(string projectHash)
+    {
+        string registryPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "instances.json");
+        string expected = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(registryPath))!, "tokens", projectHash + ".token");
+
+        string path = InstanceRegistryFile.GetTokenSidecarPath(registryPath, projectHash);
+
+        Assert.Equal(expected, path);
+    }
+
+    [Theory]
+    [InlineData("../../etc/passwd")]
+    [InlineData("09da309b95f5/../x")]
+    [InlineData("zzzz")]
+    [InlineData("zzzzzzzzzzzz")]
+    [InlineData("09da309b95f5-")]
+    [InlineData("09da309b95f5-x")]
+    [InlineData("09da309b95f")]
+    [InlineData("09da309b95f55")]
+    public void GetTokenSidecarPath_WithInvalidProjectHash_ReturnsEmpty(string projectHash)
+    {
+        string registryPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "instances.json");
+
+        string path = InstanceRegistryFile.GetTokenSidecarPath(registryPath, projectHash);
+
+        Assert.Equal(string.Empty, path);
+    }
+
+    [Theory]
+    [InlineData("../../etc/passwd")]
+    [InlineData("09da309b95f5/../x")]
+    [InlineData("zzzz")]
+    [InlineData("09da309b95f5-")]
+    [InlineData("09da309b95f5-x")]
+    [InlineData("09da309b95f")]
+    [InlineData("09da309b95f55")]
+    public void TokenSidecar_WithInvalidProjectHash_NoOpsAndReturnsEmpty(string projectHash)
+    {
+        string tempRoot = CreateTempRoot();
+        try
+        {
+            string registryPath = Path.Combine(tempRoot, "instances.json");
+
+            InstanceRegistryFile.WriteTokenSidecar(registryPath, projectHash, "secret-token");
+
+            Assert.Equal(string.Empty, InstanceRegistryFile.ReadTokenSidecar(registryPath, projectHash));
+            Assert.False(Directory.Exists(tempRoot));
+            Assert.False(Directory.Exists(Path.Combine(tempRoot, "tokens")));
+            Assert.False(File.Exists(Path.Combine(tempRoot, "x.token")));
+        }
+        finally
+        {
+            DeleteTempRoot(tempRoot);
+        }
+    }
+
+    [Fact]
+    public void WriteTokenSidecar_WithTraversalProjectHash_DoesNotWriteOutsideTokenDirectory()
+    {
+        string tempRoot = CreateTempRoot();
+        string outsideName = Guid.NewGuid().ToString("N");
+        string projectHash = "../../" + outsideName;
+        string outsidePath = Path.GetFullPath(Path.Combine(tempRoot, "tokens", projectHash + ".token"));
+        try
+        {
+            string registryPath = Path.Combine(tempRoot, "instances.json");
+
+            InstanceRegistryFile.WriteTokenSidecar(registryPath, projectHash, "secret-token");
+
+            Assert.Equal(string.Empty, InstanceRegistryFile.ReadTokenSidecar(registryPath, projectHash));
+            Assert.False(File.Exists(outsidePath));
+            Assert.False(Directory.Exists(tempRoot));
+        }
+        finally
+        {
+            if (File.Exists(outsidePath))
+            {
+                File.Delete(outsidePath);
+            }
+
+            DeleteTempRoot(tempRoot);
+        }
+    }
+
     [Fact]
     public void WriteTokenSidecar_OnUnix_AppliesOwnerOnlyModes()
     {

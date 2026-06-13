@@ -751,6 +751,7 @@ namespace UnityCliBridge.Bridge.Editor
                 && EditorApplication.timeSinceStartup - _lastHeartbeatTime >= ProtocolConstants.RegistryHeartbeatSeconds)
             {
                 RegisterInstance();
+                WriteTokenSidecarSafely();
                 _lastHeartbeatTime = EditorApplication.timeSinceStartup;
             }
 
@@ -1401,6 +1402,12 @@ namespace UnityCliBridge.Bridge.Editor
         {
             try
             {
+                string sidecarPath = InstanceRegistryFile.GetTokenSidecarPath(_registryFilePath, _projectHash);
+                if (!string.IsNullOrWhiteSpace(sidecarPath) && File.Exists(sidecarPath))
+                {
+                    return;
+                }
+
                 InstanceRegistryFile.WriteTokenSidecar(_registryFilePath, _projectHash, _authToken);
             }
             catch (Exception exception)

@@ -83,13 +83,76 @@ namespace UnityCli.Protocol
                 return string.Empty;
             }
 
+            if (!IsValidSidecarProjectHash(projectHash))
+            {
+                return string.Empty;
+            }
+
             string registryDirectory = Path.GetDirectoryName(Path.GetFullPath(registryFilePath)) ?? string.Empty;
             if (string.IsNullOrWhiteSpace(registryDirectory))
             {
                 return string.Empty;
             }
 
-            return Path.Combine(registryDirectory, "tokens", projectHash + ".token");
+            string tokenDirectory = Path.GetFullPath(Path.Combine(registryDirectory, "tokens"));
+            string fullPath = Path.GetFullPath(Path.Combine(tokenDirectory, projectHash + ".token"));
+            StringComparison comparison = Path.DirectorySeparatorChar == '\\'
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            string tokenDirectoryWithSeparator = tokenDirectory.EndsWith(Path.DirectorySeparatorChar.ToString(), comparison)
+                ? tokenDirectory
+                : tokenDirectory + Path.DirectorySeparatorChar;
+
+            if (!fullPath.StartsWith(tokenDirectoryWithSeparator, comparison))
+            {
+                return string.Empty;
+            }
+
+            return fullPath;
+        }
+
+        private static bool IsValidSidecarProjectHash(string projectHash)
+        {
+            if (string.IsNullOrEmpty(projectHash) || projectHash.Length < 12)
+            {
+                return false;
+            }
+
+            for (int index = 0; index < 12; index++)
+            {
+                if (!IsHexDigit(projectHash[index]))
+                {
+                    return false;
+                }
+            }
+
+            if (projectHash.Length == 12)
+            {
+                return true;
+            }
+
+            if (projectHash[12] != '-' || projectHash.Length == 13)
+            {
+                return false;
+            }
+
+            for (int index = 13; index < projectHash.Length; index++)
+            {
+                char character = projectHash[index];
+                if (character < '0' || character > '9')
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsHexDigit(char character)
+        {
+            return (character >= '0' && character <= '9')
+                || (character >= 'a' && character <= 'f')
+                || (character >= 'A' && character <= 'F');
         }
 
         public static void WriteTokenSidecar(string registryFilePath, string projectHash, string token)
