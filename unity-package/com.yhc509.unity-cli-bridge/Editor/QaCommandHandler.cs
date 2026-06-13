@@ -220,6 +220,11 @@ namespace UnityCliBridge.Bridge.Editor
             Vector2Int screenPosition = ResolveTapScreenPosition(args);
             PointerEventData.InputButton pointerButton = ResolvePointerButton(args.button);
 
+            if (pointerButton == PointerEventData.InputButton.Right)
+            {
+                return HandleRightCoordinateTap(screenPosition, args.button);
+            }
+
             EventSystem eventSystem = RequireEventSystem();
             var pointerData = new PointerEventData(eventSystem)
             {
@@ -258,6 +263,46 @@ namespace UnityCliBridge.Bridge.Editor
             });
         }
 
+        private static string HandleRightCoordinateTap(Vector2Int screenPosition, string? button)
+        {
+            EventSystem? eventSystem = EventSystem.current;
+            if (eventSystem == null)
+            {
+#if ENABLE_INPUT_SYSTEM
+                QaInputSimulator.SimulateTap(screenPosition, button);
+                return ProtocolJson.Serialize(new QaTapPayload { completed = true });
+#else
+                throw CreateInputSystemRequiredException("qa tap --button right");
+#endif
+            }
+
+            var pointerData = new PointerEventData(eventSystem)
+            {
+                position = new Vector2(screenPosition.x, screenPosition.y),
+                button = PointerEventData.InputButton.Right,
+            };
+
+            var results = new List<RaycastResult>();
+            eventSystem.RaycastAll(pointerData, results);
+
+            if (results.Count > 0)
+            {
+                GameObject rawTarget = results[0].gameObject;
+                if (TryResolvePointerEventTarget(rawTarget, out GameObject pointerTarget))
+                {
+                    ClickGameObject(pointerTarget, PointerEventData.InputButton.Right);
+                    return ProtocolJson.Serialize(new QaTapPayload { completed = true });
+                }
+            }
+
+#if ENABLE_INPUT_SYSTEM
+            QaInputSimulator.SimulateTap(screenPosition, button);
+            return ProtocolJson.Serialize(new QaTapPayload { completed = true });
+#else
+            throw CreateInputSystemRequiredException("qa tap --button right");
+#endif
+        }
+
         private static string HandleTapTarget(QaTapArgs args)
         {
             string target = args.target!;
@@ -274,7 +319,8 @@ namespace UnityCliBridge.Bridge.Editor
                 return ProtocolJson.Serialize(new QaTapPayload { completed = true });
             }
 
-            if (TryInvokeQaTappable(gameObject))
+            if (pointerButton == PointerEventData.InputButton.Left
+                && TryInvokeQaTappable(gameObject))
             {
                 return ProtocolJson.Serialize(new QaTapPayload { completed = true });
             }

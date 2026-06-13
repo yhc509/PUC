@@ -563,7 +563,7 @@ namespace UnityCli.Protocol
             new CliCommandDescriptor(
                 "qa tap",
                 "qa tap (--x <int> --y <int> | --target <path>) [--button left|right] [--screenshot-width <int> --screenshot-height <int>]",
-                "Taps at a screenshot-derived coordinate, or at a world object resolved by --target. Defaults to left click and supports right click with --button right. With --x/--y, pass screenshot image coordinates directly with a top-left origin; the bridge auto-uses the last captured screenshot size when available and handles Y-flip plus scaling internally (--screenshot-width/--screenshot-height override the source size). With --target, the bridge invokes the object's IQaTappable action when present, otherwise simulates an Input System tap at the object's anchor; requires Play Mode.",
+                "Taps at a screenshot-derived coordinate, or at a world object resolved by --target. Defaults to left click and supports right click with --button right. With --x/--y, pass screenshot image coordinates directly with a top-left origin; the bridge auto-uses the last captured screenshot size when available and handles Y-flip plus scaling internally (--screenshot-width/--screenshot-height override the source size). With --target, left click invokes the object's IQaTappable action when present, otherwise simulates an Input System tap at the object's anchor; right click uses pointer handlers when available and otherwise simulates right-button Input System input; requires Play Mode.",
                 CliCommandGroup.QaWorkflows,
                 ProtocolConstants.CommandQaTap,
                 canUseLocal: false,
