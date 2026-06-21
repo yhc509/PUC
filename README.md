@@ -138,6 +138,7 @@ unity-cli asset delete --path ... --force                # Delete
 # Open and inspect
 unity-cli scene open --path Assets/Scenes/Main.unity
 unity-cli scene inspect --path ... --with-values --omit-defaults
+unity-cli scene inspect --path ... --node "/Player[0]/Arm[0]" --max-depth 2
 
 # Build scenes with convenience commands
 unity-cli scene add-object --name Cube --primitive Cube \
@@ -162,13 +163,14 @@ unity-cli scene patch --path ... --spec-file patch.json
 unity-cli prefab create --path Assets/Prefabs/Enemy.prefab \
   --spec-json '{"root":{"name":"Enemy","children":[...]}}'
 unity-cli prefab inspect --path ... --with-values
+unity-cli prefab inspect --path ... --node "/Visual[0]" --max-depth 2
 unity-cli prefab patch --path ... --spec-json '{"operations":[...]}'
 unity-cli prefab patch --path ... --spec-file destructive-patch.json --force
 
 # Component operations
-unity-cli prefab list-components --path Assets/Prefabs/Player.prefab --node "/Root[0]"
-unity-cli prefab add-component --path Assets/Prefabs/Player.prefab --node "/Root[0]" --type Rigidbody --values '{"mass":5}'
-unity-cli prefab remove-component --path Assets/Prefabs/Player.prefab --node "/Root[0]" --type BoxCollider --force
+unity-cli prefab list-components --path Assets/Prefabs/Player.prefab --node "/Visual[0]"
+unity-cli prefab add-component --path Assets/Prefabs/Player.prefab --node "/Visual[0]" --type Rigidbody --values '{"mass":5}'
+unity-cli prefab remove-component --path Assets/Prefabs/Player.prefab --node "/Visual[0]" --type BoxCollider --force
 ```
 
 Patch ops: `add-child`, `remove-node`, `set-node`, `add-component`, `remove-component`, `set-component-values`
@@ -192,12 +194,13 @@ unity-cli material set --path ... --texture _MainTex --asset Assets/Textures/woo
 
 ```bash
 unity-cli package list
+unity-cli package list --filter input --limit 5
 unity-cli package add --name com.unity.inputsystem
 unity-cli package remove --name ... --force
 unity-cli package search --query "input"
 ```
 
-Package Manager commands use a 360-second CLI live timeout so the bridge can return its 300-second `PACKAGE_TIMEOUT` response. They are single-flight inside the Editor; a second package command returns `PACKAGE_BUSY` until the active request completes.
+`package list --filter` matches package `name` or `displayName` case-insensitively, and `--limit` trims the filtered result to reduce response size. Package Manager commands use a 360-second CLI live timeout so the bridge can return its 300-second `PACKAGE_TIMEOUT` response. They are single-flight inside the Editor; a second package command returns `PACKAGE_BUSY` until the active request completes.
 
 ### Test Runner
 

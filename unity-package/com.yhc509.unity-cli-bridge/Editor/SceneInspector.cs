@@ -17,7 +17,7 @@ namespace UnityCliBridge.Bridge.Editor
         // main thread and no method using this buffer calls another that also uses it.
         private static readonly List<Component> _componentBuffer = new List<Component>(8);
 
-        internal static string BuildInspectPayload(string path, Scene scene, bool withValues, int? maxDepth, bool omitDefaults, string activeScenePath)
+        internal static string BuildInspectPayload(string path, Scene scene, bool withValues, int? maxDepth, bool omitDefaults, string activeScenePath, GameObject? targetRoot = null)
         {
             var builder = new StringBuilder(2048);
             using var stringWriter = new StringWriter(builder, CultureInfo.InvariantCulture);
@@ -41,11 +41,18 @@ namespace UnityCliBridge.Bridge.Editor
             writer.WritePropertyName("roots");
             writer.WriteStartArray();
 
-            GameObject[] roots = scene.GetRootGameObjects();
-            for (int index = 0; index < roots.Length; index++)
+            if (targetRoot != null)
             {
-                GameObject root = roots[index];
-                WriteNode(writer, root, BuildNodePath(root), withValues, maxDepth, omitDefaults, 0);
+                WriteNode(writer, targetRoot, BuildNodePath(targetRoot), withValues, maxDepth, omitDefaults, 0);
+            }
+            else
+            {
+                GameObject[] roots = scene.GetRootGameObjects();
+                for (int index = 0; index < roots.Length; index++)
+                {
+                    GameObject root = roots[index];
+                    WriteNode(writer, root, BuildNodePath(root), withValues, maxDepth, omitDefaults, 0);
+                }
             }
 
             writer.WriteEndArray();
@@ -64,6 +71,13 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             return ResolveNode(scene, normalizedPath, commandName).transform;
+        }
+
+        internal static GameObject? ResolveInspectRoot(Scene scene, string? path, string commandName)
+        {
+            return InspectorPathParserUtility.IsRootTraversalSentinel(path)
+                ? null
+                : ResolveNode(scene, path, commandName);
         }
 
         internal static GameObject ResolveNode(Scene scene, string? path, string commandName)

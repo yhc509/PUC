@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-06-21
+
+### Added
+- `scene inspect` and `prefab inspect` accept `--node <path>` to return a single node and its subtree instead of the entire hierarchy. For an agent that only needs one object, this cuts the response — and the tokens spent reading it — by roughly 70–90% on a targeted lookup, and removes the need to dump a full `--with-values` hierarchy before every patch. Omitting `--node` is unchanged. A bare `--node /` means the whole hierarchy, matching how scene paths already treat `/` as the virtual root (#126).
+- `package list` accepts `--filter <substring>` (matches a package `name` or display name, case-insensitively) and `--limit <N>`. Checking whether a single package is installed no longer returns the entire dependency set — a targeted lookup drops the response by ~95%. Without these options the output, including sort order, is unchanged (#128).
+
+### Changed
+- The bundled AI-agent operator skill now defaults to lower-token command patterns — compact console reads, default-omitting inspects, and smaller agent-facing screenshots — so agent sessions spend fewer tokens out of the box (#125).
+
 ## [0.3.2] - 2026-06-21
 
 ### Added

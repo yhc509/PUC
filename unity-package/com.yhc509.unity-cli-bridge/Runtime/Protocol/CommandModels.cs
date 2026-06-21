@@ -1,5 +1,7 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace UnityCli.Protocol
 {
@@ -155,6 +157,13 @@ namespace UnityCli.Protocol
     }
 
     [Serializable]
+    public sealed class PackageListArgs
+    {
+        public string filter = string.Empty;
+        public int limit = ProtocolConstants.DefaultPackageListLimit;
+    }
+
+    [Serializable]
     public sealed class PackageSearchArgs
     {
         public string query = string.Empty;
@@ -167,6 +176,38 @@ namespace UnityCli.Protocol
         public string version = string.Empty;
         public string displayName = string.Empty;
         public string source = string.Empty;
+    }
+
+    public static class PackageListFilterUtility
+    {
+        public static PackageRecord[] ApplyPackageListFilter(IReadOnlyList<PackageRecord> records, PackageListArgs args)
+        {
+            if (records == null)
+            {
+                throw new ArgumentNullException(nameof(records));
+            }
+
+            if (args == null)
+            {
+                throw new ArgumentNullException(nameof(args));
+            }
+
+            IEnumerable<PackageRecord> filteredRecords = records.OrderBy(record => record.name, StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(args.filter))
+            {
+                string filter = args.filter.Trim();
+                filteredRecords = filteredRecords.Where(record =>
+                    record.name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0
+                    || record.displayName.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0);
+            }
+
+            if (args.limit > 0)
+            {
+                filteredRecords = filteredRecords.Take(args.limit);
+            }
+
+            return filteredRecords.ToArray();
+        }
     }
 
     [Serializable]
@@ -308,6 +349,7 @@ namespace UnityCli.Protocol
     public sealed class SceneInspectArgs
     {
         public string path = string.Empty;
+        public string node = string.Empty;
         public bool withValues;
         public int? maxDepth;
         public bool omitDefaults;
@@ -344,6 +386,7 @@ namespace UnityCli.Protocol
     public sealed class PrefabInspectArgs
     {
         public string path = string.Empty;
+        public string node = string.Empty;
         public bool withValues;
         public int? maxDepth;
         public bool omitDefaults;

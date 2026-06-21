@@ -64,7 +64,7 @@ Commands for opening, inspecting, and patching saved scene assets.
 | Command | Synopsis | Modes | Force Rule | Summary |
 | --- | --- | --- | --- | --- |
 | `scene open` | `scene open --path <Assets/...> [--force]` | live | `None` | Opens a saved scene asset; use --force to discard dirty loaded scenes. |
-| `scene inspect` | `scene inspect --path <Assets/...> [--with-values] [--max-depth <N>] [--omit-defaults]` | live | `None` | Inspects a saved scene hierarchy; use --with-values when authoring scene patch specs and the other options to reduce payload size. |
+| `scene inspect` | `scene inspect --path <Assets/...> [--node <scenePath>] [--with-values] [--max-depth <N>] [--omit-defaults]` | live | `None` | Inspects a saved scene hierarchy; use --with-values when authoring scene patch specs and the other options to reduce payload size. |
 | `scene patch` | `scene patch --path <Assets/...> (--spec-file <file.json> \| --spec-json <json>) [--force]` | live | `OnDestructiveOp` | Applies a deterministic scene patch spec; destructive operations require --force. |
 | `scene add-object` | `scene add-object --path <Assets/...> [--parent <scenePath>] --name <name> [--primitive <Cube\|Sphere\|Capsule\|Cylinder\|Plane\|Quad>] [--position x,y,z] [--components "Type1,Type2"]` | live | `None` | Adds a new GameObject or built-in primitive to a scene; shortcut for a single add-gameobject scene patch operation. |
 | `scene set-transform` | `scene set-transform --node <scenePath> [--position x,y,z] [--rotation x,y,z] [--scale x,y,z]` | live | `None` | Sets local transform values on a node in the active loaded scene and saves the scene immediately. |
@@ -79,7 +79,7 @@ Commands for inspecting, creating, and patching prefab assets.
 
 | Command | Synopsis | Modes | Force Rule | Summary |
 | --- | --- | --- | --- | --- |
-| `prefab inspect` | `prefab inspect --path <Assets/...> [--with-values] [--max-depth <N>] [--omit-defaults]` | live | `None` | Inspects prefab hierarchy and serialized property paths; use --with-values when authoring patch specs and the other options to reduce payload size. |
+| `prefab inspect` | `prefab inspect --path <Assets/...> [--node <nodePath>] [--with-values] [--max-depth <N>] [--omit-defaults]` | live | `None` | Inspects prefab hierarchy and serialized property paths; use --with-values when authoring patch specs and the other options to reduce payload size. |
 | `prefab create` | `prefab create --path <Assets/...> (--spec-file <file.json> \| --spec-json <json>) [--force]` | live | `None` | Creates a prefab from a JSON structure spec; use --force to overwrite an existing asset. |
 | `prefab patch` | `prefab patch --path <Assets/...> (--spec-file <file.json> \| --spec-json <json>) [--force]` | live | `OnDestructiveOp` | Applies a deterministic patch spec to an existing prefab; destructive operations require --force. |
 | `prefab add-component` | `prefab add-component --path <Assets/...> --node <nodePath> --type <ComponentType> [--values <json>]` | live | `None` | Adds a component to a prefab node; shortcut for a single add-component prefab patch operation. |
@@ -92,7 +92,7 @@ Commands for listing, adding, removing, and searching Unity packages.
 
 | Command | Synopsis | Modes | Force Rule | Summary |
 | --- | --- | --- | --- | --- |
-| `package list` | `package list` | live | `None` | Lists all installed packages in the project. |
+| `package list` | `package list [--filter <substring>] [--limit N]` | live | `None` | Lists installed packages in the project, optionally filtered by name or display name. |
 | `package add` | `package add --name <package> [--version <version>]` | live | `None` | Adds a package to the project; supports registry, git URL, and local paths. |
 | `package remove` | `package remove --name <package> --force` | live | `Always` | Removes a package from the project; always requires --force. |
 | `package search` | `package search --query <text>` | live | `None` | Searches the Unity registry for packages matching the query. |

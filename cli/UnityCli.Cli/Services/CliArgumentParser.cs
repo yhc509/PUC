@@ -488,6 +488,12 @@ public static partial class CliArgumentParser
                 case CommandKind.PackageRemove when token == "--force":
                     parsed.Force = true;
                     break;
+                case CommandKind.PackageList when token == "--filter":
+                    parsed.PackageFilter = RequireValue(tokens, "--filter");
+                    break;
+                case CommandKind.PackageList when token == "--limit":
+                    parsed.PackageLimit = RequireInt(RequireValue(tokens, "--limit"), "--limit", minimumValue: null);
+                    break;
                 case CommandKind.PackageSearch when token == "--query":
                     parsed.PackageQuery = RequireValue(tokens, "--query");
                     break;
@@ -713,6 +719,9 @@ public static partial class CliArgumentParser
                 case CommandKind.SceneInspect when token == "--with-values":
                     parsed.SceneWithValues = true;
                     break;
+                case CommandKind.SceneInspect when token == "--node":
+                    parsed.SceneTarget = RequireValue(tokens, "--node");
+                    break;
                 case CommandKind.SceneInspect when token == "--max-depth":
                     parsed.MaxDepth = RequireInt(RequireValue(tokens, "--max-depth"), "--max-depth");
                     break;
@@ -775,6 +784,9 @@ public static partial class CliArgumentParser
                     break;
                 case CommandKind.PrefabInspect when token == "--with-values":
                     parsed.PrefabWithValues = true;
+                    break;
+                case CommandKind.PrefabInspect when token == "--node":
+                    parsed.SceneTarget = RequireValue(tokens, "--node");
                     break;
                 case CommandKind.PrefabInspect when token == "--max-depth":
                     parsed.MaxDepth = RequireInt(RequireValue(tokens, "--max-depth"), "--max-depth");

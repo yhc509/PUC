@@ -584,12 +584,31 @@ public sealed class CliArgumentParserTests
     }
 
     [Fact]
+    public void Parse_PrefabInspect_WithoutNode_UsesEmptyNodeSentinel()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "prefab",
+            "inspect",
+            "--path", "Assets/Prefabs/Enemy.prefab"
+        ]);
+
+        var args = ProtocolJson.Deserialize<PrefabInspectArgs>(parsed.ToEnvelope().argumentsJson);
+        Assert.NotNull(args);
+        Assert.Equal("Assets/Prefabs/Enemy.prefab", args.path);
+        Assert.Equal(string.Empty, args.node);
+        Assert.False(args.withValues);
+        Assert.Null(args.maxDepth);
+        Assert.False(args.omitDefaults);
+    }
+
+    [Fact]
     public void Parse_PrefabInspect_AcceptsDepthAndOmitDefaults()
     {
         var parsed = CliArgumentParser.Parse([
             "prefab",
             "inspect",
             "--path", "Assets/Prefabs/Enemy.prefab",
+            "--node", "/Visual[0]",
             "--with-values",
             "--max-depth", "3",
             "--omit-defaults"
@@ -597,6 +616,7 @@ public sealed class CliArgumentParserTests
 
         Assert.Equal(CommandKind.PrefabInspect, parsed.Kind);
         Assert.Equal("Assets/Prefabs/Enemy.prefab", parsed.PrefabPath);
+        Assert.Equal("/Visual[0]", parsed.SceneTarget);
         Assert.True(parsed.PrefabWithValues);
         Assert.Equal(3, parsed.MaxDepth);
         Assert.True(parsed.OmitDefaults);
@@ -609,6 +629,8 @@ public sealed class CliArgumentParserTests
             "prefab",
             "inspect",
             "--path", "Assets/Prefabs/Enemy.prefab",
+            "--node", "/Visual[0]",
+            "--with-values",
             "--max-depth", "2",
             "--omit-defaults"
         ]);
@@ -616,6 +638,8 @@ public sealed class CliArgumentParserTests
         var args = ProtocolJson.Deserialize<PrefabInspectArgs>(parsed.ToEnvelope().argumentsJson);
         Assert.NotNull(args);
         Assert.Equal("Assets/Prefabs/Enemy.prefab", args.path);
+        Assert.Equal("/Visual[0]", args.node);
+        Assert.True(args.withValues);
         Assert.Equal(2, args.maxDepth);
         Assert.True(args.omitDefaults);
     }
@@ -703,18 +727,38 @@ public sealed class CliArgumentParserTests
     }
 
     [Fact]
+    public void Parse_SceneInspect_WithoutNode_UsesEmptyNodeSentinel()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "scene",
+            "inspect",
+            "--path", "Assets/Scenes/System.unity"
+        ]);
+
+        var args = ProtocolJson.Deserialize<SceneInspectArgs>(parsed.ToEnvelope().argumentsJson);
+        Assert.NotNull(args);
+        Assert.Equal("Assets/Scenes/System.unity", args.path);
+        Assert.Equal(string.Empty, args.node);
+        Assert.False(args.withValues);
+        Assert.Null(args.maxDepth);
+        Assert.False(args.omitDefaults);
+    }
+
+    [Fact]
     public void Parse_SceneInspect_AcceptsDepthAndOmitDefaults()
     {
         var parsed = CliArgumentParser.Parse([
             "scene",
             "inspect",
             "--path", "Assets/Scenes/System.unity",
+            "--node", "/Player[0]/Arm[0]",
             "--max-depth", "3",
             "--omit-defaults"
         ]);
 
         Assert.Equal(CommandKind.SceneInspect, parsed.Kind);
         Assert.Equal("Assets/Scenes/System.unity", parsed.ScenePath);
+        Assert.Equal("/Player[0]/Arm[0]", parsed.SceneTarget);
         Assert.Equal(3, parsed.MaxDepth);
         Assert.True(parsed.OmitDefaults);
     }
@@ -740,6 +784,7 @@ public sealed class CliArgumentParserTests
             "scene",
             "inspect",
             "--path", "Assets/Scenes/System.unity",
+            "--node", "/Player[0]/Arm[0]",
             "--with-values",
             "--max-depth", "4",
             "--omit-defaults"
@@ -748,6 +793,7 @@ public sealed class CliArgumentParserTests
         var args = ProtocolJson.Deserialize<SceneInspectArgs>(parsed.ToEnvelope().argumentsJson);
         Assert.NotNull(args);
         Assert.Equal("Assets/Scenes/System.unity", args.path);
+        Assert.Equal("/Player[0]/Arm[0]", args.node);
         Assert.True(args.withValues);
         Assert.Equal(4, args.maxDepth);
         Assert.True(args.omitDefaults);
@@ -1856,6 +1902,69 @@ public sealed class CliArgumentParserTests
 
         Assert.Equal(CommandKind.PackageList, parsed.Kind);
         Assert.Equal(42, parsed.TimeoutMs);
+    }
+
+    [Fact]
+    public void Parse_PackageList_DefaultsToUnfilteredUnlimitedArgs()
+    {
+        var parsed = CliArgumentParser.Parse(["package", "list"]);
+
+        var args = ProtocolJson.Deserialize<PackageListArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.NotNull(args);
+        Assert.Equal(CommandKind.PackageList, parsed.Kind);
+        Assert.Equal(string.Empty, args!.filter);
+        Assert.Equal(ProtocolConstants.DefaultPackageListLimit, args.limit);
+    }
+
+    [Fact]
+    public void Parse_PackageList_AcceptsFilter()
+    {
+        var parsed = CliArgumentParser.Parse(["package", "list", "--filter", "textmesh"]);
+
+        var args = ProtocolJson.Deserialize<PackageListArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.NotNull(args);
+        Assert.Equal("textmesh", parsed.PackageFilter);
+        Assert.Equal("textmesh", args!.filter);
+        Assert.Equal(ProtocolConstants.DefaultPackageListLimit, args.limit);
+    }
+
+    [Fact]
+    public void Parse_PackageList_AcceptsLimit()
+    {
+        var parsed = CliArgumentParser.Parse(["package", "list", "--limit", "3"]);
+
+        var args = ProtocolJson.Deserialize<PackageListArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.NotNull(args);
+        Assert.Equal(3, parsed.PackageLimit);
+        Assert.Equal(string.Empty, args!.filter);
+        Assert.Equal(3, args.limit);
+    }
+
+    [Fact]
+    public void Parse_PackageList_AcceptsFilterAndLimit()
+    {
+        var parsed = CliArgumentParser.Parse(["package", "list", "--filter", "unity", "--limit", "2"]);
+
+        var args = ProtocolJson.Deserialize<PackageListArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.NotNull(args);
+        Assert.Equal("unity", args!.filter);
+        Assert.Equal(2, args.limit);
+    }
+
+    [Fact]
+    public void Parse_PackageList_LimitZeroSerializesUnlimitedSentinel()
+    {
+        var parsed = CliArgumentParser.Parse(["package", "list", "--limit", "0"]);
+
+        var args = ProtocolJson.Deserialize<PackageListArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.NotNull(args);
+        Assert.Equal(0, parsed.PackageLimit);
+        Assert.Equal(0, args!.limit);
     }
 
     [Fact]

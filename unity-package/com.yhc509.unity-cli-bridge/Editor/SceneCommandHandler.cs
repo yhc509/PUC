@@ -73,7 +73,10 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             return WithLoadedScene(path, "scene-inspect", scene =>
-                SceneInspector.BuildInspectPayload(path, scene, args.withValues, maxDepth, args.omitDefaults, EditorSceneManager.GetActiveScene().path));
+            {
+                GameObject? targetRoot = SceneInspector.ResolveInspectRoot(scene, args.node, "scene-inspect");
+                return SceneInspector.BuildInspectPayload(path, scene, args.withValues, maxDepth, args.omitDefaults, EditorSceneManager.GetActiveScene().path, targetRoot);
+            });
         }
 
         private static string HandlePatch(string argumentsJson)

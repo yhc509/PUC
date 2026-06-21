@@ -101,6 +101,8 @@ public sealed class ParsedCommand
     public string? PackageName { get; set; }
     public string? PackageVersion { get; set; }
     public string? PackageQuery { get; set; }
+    public string? PackageFilter { get; set; }
+    public int PackageLimit { get; set; } = ProtocolConstants.DefaultPackageListLimit;
     public string? TestMode { get; set; }
     public string? TestFilter { get; set; }
     public string? TestCategory { get; set; }
@@ -306,7 +308,11 @@ public sealed class ParsedCommand
                 quality = ScreenshotQuality ?? 0,
                 maxWidth = ScreenshotMaxWidth ?? 0,
             },
-            CommandKind.PackageList => new { },
+            CommandKind.PackageList => new PackageListArgs
+            {
+                filter = PackageFilter ?? string.Empty,
+                limit = PackageLimit,
+            },
             CommandKind.PackageAdd => new PackageAddArgs
             {
                 name = PackageName ?? string.Empty,
@@ -471,6 +477,7 @@ public sealed class ParsedCommand
             CommandKind.SceneInspect => new SceneInspectArgs
             {
                 path = ScenePath ?? string.Empty,
+                node = SceneTarget ?? string.Empty,
                 withValues = SceneWithValues,
                 maxDepth = MaxDepth,
                 omitDefaults = OmitDefaults,
@@ -507,6 +514,7 @@ public sealed class ParsedCommand
             CommandKind.PrefabInspect => new PrefabInspectArgs
             {
                 path = PrefabPath ?? string.Empty,
+                node = SceneTarget ?? string.Empty,
                 withValues = PrefabWithValues,
                 maxDepth = MaxDepth,
                 omitDefaults = OmitDefaults,
