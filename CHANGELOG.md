@@ -6,17 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-06-21
+
 ### Added
 - `qa click`, `qa tap`, and `qa swipe` now accept `--button left|right` so Play Mode QA can drive right-click and right-drag input paths. The default remains `left`.
 
 ### Fixed
-- Auth tokens are now stored in a per-instance owner-only sidecar file instead of the shared instance registry, so an Editor running an older package version can no longer strip a newer Editor's token and cause intermittent `UNAUTHORIZED` failures in mixed-version setups (#115).
 - Fixed #78: queued IPC commands that have not started yet are now cancelled when the CLI disconnects or times out, preventing delayed writes after the caller has already failed. Commands that have started still use at-least-once semantics, so check state before retrying mutation commands after a timeout.
 - `scene set-transform` and `scene assign-material` now refuse to run when the active scene already has unsaved changes, instead of silently saving those unrelated edits along with the requested change. This matches the existing `scene patch` behavior; save or discard first.
 - `prefab patch` and `prefab create` (overwrite) now refuse to write when the target prefab is open in a Prefab Stage with unsaved changes — including a parent stage left dirty while you edit a nested Prefab — instead of silently overwriting your in-editor edits. Save or discard the Prefab Stage first (#119).
+- `qa ui-dump` label search is now scoped to each element's own subtree, so a label no longer matches text from an unrelated same-named sibling (#113).
 
 ### Security
-- Live IPC now requires a per-Editor authentication token from the instance registry. The wire protocol is bumped to `5`, so the CLI binary and Unity package must be upgraded together; mixed versions are rejected before commands run.
+- Asset path normalization now rejects path-traversal inputs (absolute or drive-qualified paths and `.`/`..` segments) and adds a canonical Assets/Packages containment check, so inputs like `Assets/../ProjectSettings/foo` can no longer escape the intended root (#69).
 - Scene and prefab component patching now refuses serialized fields that are hidden from `inspect`, so the patchable surface matches what `inspect` shows instead of letting hand-written property paths reach internal or non-editable fields. `SerializeReference` (`$type`) assignments are validated against the field's declared type and must be a constructible, assignable type.
 
 ## [0.3.1] - 2026-06-12

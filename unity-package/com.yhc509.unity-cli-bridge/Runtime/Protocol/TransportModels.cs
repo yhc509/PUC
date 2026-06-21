@@ -11,7 +11,6 @@ namespace UnityCli.Protocol
     {
         public string requestId = string.Empty;
         public string? protocolVersion;
-        public string token = string.Empty;
         public string command = string.Empty;
         public string argumentsJson = "{}";
     }

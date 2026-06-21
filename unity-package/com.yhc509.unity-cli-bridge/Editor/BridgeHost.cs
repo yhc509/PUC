@@ -7,11 +7,6 @@ using System.IO;
 using System.IO.Pipes;
 using System.Net.Sockets;
 using System.Reflection;
-using System.Security.Cryptography;
-#if UNITY_EDITOR_WIN
-using System.Security.AccessControl;
-using System.Security.Principal;
-#endif
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -46,7 +41,6 @@ namespace UnityCliBridge.Bridge.Editor
         private readonly string _projectName;
         private readonly string _baseProjectHash;
         private readonly string _registryFilePath;
-        private readonly string _authToken;
         private readonly AssetCommandHandler _assetCommandHandler;
         private readonly SceneCommandHandler _sceneCommandHandler;
         private readonly PrefabCommandHandler _prefabCommandHandler;
@@ -69,8 +63,6 @@ namespace UnityCliBridge.Bridge.Editor
         private volatile bool _isListenerReady;
         private string _projectHash = string.Empty;
         private string _pipeName = string.Empty;
-        private const string AuthTokenSessionStateKey = "UnityCliBridge.AuthToken";
-        private const int AuthTokenByteLength = 32;
         private const int ListenerAcquireMaxAttempts = 16;
         private const int NamedPipeMaxServerInstances = 2;
         private const int NamedPipeProbeTimeoutMilliseconds = 50;
@@ -82,7 +74,6 @@ namespace UnityCliBridge.Bridge.Editor
             _baseProjectHash = ProtocolConstants.ComputeProjectHash(_projectRoot);
             _projectHash = _baseProjectHash;
             _registryFilePath = RegistryPathUtility.GetRegistryFilePath();
-            _authToken = EnsureSessionToken();
             _capabilities = ProtocolHelpers.GetSupportedCommands();
             _assetCommandHandler = new AssetCommandHandler();
             _sceneCommandHandler = new SceneCommandHandler();
@@ -174,119 +165,6 @@ namespace UnityCliBridge.Bridge.Editor
             }
         }
 
-        private static NamedPipeServerStream CreateNamedPipeServerStream(string pipeName)
-        {
-#if UNITY_EDITOR_WIN
-            PipeSecurity? pipeSecurity = TryCreateCurrentUserPipeSecurity();
-            if (pipeSecurity != null)
-            {
-                return new NamedPipeServerStream(
-                    pipeName,
-                    PipeDirection.InOut,
-                    NamedPipeMaxServerInstances,
-                    PipeTransmissionMode.Byte,
-                    PipeOptions.Asynchronous,
-                    0,
-                    0,
-                    pipeSecurity);
-            }
-#endif
-
-            var server = new NamedPipeServerStream(
-                pipeName,
-                PipeDirection.InOut,
-                NamedPipeMaxServerInstances,
-                PipeTransmissionMode.Byte,
-                PipeOptions.Asynchronous);
-            TryApplyOwnerOnlySocketMode(pipeName);
-            return server;
-        }
-
-#if UNITY_EDITOR_WIN
-        private static PipeSecurity? TryCreateCurrentUserPipeSecurity()
-        {
-            try
-            {
-                using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
-                {
-                    SecurityIdentifier? principal = identity.User ?? identity.Owner;
-                    if (principal == null)
-                    {
-                        return null;
-                    }
-
-                    var pipeSecurity = new PipeSecurity();
-                    pipeSecurity.SetAccessRuleProtection(true, false);
-                    pipeSecurity.AddAccessRule(new PipeAccessRule(
-                        principal,
-                        PipeAccessRights.FullControl,
-                        AccessControlType.Allow));
-                    return pipeSecurity;
-                }
-            }
-            catch (Exception exception)
-            {
-                UnityEngine.Debug.LogWarning(string.Format(
-                    "Unity CLI bridge named pipe 권한 보정 실패: {0}",
-                    exception.Message));
-                return null;
-            }
-        }
-#endif
-
-        private static void TryApplyOwnerOnlySocketMode(string socketPath)
-        {
-            if (Path.DirectorySeparatorChar == '\\' || string.IsNullOrWhiteSpace(socketPath))
-            {
-                return;
-            }
-
-            try
-            {
-                var startInfo = new ProcessStartInfo
-                {
-                    FileName = "chmod",
-                    Arguments = "600 " + QuoteProcessArgument(socketPath),
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                };
-
-                Process? process = null;
-                try
-                {
-                    process = Process.Start(startInfo);
-                    if (process == null || !process.WaitForExit(1000))
-                    {
-                        UnityEngine.Debug.LogWarning("Unity CLI bridge socket 권한 보정 실패: chmod timed out.");
-                    }
-                    else if (process.ExitCode != 0)
-                    {
-                        UnityEngine.Debug.LogWarning(string.Format(
-                            "Unity CLI bridge socket 권한 보정 실패: chmod exited with {0}.",
-                            process.ExitCode));
-                    }
-                }
-                finally
-                {
-                    if (process != null)
-                    {
-                        process.Dispose();
-                    }
-                }
-            }
-            catch (Exception exception)
-            {
-                UnityEngine.Debug.LogWarning(string.Format(
-                    "Unity CLI bridge socket 권한 보정 실패: {0}",
-                    exception.Message));
-            }
-        }
-
-        private static string QuoteProcessArgument(string value)
-        {
-            return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
-        }
-
 #if !UNITY_5_3_OR_NEWER || UNITY_6000_0_OR_NEWER
         private async void StartUnixSocketListener()
         {
@@ -330,7 +208,12 @@ namespace UnityCliBridge.Bridge.Editor
                                     return null;
                                 }
 
-                                var server = CreateNamedPipeServerStream(candidatePipeName);
+                                var server = new NamedPipeServerStream(
+                                    candidatePipeName,
+                                    PipeDirection.InOut,
+                                    NamedPipeMaxServerInstances,
+                                    PipeTransmissionMode.Byte,
+                                    PipeOptions.Asynchronous);
                                 _projectHash = hash;
                                 _pipeName = candidatePipeName;
                                 _namedPipeOwnershipLock = ownershipLock;
@@ -375,7 +258,12 @@ namespace UnityCliBridge.Bridge.Editor
                     {
                         if (server == null)
                         {
-                            server = CreateNamedPipeServerStream(_pipeName);
+                            server = new NamedPipeServerStream(
+                                _pipeName,
+                                PipeDirection.InOut,
+                                NamedPipeMaxServerInstances,
+                                PipeTransmissionMode.Byte,
+                                PipeOptions.Asynchronous);
                         }
 
                         _isListenerReady = true;
@@ -465,7 +353,6 @@ namespace UnityCliBridge.Bridge.Editor
                             try
                             {
                                 socket.Bind(new UnixDomainSocketEndPoint(candidatePipeName));
-                                TryApplyOwnerOnlySocketMode(candidatePipeName);
                                 socket.Listen(8);
                                 _projectHash = hash;
                                 _pipeName = candidatePipeName;
@@ -635,22 +522,6 @@ namespace UnityCliBridge.Bridge.Editor
                     return;
                 }
 
-                if (string.IsNullOrEmpty(command.token)
-                    || !string.Equals(command.token, _authToken, StringComparison.Ordinal))
-                {
-                    var error = ResponseEnvelope.Failure(
-                        command.requestId,
-                        _projectHash,
-                        ProtocolConstants.ErrorUnauthorized,
-                        "IPC authentication failed.",
-                        false,
-                        0,
-                        ProtocolConstants.TransportLive,
-                        ProtocolErrorDetails.FromString("Missing or invalid IPC authentication token."));
-                    await WriteResponseAsync(writer, error);
-                    return;
-                }
-
                 var pending = new PendingRequest(command);
                 _pendingRequests.Enqueue(pending);
 
@@ -742,7 +613,6 @@ namespace UnityCliBridge.Bridge.Editor
 
             if (!_isInstanceRegistered && _isListenerReady)
             {
-                WriteTokenSidecarSafely();
                 RegisterInstance();
                 _isInstanceRegistered = true;
                 _lastHeartbeatTime = EditorApplication.timeSinceStartup;
@@ -751,7 +621,6 @@ namespace UnityCliBridge.Bridge.Editor
                 && EditorApplication.timeSinceStartup - _lastHeartbeatTime >= ProtocolConstants.RegistryHeartbeatSeconds)
             {
                 RegisterInstance();
-                WriteTokenSidecarSafely();
                 _lastHeartbeatTime = EditorApplication.timeSinceStartup;
             }
 
@@ -1289,7 +1158,6 @@ namespace UnityCliBridge.Bridge.Editor
                 registry.activeProjectHash = null;
                 return registry;
             });
-            InstanceRegistryFile.DeleteTokenSidecar(_registryFilePath, _projectHash);
         }
 
         private InstanceRecord BuildInstanceRecord()
@@ -1306,64 +1174,6 @@ namespace UnityCliBridge.Bridge.Editor
                 lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
                 capabilities = (string[])_capabilities.Clone(),
             };
-        }
-
-        private static string EnsureSessionToken()
-        {
-            string existingToken = SessionState.GetString(AuthTokenSessionStateKey, string.Empty);
-            if (IsValidToken(existingToken))
-            {
-                return existingToken;
-            }
-
-            string token = GenerateToken();
-            SessionState.SetString(AuthTokenSessionStateKey, token);
-            return token;
-        }
-
-        private static string GenerateToken()
-        {
-            var bytes = new byte[AuthTokenByteLength];
-            using (RandomNumberGenerator generator = RandomNumberGenerator.Create())
-            {
-                generator.GetBytes(bytes);
-            }
-
-            var characters = new char[bytes.Length * 2];
-            for (int index = 0; index < bytes.Length; index++)
-            {
-                byte value = bytes[index];
-                characters[index * 2] = ToHexChar(value >> 4);
-                characters[(index * 2) + 1] = ToHexChar(value & 0x0F);
-            }
-
-            return new string(characters);
-        }
-
-        private static bool IsValidToken(string token)
-        {
-            if (token.Length != AuthTokenByteLength * 2)
-            {
-                return false;
-            }
-
-            for (int index = 0; index < token.Length; index++)
-            {
-                char character = token[index];
-                if (!((character >= '0' && character <= '9')
-                    || (character >= 'a' && character <= 'f')
-                    || (character >= 'A' && character <= 'F')))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static char ToHexChar(int value)
-        {
-            return (char)(value < 10 ? '0' + value : 'a' + (value - 10));
         }
 
         private string BuildStateLabel()
@@ -1395,24 +1205,6 @@ namespace UnityCliBridge.Bridge.Editor
             catch (Exception exception)
             {
                 UnityEngine.Debug.LogWarning(string.Format("Unity CLI bridge registry 갱신 실패: {0}", exception));
-            }
-        }
-
-        private void WriteTokenSidecarSafely()
-        {
-            try
-            {
-                string sidecarPath = InstanceRegistryFile.GetTokenSidecarPath(_registryFilePath, _projectHash);
-                if (!string.IsNullOrWhiteSpace(sidecarPath) && File.Exists(sidecarPath))
-                {
-                    return;
-                }
-
-                InstanceRegistryFile.WriteTokenSidecar(_registryFilePath, _projectHash, _authToken);
-            }
-            catch (Exception exception)
-            {
-                UnityEngine.Debug.LogWarning(string.Format("Unity CLI bridge auth token 저장 실패: {0}", exception));
             }
         }
 

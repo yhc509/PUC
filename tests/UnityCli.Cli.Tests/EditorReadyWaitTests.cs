@@ -206,93 +206,6 @@ public sealed class EditorReadyWaitTests
     }
 
     [Fact]
-    public async Task ExecuteUnityCommandAsync_RetriesUnauthorizedOnceWhenRegistryTokenChanges()
-    {
-        using var temp = new TempDirectory();
-        string projectRoot = CreateUnityProject(temp.Path, "SampleProject");
-        string registryPath = Path.Combine(temp.Path, "instances.json");
-        var registryStore = new InstanceRegistryStore(registryPath);
-        SaveRegistry(registryStore, registryPath, projectRoot, "old-token");
-        var seenTokens = new List<string?>();
-
-        var result = await UnityCli.Cli.CliApp.ExecuteUnityCommandAsync(
-            new ParsedCommand(CommandKind.Refresh),
-            registryStore,
-            projectRoot,
-            (target, _, _, _) =>
-            {
-                seenTokens.Add(target.token);
-                if (seenTokens.Count == 1)
-                {
-                    SaveRegistry(registryStore, registryPath, projectRoot, "new-token");
-                    return Task.FromResult(Unauthorized());
-                }
-
-                return Task.FromResult(Success(new { retried = true }));
-            });
-
-        Assert.Equal(ProtocolConstants.StatusSuccess, result.status);
-        Assert.Equal(["old-token", "new-token"], seenTokens);
-    }
-
-    [Fact]
-    public async Task ExecuteUnityCommandAsync_WhenUnauthorizedTokenIsUnchanged_DoesNotRetryAndAddsHint()
-    {
-        using var temp = new TempDirectory();
-        string projectRoot = CreateUnityProject(temp.Path, "SampleProject");
-        string registryPath = Path.Combine(temp.Path, "instances.json");
-        var registryStore = new InstanceRegistryStore(registryPath);
-        SaveRegistry(registryStore, registryPath, projectRoot, "same-token");
-        int calls = 0;
-
-        var result = await UnityCli.Cli.CliApp.ExecuteUnityCommandAsync(
-            new ParsedCommand(CommandKind.Refresh),
-            registryStore,
-            projectRoot,
-            (_, _, _, _) =>
-            {
-                calls++;
-                return Task.FromResult(Unauthorized());
-            });
-
-        Assert.Equal(1, calls);
-        Assert.Equal(ProtocolConstants.StatusError, result.status);
-        Assert.Equal(ProtocolConstants.ErrorUnauthorized, result.error?.code);
-        Assert.Contains("registry heartbeat refreshes", result.error?.message);
-    }
-
-    [Fact]
-    public async Task ExecuteUnityCommandAsync_WhenRetryIsStillUnauthorized_AddsHint()
-    {
-        using var temp = new TempDirectory();
-        string projectRoot = CreateUnityProject(temp.Path, "SampleProject");
-        string registryPath = Path.Combine(temp.Path, "instances.json");
-        var registryStore = new InstanceRegistryStore(registryPath);
-        SaveRegistry(registryStore, registryPath, projectRoot, "old-token");
-        int calls = 0;
-
-        var result = await UnityCli.Cli.CliApp.ExecuteUnityCommandAsync(
-            new ParsedCommand(CommandKind.Refresh),
-            registryStore,
-            projectRoot,
-            (_, _, _, _) =>
-            {
-                calls++;
-                if (calls == 1)
-                {
-                    SaveRegistry(registryStore, registryPath, projectRoot, "new-token");
-                }
-
-                return Task.FromResult(Unauthorized());
-            });
-
-        Assert.Equal(2, calls);
-        Assert.Equal(ProtocolConstants.StatusError, result.status);
-        Assert.Equal(ProtocolConstants.ErrorUnauthorized, result.error?.code);
-        Assert.Contains("registry heartbeat refreshes", result.error?.message);
-    }
-
-    [Fact]
     public async Task PollEditorReadyAsync_FailsFastWhenStatusPayloadIsInvalid()
     {
         var parsed = new ParsedCommand(CommandKind.Refresh) { Wait = true };
@@ -324,37 +237,6 @@ public sealed class EditorReadyWaitTests
             JsonSerializer.SerializeToElement(data, ProtocolJson.Default),
             durationMs: 1,
             transport: ProtocolConstants.TransportLive);
-    }
-
-    private static ResponseEnvelope Unauthorized()
-    {
-        return ResponseEnvelope.Failure(
-            "req-1",
-            "target-1",
-            ProtocolConstants.ErrorUnauthorized,
-            "Invalid IPC token.",
-            retryable: false);
-    }
-
-    private static void SaveRegistry(InstanceRegistryStore registryStore, string registryPath, string projectRoot, string token)
-    {
-        string projectHash = ProtocolConstants.ComputeProjectHash(projectRoot);
-        registryStore.Save(new InstanceRegistry
-        {
-            instances =
-            [
-                new InstanceRecord
-                {
-                    projectRoot = ProtocolConstants.GetCanonicalPath(projectRoot),
-                    projectName = Path.GetFileName(projectRoot),
-                    projectHash = projectHash,
-                    pipeName = ProtocolConstants.BuildPipeName(projectHash),
-                    state = "idle",
-                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
-                },
-            ],
-        });
-        InstanceRegistryFile.WriteTokenSidecar(registryPath, projectHash, token);
     }
 
     private static string CreateUnityProject(string root, string name)

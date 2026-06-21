@@ -39,7 +39,7 @@ The repo is a single solution (`UnityCliBridge.sln`) split across four projects:
 **Shared protocol (`cli/UnityCli.Protocol/` ↔ `unity-package/.../Runtime/Protocol/`)** — The `.csproj` uses `<Compile Include>` links to compile the same `.cs` files from the Unity package. **A change to any protocol file is a change to both sides; keep them buildable for both `.NET 9` and Unity's runtime.** Shared protocol source files must live in `unity-package/com.yhc509.unity-cli-bridge/Runtime/Protocol/`; the CLI project enforces this via a build-time guard. Hot spots:
 - `CliCommandCatalog.cs` is the single source of truth for command metadata, including `ForceRule` (None / OnOverwrite / OnDestructiveOp / Always) — every force-gating decision must trace back here.
 - `FileBackupTransaction.cs` is `.NET`-testable and powers all backup/restore flows.
-- `InstanceRegistryFile.cs` owns the atomic registry-lock protocol (atomic `FileMode.CreateNew`, PID + UTC timestamp content, stale-reclaim via open-then-rename-then-delete) used by both `BridgeHost` and the CLI's `InstanceRegistryStore`. It also owns per-instance 0600 auth-token sidecars (`<registryDir>/tokens/<hash>.token`) so mixed-version registry rewrites cannot strip live tokens.
+- `InstanceRegistryFile.cs` owns the atomic registry-lock protocol (atomic `FileMode.CreateNew`, PID + UTC timestamp content, stale-reclaim via open-then-rename-then-delete) used by both `BridgeHost` and the CLI's `InstanceRegistryStore`.
 
 **Bridge runtime (`unity-package/com.yhc509.unity-cli-bridge/Editor/`)** — Hosted in the Unity Editor.
 - `BridgeHost.cs` is the bootstrap and dispatcher: it registers the project in the instance registry, starts the IPC listener (Named Pipe on Windows / Unix socket on macOS+Linux), and routes commands to one of the `*CommandHandler` classes (`Asset`, `AssetCreate`, `Scene`, `Prefab`, `Material`, `Package`, `Qa`, `Screenshot`, `ExecuteCode`, `Custom`).
@@ -67,7 +67,6 @@ Tests live in `tests/UnityCli.Cli.Tests/` (xUnit, `.NET`-testable surface only).
 - **macOS paths:** Use real paths (`pwd -P`), not symlinks, for hashing and registry lookups.
 - **Instance primary identity:** Registry and CLI routing use canonical `projectRoot` first. The 12-character hash is only for socket/pipe names and user-input fallback; if a hash matches multiple instances, require a project path.
 - **No-`--project` routing:** With no `--project`, routing resolves CWD → pinned `activeProjectRoot` (set via `instances use`) → the single live instance. If two or more live instances remain and none is pinned, the command fails with a `CLI_USAGE` error listing candidates instead of silently picking one. Auto-promoted `activeProjectRoot` (most-recent live Editor) is not trusted for this fallback; only an explicit `instances use` pin is.
-- **Auth token storage:** Live IPC auth tokens are stored in per-instance 0600 sidecars (`<registryDir>/tokens/<hash>.token`), not in the shared registry. The CLI reads the sidecar during resolve/load, and `InstanceRecord.token` is a non-serialized in-memory field.
 - **Scene paths:** Format `/Root[0]/Child[0]` with array notation for sibling indexing; `/` is the virtual scene root.
 - **Scene/prefab node flags:** Convenience commands that point at a hierarchy node use `--node`; JSON patch specs still use `target`/`parent`.
 - **Prefab editing:** Based on `SerializedProperty.propertyPath` (run `prefab inspect --with-values` to verify paths before patching).
@@ -86,7 +85,7 @@ Tests live in `tests/UnityCli.Cli.Tests/` (xUnit, `.NET`-testable surface only).
   4. `tools/skills/unity-cli-operator/SKILL.md` — update command workflows and examples for AI agent usage
   5. `dotnet run --project cli/UnityCli.DocGen -- --check` — verify cli-reference is up to date
 - **Release checklist:** Cutting a new version:
-  1. `CHANGELOG.md` — move `[Unreleased]` entries to new version section with date
+  1. `CHANGELOG.md` — move `[Unreleased]` entries to new version section with date, then mirror the file to `unity-package/com.yhc509.unity-cli-bridge/CHANGELOG.md` (the UPM package ships its own copy; keep the two identical so Package Manager shows the current changelog)
   2. Update `package.json` version
   3. Open a release PR (`chore: release vX.Y.Z`), wait for CI green, then merge
   4. Push an annotated tag (`git tag -a vX.Y.Z -m "Release vX.Y.Z" <commit> && git push origin vX.Y.Z`). This triggers `.github/workflows/release.yml`, which builds artifacts and creates a **draft** GitHub Release.
@@ -100,11 +99,20 @@ Tests live in `tests/UnityCli.Cli.Tests/` (xUnit, `.NET`-testable surface only).
 
 ## Branch Policy
 
-- All changes go through PRs to `main`. Direct push to `main` is blocked by branch ruleset.
-- Admin bypass exists for emergencies only — do not use it for routine work.
+This repo uses a release-branch model:
+
+- **`main` is the release branch.** It always matches the latest published release and stays installable. The UPM git URL in `README.md` points at `#main`, so anything merged to `main` is immediately what new users install.
+- **`dev` is the integration branch.** Day-to-day feature work — and especially any change that bumps the wire protocol (`ProtocolConstants.ProtocolVersion`) — lands here first, never directly on `main`.
+- Feature branches (`feat/`, `fix/`, `refactor/`, `docs/`, `chore/`) branch off `dev` and merge back via PR. `release/x.y.z` branches cut from `dev` carry version/changelog prep.
+- **`main` only advances at release time**, by merging the prepared `dev`/`release` work once the Unity package and CLI binary are ready to ship together.
+
+Hard rules:
+
+- All changes go through PRs. Direct push to `main` is blocked by branch ruleset; admin bypass exists for emergencies only — do not use it for routine work.
 - CI (`test` job) must pass before merge.
 - GitHub Codex bot (`@codex`) is enabled as a PR reviewer on this repo.
-- Versioning: patch-level increments (`v0.1.0` → `v0.1.1`). Major/minor bumps only when explicitly requested.
+- **Never merge a breaking wire-protocol bump straight to `main`.** A protocol bump makes already-released CLIs incompatible with `main`'s package (and vice versa), so a user installing from `#main` hits `PROTOCOL_MISMATCH`. Land it on `dev`, and when it ships, publish the Unity package and the CLI binary in the same release so `#main` users never see a mismatch.
+- Versioning (SemVer): bug fixes and non-breaking changes are patch bumps (`v0.3.1` → `v0.3.2`); a wire-protocol bump or any other breaking change is at least a minor bump (`v0.3.x` → `v0.4.0`). Major bumps only when explicitly requested.
 
 ## Verification After Changes
 
