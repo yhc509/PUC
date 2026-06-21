@@ -25,38 +25,6 @@ public sealed class InstanceRegistryStoreTests
     }
 
     [Fact]
-    public void Load_PreservesInstanceTokenDuringSanitize()
-    {
-        using var temp = new TempDirectory();
-        var projectRoot = Path.Combine(temp.Path, "ProjectA");
-        Directory.CreateDirectory(projectRoot);
-        string projectHash = ProtocolConstants.ComputeProjectHash(projectRoot);
-        const string token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-        var store = new InstanceRegistryStore(Path.Combine(temp.Path, "instances.json"));
-        store.Save(new InstanceRegistry
-        {
-            instances =
-            [
-                new InstanceRecord
-                {
-                    projectRoot = projectRoot,
-                    projectName = "ProjectA",
-                    projectHash = projectHash,
-                    pipeName = ProtocolConstants.BuildPipeName(projectHash),
-                    token = token,
-                    state = "idle",
-                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
-                },
-            ],
-        });
-
-        InstanceRegistry registry = store.Load();
-
-        Assert.Single(registry.instances);
-        Assert.Equal(token, registry.instances[0].token);
-    }
-
-    [Fact]
     public void ResolveOrCreateTarget_UsesRegisteredProjectName()
     {
         using var temp = new TempDirectory();

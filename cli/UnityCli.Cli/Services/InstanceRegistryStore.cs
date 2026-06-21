@@ -273,7 +273,6 @@ public sealed class InstanceRegistryStore
                 pipeName = string.IsNullOrWhiteSpace(instance.pipeName)
                     ? ProtocolConstants.BuildPipeName(string.IsNullOrWhiteSpace(instance.projectHash) ? projectHash : instance.projectHash)
                     : instance.pipeName,
-                token = instance.token ?? string.Empty,
                 editorProcessId = instance.editorProcessId,
                 unityVersion = instance.unityVersion ?? string.Empty,
                 state = instance.state ?? "offline",

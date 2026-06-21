@@ -13,16 +13,9 @@ public sealed class LocalIpcClient
         int timeoutMs,
         CancellationToken cancellationToken)
     {
-        PrepareCommandForSend(target, command);
         return OperatingSystem.IsWindows()
             ? await SendNamedPipeAsync(target.pipeName, command, timeoutMs, cancellationToken)
             : await SendUnixSocketAsync(target.pipeName, command, timeoutMs, cancellationToken);
-    }
-
-    internal static void PrepareCommandForSend(InstanceRecord target, CommandEnvelope command)
-    {
-        command.protocolVersion = ProtocolConstants.ProtocolVersion;
-        command.token = target.token ?? string.Empty;
     }
 
     private static async Task<ResponseEnvelope> SendNamedPipeAsync(
@@ -58,6 +51,7 @@ public sealed class LocalIpcClient
         using var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true);
         using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
 
+        command.protocolVersion = ProtocolConstants.ProtocolVersion;
         await writer.WriteLineAsync(ProtocolJson.Serialize(command));
         await writer.FlushAsync(cancellationToken);
 

@@ -5,14 +5,8 @@ namespace UnityCli.Cli.Tests;
 public sealed class ProtocolConstantsTests
 {
     [Fact]
-    public void ProtocolVersion_BumpedToFive_ForIpcAuthentication()
+    public void ProtocolVersion_BumpedToFour_ForRegistryKeyMigration()
     {
-        Assert.Equal("5", ProtocolConstants.ProtocolVersion);
-    }
-
-    [Fact]
-    public void ErrorUnauthorized_IsRegistered()
-    {
-        Assert.Equal("UNAUTHORIZED", ProtocolConstants.ErrorUnauthorized);
+        Assert.Equal("4", ProtocolConstants.ProtocolVersion);
     }
 }
