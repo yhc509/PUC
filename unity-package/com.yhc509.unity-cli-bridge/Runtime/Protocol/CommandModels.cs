@@ -155,6 +155,13 @@ namespace UnityCli.Protocol
     }
 
     [Serializable]
+    public sealed class PackageListArgs
+    {
+        public string filter = string.Empty;
+        public int limit = ProtocolConstants.DefaultPackageListLimit;
+    }
+
+    [Serializable]
     public sealed class PackageSearchArgs
     {
         public string query = string.Empty;

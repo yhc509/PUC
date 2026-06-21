@@ -70,10 +70,11 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 if (string.Equals(command, ProtocolConstants.CommandPackageList, StringComparison.Ordinal))
                 {
+                    PackageListArgs args = ProtocolJson.Deserialize<PackageListArgs>(argumentsJson) ?? new PackageListArgs();
                     ListRequest request = Client.List(true);
                     StartPollingRequest(
                         request,
-                        CreateListPayloadJson,
+                        completedRequest => CreateListPayloadJson(completedRequest, args),
                         "PACKAGE_LIST_FAILED",
                         "패키지 목록 조회에 실패했습니다.",
                         completion,
@@ -165,7 +166,7 @@ namespace UnityCliBridge.Bridge.Editor
             }
         }
 
-        private static string CreateListPayloadJson(ListRequest request)
+        private static string CreateListPayloadJson(ListRequest request, PackageListArgs args)
         {
             var records = new List<PackageRecord>();
             foreach (var package in request.Result)
@@ -179,9 +180,23 @@ namespace UnityCliBridge.Bridge.Editor
                 });
             }
 
+            IEnumerable<PackageRecord> filteredRecords = records.OrderBy(record => record.name, StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(args.filter))
+            {
+                string filter = args.filter.Trim();
+                filteredRecords = filteredRecords.Where(record =>
+                    record.name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0
+                    || record.displayName.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0);
+            }
+
+            if (args.limit > 0)
+            {
+                filteredRecords = filteredRecords.Take(args.limit);
+            }
+
             return ProtocolJson.Serialize(new PackageListPayload
             {
-                packages = records.OrderBy(record => record.name, StringComparer.OrdinalIgnoreCase).ToArray(),
+                packages = filteredRecords.ToArray(),
             });
         }
 

@@ -1859,6 +1859,69 @@ public sealed class CliArgumentParserTests
     }
 
     [Fact]
+    public void Parse_PackageList_DefaultsToUnfilteredUnlimitedArgs()
+    {
+        var parsed = CliArgumentParser.Parse(["package", "list"]);
+
+        var args = ProtocolJson.Deserialize<PackageListArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.NotNull(args);
+        Assert.Equal(CommandKind.PackageList, parsed.Kind);
+        Assert.Equal(string.Empty, args!.filter);
+        Assert.Equal(ProtocolConstants.DefaultPackageListLimit, args.limit);
+    }
+
+    [Fact]
+    public void Parse_PackageList_AcceptsFilter()
+    {
+        var parsed = CliArgumentParser.Parse(["package", "list", "--filter", "textmesh"]);
+
+        var args = ProtocolJson.Deserialize<PackageListArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.NotNull(args);
+        Assert.Equal("textmesh", parsed.PackageFilter);
+        Assert.Equal("textmesh", args!.filter);
+        Assert.Equal(ProtocolConstants.DefaultPackageListLimit, args.limit);
+    }
+
+    [Fact]
+    public void Parse_PackageList_AcceptsLimit()
+    {
+        var parsed = CliArgumentParser.Parse(["package", "list", "--limit", "3"]);
+
+        var args = ProtocolJson.Deserialize<PackageListArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.NotNull(args);
+        Assert.Equal(3, parsed.PackageLimit);
+        Assert.Equal(string.Empty, args!.filter);
+        Assert.Equal(3, args.limit);
+    }
+
+    [Fact]
+    public void Parse_PackageList_AcceptsFilterAndLimit()
+    {
+        var parsed = CliArgumentParser.Parse(["package", "list", "--filter", "unity", "--limit", "2"]);
+
+        var args = ProtocolJson.Deserialize<PackageListArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.NotNull(args);
+        Assert.Equal("unity", args!.filter);
+        Assert.Equal(2, args.limit);
+    }
+
+    [Fact]
+    public void Parse_PackageList_LimitZeroSerializesUnlimitedSentinel()
+    {
+        var parsed = CliArgumentParser.Parse(["package", "list", "--limit", "0"]);
+
+        var args = ProtocolJson.Deserialize<PackageListArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.NotNull(args);
+        Assert.Equal(0, parsed.PackageLimit);
+        Assert.Equal(0, args!.limit);
+    }
+
+    [Fact]
     public void Parse_NonPackageCommand_KeepsDefaultLiveTimeout()
     {
         var parsed = CliArgumentParser.Parse(["asset", "find", "--name", "Player"]);

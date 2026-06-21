@@ -92,7 +92,7 @@ Commands for listing, adding, removing, and searching Unity packages.
 
 | Command | Synopsis | Modes | Force Rule | Summary |
 | --- | --- | --- | --- | --- |
-| `package list` | `package list` | live | `None` | Lists all installed packages in the project. |
+| `package list` | `package list [--filter <substring>] [--limit N]` | live | `None` | Lists installed packages in the project, optionally filtered by name or display name. |
 | `package add` | `package add --name <package> [--version <version>]` | live | `None` | Adds a package to the project; supports registry, git URL, and local paths. |
 | `package remove` | `package remove --name <package> --force` | live | `Always` | Removes a package from the project; always requires --force. |
 | `package search` | `package search --query <text>` | live | `None` | Searches the Unity registry for packages matching the query. |

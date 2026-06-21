@@ -1345,7 +1345,12 @@ test_package_list() {
   run_cli_main_timeout 120000 package list
   assert_success_response || return 1
   assert_output_contains "\"packages\": [" || return 1
-  TEST_MESSAGE="package list returned the installed package set"
+
+  run_cli_main_timeout 120000 package list --filter "com.unity" --limit 1
+  assert_success_response || return 1
+  assert_output_contains "\"packages\": [" || return 1
+  assert_output_contains "\"name\": \"com.unity" || return 1
+  TEST_MESSAGE="package list returned installed packages and supported filter/limit"
 }
 
 test_package_search() {
