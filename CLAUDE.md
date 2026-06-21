@@ -85,7 +85,7 @@ Tests live in `tests/UnityCli.Cli.Tests/` (xUnit, `.NET`-testable surface only).
   4. `tools/skills/unity-cli-operator/SKILL.md` — update command workflows and examples for AI agent usage
   5. `dotnet run --project cli/UnityCli.DocGen -- --check` — verify cli-reference is up to date
 - **Release checklist:** Cutting a new version:
-  1. `CHANGELOG.md` — move `[Unreleased]` entries to new version section with date
+  1. `CHANGELOG.md` — move `[Unreleased]` entries to new version section with date, then mirror the file to `unity-package/com.yhc509.unity-cli-bridge/CHANGELOG.md` (the UPM package ships its own copy; keep the two identical so Package Manager shows the current changelog)
   2. Update `package.json` version
   3. Open a release PR (`chore: release vX.Y.Z`), wait for CI green, then merge
   4. Push an annotated tag (`git tag -a vX.Y.Z -m "Release vX.Y.Z" <commit> && git push origin vX.Y.Z`). This triggers `.github/workflows/release.yml`, which builds artifacts and creates a **draft** GitHub Release.
