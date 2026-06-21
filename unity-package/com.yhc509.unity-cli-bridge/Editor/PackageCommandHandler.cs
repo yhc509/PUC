@@ -70,10 +70,11 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 if (string.Equals(command, ProtocolConstants.CommandPackageList, StringComparison.Ordinal))
                 {
+                    PackageListArgs args = ProtocolJson.Deserialize<PackageListArgs>(argumentsJson) ?? new PackageListArgs();
                     ListRequest request = Client.List(true);
                     StartPollingRequest(
                         request,
-                        CreateListPayloadJson,
+                        completedRequest => CreateListPayloadJson(completedRequest, args),
                         "PACKAGE_LIST_FAILED",
                         "패키지 목록 조회에 실패했습니다.",
                         completion,
@@ -165,7 +166,7 @@ namespace UnityCliBridge.Bridge.Editor
             }
         }
 
-        private static string CreateListPayloadJson(ListRequest request)
+        private static string CreateListPayloadJson(ListRequest request, PackageListArgs args)
         {
             var records = new List<PackageRecord>();
             foreach (var package in request.Result)
@@ -181,7 +182,7 @@ namespace UnityCliBridge.Bridge.Editor
 
             return ProtocolJson.Serialize(new PackageListPayload
             {
-                packages = records.OrderBy(record => record.name, StringComparer.OrdinalIgnoreCase).ToArray(),
+                packages = PackageListFilterUtility.ApplyPackageListFilter(records, args),
             });
         }
 

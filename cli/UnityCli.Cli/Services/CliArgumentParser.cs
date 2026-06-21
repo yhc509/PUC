@@ -488,6 +488,12 @@ public static partial class CliArgumentParser
                 case CommandKind.PackageRemove when token == "--force":
                     parsed.Force = true;
                     break;
+                case CommandKind.PackageList when token == "--filter":
+                    parsed.PackageFilter = RequireValue(tokens, "--filter");
+                    break;
+                case CommandKind.PackageList when token == "--limit":
+                    parsed.PackageLimit = RequireInt(RequireValue(tokens, "--limit"), "--limit", minimumValue: null);
+                    break;
                 case CommandKind.PackageSearch when token == "--query":
                     parsed.PackageQuery = RequireValue(tokens, "--query");
                     break;

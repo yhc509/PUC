@@ -491,8 +491,8 @@ namespace UnityCli.Protocol
                 notes: new[] { "Reads from Library/com.yhc509.unity-cli-bridge/test-runs/<runId>.json or in-memory SessionState." }),
             new CliCommandDescriptor(
                 "package list",
-                "package list",
-                "Lists all installed packages in the project.",
+                "package list [--filter <substring>] [--limit N]",
+                "Lists installed packages in the project, optionally filtered by name or display name.",
                 CliCommandGroup.PackageManagement,
                 ProtocolConstants.CommandPackageList,
                 canUseLocal: false,
