@@ -12,7 +12,7 @@ status → play → (입력 시뮬레이션) → 검증 (로그 + 스크린샷) 
 2. `play`로 Play Mode 진입 (자동으로 `runInBackground = true` 설정됨)
 3. QA 커맨드로 입력 시뮬레이션
 4. **로그 검증**: `read-console --type error --limit N` + `read-console --type log --limit N`
-5. **시각 검증**: `screenshot --view game --path /tmp/qa-check.png` 후 이미지 확인
+5. **시각 검증**: `screenshot --view game --format jpg --quality 75 --max-width 1024 --path /tmp/qa-check.jpg` 후 이미지 확인 (lossless가 필요할 때만 `--format png`)
 6. `stop`으로 Play Mode 종료 (`runInBackground` 원래값 복원됨)
 
 ## 입력 방식 선택
@@ -135,8 +135,10 @@ ucli read-console --type error --limit 5 --project "$P" --json
 `screenshot --view game`으로 Game View를 캡처해서 시각적 변화를 확인한다.
 
 ```bash
+# 토큰 절약: 에이전트가 읽을 스크린샷은 jpg + max-width를 기본으로 한다
+ucli screenshot --view game --format jpg --quality 75 --max-width 1024 --path /tmp/qa-check.jpg --project "$P" --json
+# lossless가 필요할 때만 PNG
 ucli screenshot --view game --path /tmp/qa-check.png --project "$P" --json
-ucli screenshot --view game --format jpg --quality 70 --max-width 1024 --path /tmp/qa-check.jpg --project "$P" --json
 # 이후 이미지를 Read 도구로 확인
 ```
 
