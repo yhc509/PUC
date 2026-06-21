@@ -163,14 +163,14 @@ unity-cli scene patch --path ... --spec-file patch.json
 unity-cli prefab create --path Assets/Prefabs/Enemy.prefab \
   --spec-json '{"root":{"name":"Enemy","children":[...]}}'
 unity-cli prefab inspect --path ... --with-values
-unity-cli prefab inspect --path ... --node "/Root[0]/Arm[0]" --max-depth 2
+unity-cli prefab inspect --path ... --node "/Visual[0]" --max-depth 2
 unity-cli prefab patch --path ... --spec-json '{"operations":[...]}'
 unity-cli prefab patch --path ... --spec-file destructive-patch.json --force
 
 # Component operations
-unity-cli prefab list-components --path Assets/Prefabs/Player.prefab --node "/Root[0]"
-unity-cli prefab add-component --path Assets/Prefabs/Player.prefab --node "/Root[0]" --type Rigidbody --values '{"mass":5}'
-unity-cli prefab remove-component --path Assets/Prefabs/Player.prefab --node "/Root[0]" --type BoxCollider --force
+unity-cli prefab list-components --path Assets/Prefabs/Player.prefab --node "/Visual[0]"
+unity-cli prefab add-component --path Assets/Prefabs/Player.prefab --node "/Visual[0]" --type Rigidbody --values '{"mass":5}'
+unity-cli prefab remove-component --path Assets/Prefabs/Player.prefab --node "/Visual[0]" --type BoxCollider --force
 ```
 
 Patch ops: `add-child`, `remove-node`, `set-node`, `add-component`, `remove-component`, `set-component-values`

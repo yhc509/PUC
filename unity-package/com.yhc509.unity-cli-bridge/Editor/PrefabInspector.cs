@@ -33,6 +33,13 @@ namespace UnityCliBridge.Bridge.Editor
             return builder.ToString();
         }
 
+        internal static GameObject? ResolveInspectRoot(GameObject root, string? path, string commandName)
+        {
+            return InspectorPathParserUtility.IsRootTraversalSentinel(path)
+                ? null
+                : ResolveNode(root, path, commandName);
+        }
+
         internal static GameObject ResolveNode(GameObject root, string? path, string commandName)
         {
             string normalizedPath = string.IsNullOrWhiteSpace(path) ? "/" : path.Trim();

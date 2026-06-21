@@ -584,13 +584,31 @@ public sealed class CliArgumentParserTests
     }
 
     [Fact]
+    public void Parse_PrefabInspect_WithoutNode_UsesEmptyNodeSentinel()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "prefab",
+            "inspect",
+            "--path", "Assets/Prefabs/Enemy.prefab"
+        ]);
+
+        var args = ProtocolJson.Deserialize<PrefabInspectArgs>(parsed.ToEnvelope().argumentsJson);
+        Assert.NotNull(args);
+        Assert.Equal("Assets/Prefabs/Enemy.prefab", args.path);
+        Assert.Equal(string.Empty, args.node);
+        Assert.False(args.withValues);
+        Assert.Null(args.maxDepth);
+        Assert.False(args.omitDefaults);
+    }
+
+    [Fact]
     public void Parse_PrefabInspect_AcceptsDepthAndOmitDefaults()
     {
         var parsed = CliArgumentParser.Parse([
             "prefab",
             "inspect",
             "--path", "Assets/Prefabs/Enemy.prefab",
-            "--node", "/Root[0]/Arm[0]",
+            "--node", "/Visual[0]",
             "--with-values",
             "--max-depth", "3",
             "--omit-defaults"
@@ -598,7 +616,7 @@ public sealed class CliArgumentParserTests
 
         Assert.Equal(CommandKind.PrefabInspect, parsed.Kind);
         Assert.Equal("Assets/Prefabs/Enemy.prefab", parsed.PrefabPath);
-        Assert.Equal("/Root[0]/Arm[0]", parsed.SceneTarget);
+        Assert.Equal("/Visual[0]", parsed.SceneTarget);
         Assert.True(parsed.PrefabWithValues);
         Assert.Equal(3, parsed.MaxDepth);
         Assert.True(parsed.OmitDefaults);
@@ -611,7 +629,8 @@ public sealed class CliArgumentParserTests
             "prefab",
             "inspect",
             "--path", "Assets/Prefabs/Enemy.prefab",
-            "--node", "/Root[0]/Arm[0]",
+            "--node", "/Visual[0]",
+            "--with-values",
             "--max-depth", "2",
             "--omit-defaults"
         ]);
@@ -619,7 +638,8 @@ public sealed class CliArgumentParserTests
         var args = ProtocolJson.Deserialize<PrefabInspectArgs>(parsed.ToEnvelope().argumentsJson);
         Assert.NotNull(args);
         Assert.Equal("Assets/Prefabs/Enemy.prefab", args.path);
-        Assert.Equal("/Root[0]/Arm[0]", args.node);
+        Assert.Equal("/Visual[0]", args.node);
+        Assert.True(args.withValues);
         Assert.Equal(2, args.maxDepth);
         Assert.True(args.omitDefaults);
     }
@@ -704,6 +724,24 @@ public sealed class CliArgumentParserTests
         Assert.Equal(CommandKind.SceneInspect, parsed.Kind);
         Assert.Equal("Assets/Scenes/System.unity", parsed.ScenePath);
         Assert.True(parsed.SceneWithValues);
+    }
+
+    [Fact]
+    public void Parse_SceneInspect_WithoutNode_UsesEmptyNodeSentinel()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "scene",
+            "inspect",
+            "--path", "Assets/Scenes/System.unity"
+        ]);
+
+        var args = ProtocolJson.Deserialize<SceneInspectArgs>(parsed.ToEnvelope().argumentsJson);
+        Assert.NotNull(args);
+        Assert.Equal("Assets/Scenes/System.unity", args.path);
+        Assert.Equal(string.Empty, args.node);
+        Assert.False(args.withValues);
+        Assert.Null(args.maxDepth);
+        Assert.False(args.omitDefaults);
     }
 
     [Fact]

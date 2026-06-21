@@ -16,6 +16,12 @@ namespace UnityCliBridge.Bridge.Editor
             return normalized;
         }
 
+        internal static bool IsRootTraversalSentinel(string? path)
+        {
+            string normalized = path == null ? string.Empty : path.Trim();
+            return normalized.Length == 0 || string.Equals(normalized, "/", StringComparison.Ordinal);
+        }
+
         internal static (string name, int index) ParsePathSegment(string segment, string commandName, string errorPrefix)
         {
             ParsePathSegment(segment.AsSpan(), commandName, errorPrefix, out int nameLength, out int index);
