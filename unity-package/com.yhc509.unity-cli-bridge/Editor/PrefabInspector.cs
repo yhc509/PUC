@@ -16,7 +16,7 @@ namespace UnityCliBridge.Bridge.Editor
         // main thread and no method using this buffer calls another that also uses it.
         private static readonly List<Component> _componentBuffer = new List<Component>(8);
 
-        internal static string BuildInspectPayload(string path, GameObject root, bool withValues, int? maxDepth, bool omitDefaults)
+        internal static string BuildInspectPayload(string path, GameObject root, bool withValues, int? maxDepth, bool omitDefaults, GameObject? targetRoot = null)
         {
             var builder = new StringBuilder(2048);
             using var stringWriter = new StringWriter(builder, CultureInfo.InvariantCulture);
@@ -26,10 +26,18 @@ namespace UnityCliBridge.Bridge.Editor
             writer.WritePropertyName("asset");
             InspectorJsonWriterUtility.WriteAssetToken(writer, path);
             writer.WritePropertyName("root");
-            WriteNode(writer, root, "/", withValues, maxDepth, omitDefaults, 0);
+            GameObject inspectRoot = targetRoot ?? root;
+            WriteNode(writer, inspectRoot, BuildNodePath(inspectRoot.transform), withValues, maxDepth, omitDefaults, 0);
             writer.WriteEndObject();
             writer.Flush();
             return builder.ToString();
+        }
+
+        internal static GameObject? ResolveInspectRoot(GameObject root, string? path, string commandName)
+        {
+            return InspectorPathParserUtility.IsRootTraversalSentinel(path)
+                ? null
+                : ResolveNode(root, path, commandName);
         }
 
         internal static GameObject ResolveNode(GameObject root, string? path, string commandName)

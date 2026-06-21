@@ -976,6 +976,85 @@ test_scene_inspect() {
   TEST_MESSAGE="scene inspect reported the created hierarchy in SampleScene"
 }
 
+test_scene_inspect_node_filter() {
+  local spec_path="$TEMP_DIR/specs/scene-inspect-node-filter.json"
+  local root_name=""
+  local sibling_name=""
+  local root_path=""
+  local child_path=""
+  local grandchild_path=""
+  local sibling_path=""
+  ensure_scene_test_path || return 1
+  open_temporary_scratch_scene || return 1
+
+  root_name="$(scene_test_object_name "InspectNodeRoot")"
+  sibling_name="$(scene_test_object_name "InspectNodeSibling")"
+  root_path="$(scene_test_object_path "$root_name")"
+  child_path="$root_path/Child[0]"
+  grandchild_path="$child_path/Grandchild[0]"
+  sibling_path="$(scene_test_object_path "$sibling_name")"
+
+  cat >"$spec_path" <<EOF
+{
+  "version": 1,
+  "operations": [
+    {
+      "op": "add-gameobject",
+      "parent": "/",
+      "node": {
+        "name": "$root_name",
+        "children": [
+          {
+            "name": "Child",
+            "children": [
+              {
+                "name": "Grandchild",
+                "components": [
+                  { "type": "UnityEngine.BoxCollider" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "add-gameobject",
+      "parent": "/",
+      "node": {
+        "name": "$sibling_name"
+      }
+    }
+  ]
+}
+EOF
+
+  run_cli_main scene patch --path "$SCENE_TEST_PATH" --spec-file "$spec_path"
+  assert_success_response || return 1
+
+  run_cli_main scene inspect --path "$SCENE_TEST_PATH" --node "$child_path" --with-values --max-depth 1 --omit-defaults
+  assert_success_response || return 1
+  assert_output_contains "\"path\": \"$child_path\"" || return 1
+  assert_output_contains "\"path\": \"$grandchild_path\"" || return 1
+  assert_output_contains "\"type\": \"UnityEngine.BoxCollider\"" || return 1
+  assert_output_not_contains "\"path\": \"$root_path\"" || return 1
+  assert_output_not_contains "\"path\": \"$sibling_path\"" || return 1
+
+  run_cli_main scene inspect --path "$SCENE_TEST_PATH" --node "/"
+  assert_success_response || return 1
+  assert_output_contains "\"path\": \"$root_path\"" || return 1
+  assert_output_contains "\"path\": \"$sibling_path\"" || return 1
+
+  run_cli_main scene inspect --path "$SCENE_TEST_PATH" --node "   "
+  assert_success_response || return 1
+  assert_output_contains "\"path\": \"$root_path\"" || return 1
+  assert_output_contains "\"path\": \"$sibling_path\"" || return 1
+
+  run_cli_main scene inspect --path "$SCENE_TEST_PATH" --node "/MissingNode[0]"
+  assert_error_response 1 SCENE_NODE_NOT_FOUND || return 1
+  TEST_MESSAGE="scene inspect --node filtered subtrees and treated root sentinels as full traversal"
+}
+
 test_scene_patch() {
   local spec_path="$TEMP_DIR/specs/scene-patch-basic.json"
   local object_name=""
@@ -1147,6 +1226,57 @@ EOF
   assert_success_response || return 1
   assert_output_contains "\"path\": \"/Hitbox[0]\"" || return 1
   TEST_MESSAGE="prefab inspect reported the expected child path"
+}
+
+test_prefab_inspect_node_filter() {
+  local prefab_path="$FIXTURE_ROOT/Prefabs/InspectNodeFilter.prefab"
+  local spec_path="$TEMP_DIR/specs/prefab-inspect-node-filter.json"
+
+  cat >"$spec_path" <<EOF
+{
+  "version": 1,
+  "root": {
+    "children": [
+      {
+        "name": "Visual",
+        "children": [
+          {
+            "name": "MeshRoot",
+            "components": [
+              { "type": "UnityEngine.BoxCollider" }
+            ]
+          }
+        ]
+      },
+      { "name": "Hitbox" }
+    ]
+  }
+}
+EOF
+
+  run_cli_main prefab create --path "$prefab_path" --spec-file "$spec_path"
+  assert_success_response || return 1
+
+  run_cli_main prefab inspect --path "$prefab_path" --node "/Visual[0]" --with-values --max-depth 1 --omit-defaults
+  assert_success_response || return 1
+  assert_output_contains "\"path\": \"/Visual[0]\"" || return 1
+  assert_output_contains "\"path\": \"/Visual[0]/MeshRoot[0]\"" || return 1
+  assert_output_contains "\"type\": \"UnityEngine.BoxCollider\"" || return 1
+  assert_output_not_contains "\"path\": \"/Hitbox[0]\"" || return 1
+
+  run_cli_main prefab inspect --path "$prefab_path" --node "/"
+  assert_success_response || return 1
+  assert_output_contains "\"path\": \"/Visual[0]\"" || return 1
+  assert_output_contains "\"path\": \"/Hitbox[0]\"" || return 1
+
+  run_cli_main prefab inspect --path "$prefab_path" --node "   "
+  assert_success_response || return 1
+  assert_output_contains "\"path\": \"/Visual[0]\"" || return 1
+  assert_output_contains "\"path\": \"/Hitbox[0]\"" || return 1
+
+  run_cli_main prefab inspect --path "$prefab_path" --node "/MissingNode[0]"
+  assert_error_response 1 PREFAB_NODE_NOT_FOUND || return 1
+  TEST_MESSAGE="prefab inspect --node used real prefab paths and root sentinels"
 }
 
 test_prefab_patch() {
@@ -1415,6 +1545,7 @@ register_all_tests() {
 
   register_test "scene_open" "scene" "scene open reloads Assets/Scenes/SampleScene.unity" "no" "test_scene_open"
   register_test "scene_inspect" "scene" "scene inspect reports a created hierarchy" "no" "test_scene_inspect"
+  register_test "scene_inspect_node_filter" "scene" "scene inspect --node handles root sentinels and subtrees" "no" "test_scene_inspect_node_filter"
   register_test "scene_patch" "scene" "scene patch applies an add-gameobject spec" "no" "test_scene_patch"
   register_test "scene_add_object" "scene" "scene add-object creates a node with components" "no" "test_scene_add_object"
   register_test "scene_set_transform" "scene" "scene set-transform updates localPosition" "no" "test_scene_set_transform"
@@ -1423,6 +1554,7 @@ register_all_tests() {
 
   register_test "prefab_create" "prefab" "prefab create writes a structured prefab" "no" "test_prefab_create"
   register_test "prefab_inspect" "prefab" "prefab inspect reports child paths" "no" "test_prefab_inspect"
+  register_test "prefab_inspect_node_filter" "prefab" "prefab inspect --node handles root sentinels and subtrees" "no" "test_prefab_inspect_node_filter"
   register_test "prefab_patch" "prefab" "prefab patch adds and configures a BoxCollider" "no" "test_prefab_patch"
 
   register_test "editor_refresh" "editor" "refresh runs through the live bridge" "no" "test_editor_refresh"
