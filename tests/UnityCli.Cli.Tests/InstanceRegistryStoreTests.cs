@@ -25,15 +25,14 @@ public sealed class InstanceRegistryStoreTests
     }
 
     [Fact]
-    public void Load_ReadsInstanceTokenFromSidecarDuringSanitize()
+    public void Load_PreservesInstanceTokenDuringSanitize()
     {
         using var temp = new TempDirectory();
         var projectRoot = Path.Combine(temp.Path, "ProjectA");
         Directory.CreateDirectory(projectRoot);
         string projectHash = ProtocolConstants.ComputeProjectHash(projectRoot);
         const string token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-        var registryPath = Path.Combine(temp.Path, "instances.json");
-        var store = new InstanceRegistryStore(registryPath);
+        var store = new InstanceRegistryStore(Path.Combine(temp.Path, "instances.json"));
         store.Save(new InstanceRegistry
         {
             instances =
@@ -44,13 +43,12 @@ public sealed class InstanceRegistryStoreTests
                     projectName = "ProjectA",
                     projectHash = projectHash,
                     pipeName = ProtocolConstants.BuildPipeName(projectHash),
-                    token = "registry-token-should-be-ignored",
+                    token = token,
                     state = "idle",
                     lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
                 },
             ],
         });
-        InstanceRegistryFile.WriteTokenSidecar(registryPath, projectHash, token);
 
         InstanceRegistry registry = store.Load();
 

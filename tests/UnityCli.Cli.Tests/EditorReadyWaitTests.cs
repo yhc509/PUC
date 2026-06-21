@@ -210,9 +210,8 @@ public sealed class EditorReadyWaitTests
     {
         using var temp = new TempDirectory();
         string projectRoot = CreateUnityProject(temp.Path, "SampleProject");
-        string registryPath = Path.Combine(temp.Path, "instances.json");
-        var registryStore = new InstanceRegistryStore(registryPath);
-        SaveRegistry(registryStore, registryPath, projectRoot, "old-token");
+        var registryStore = new InstanceRegistryStore(Path.Combine(temp.Path, "instances.json"));
+        SaveRegistry(registryStore, projectRoot, "old-token");
         var seenTokens = new List<string?>();
 
         var result = await UnityCli.Cli.CliApp.ExecuteUnityCommandAsync(
@@ -224,7 +223,7 @@ public sealed class EditorReadyWaitTests
                 seenTokens.Add(target.token);
                 if (seenTokens.Count == 1)
                 {
-                    SaveRegistry(registryStore, registryPath, projectRoot, "new-token");
+                    SaveRegistry(registryStore, projectRoot, "new-token");
                     return Task.FromResult(Unauthorized());
                 }
 
@@ -240,9 +239,8 @@ public sealed class EditorReadyWaitTests
     {
         using var temp = new TempDirectory();
         string projectRoot = CreateUnityProject(temp.Path, "SampleProject");
-        string registryPath = Path.Combine(temp.Path, "instances.json");
-        var registryStore = new InstanceRegistryStore(registryPath);
-        SaveRegistry(registryStore, registryPath, projectRoot, "same-token");
+        var registryStore = new InstanceRegistryStore(Path.Combine(temp.Path, "instances.json"));
+        SaveRegistry(registryStore, projectRoot, "same-token");
         int calls = 0;
 
         var result = await UnityCli.Cli.CliApp.ExecuteUnityCommandAsync(
@@ -266,9 +264,8 @@ public sealed class EditorReadyWaitTests
     {
         using var temp = new TempDirectory();
         string projectRoot = CreateUnityProject(temp.Path, "SampleProject");
-        string registryPath = Path.Combine(temp.Path, "instances.json");
-        var registryStore = new InstanceRegistryStore(registryPath);
-        SaveRegistry(registryStore, registryPath, projectRoot, "old-token");
+        var registryStore = new InstanceRegistryStore(Path.Combine(temp.Path, "instances.json"));
+        SaveRegistry(registryStore, projectRoot, "old-token");
         int calls = 0;
 
         var result = await UnityCli.Cli.CliApp.ExecuteUnityCommandAsync(
@@ -280,7 +277,7 @@ public sealed class EditorReadyWaitTests
                 calls++;
                 if (calls == 1)
                 {
-                    SaveRegistry(registryStore, registryPath, projectRoot, "new-token");
+                    SaveRegistry(registryStore, projectRoot, "new-token");
                 }
 
                 return Task.FromResult(Unauthorized());
@@ -336,7 +333,7 @@ public sealed class EditorReadyWaitTests
             retryable: false);
     }
 
-    private static void SaveRegistry(InstanceRegistryStore registryStore, string registryPath, string projectRoot, string token)
+    private static void SaveRegistry(InstanceRegistryStore registryStore, string projectRoot, string token)
     {
         string projectHash = ProtocolConstants.ComputeProjectHash(projectRoot);
         registryStore.Save(new InstanceRegistry
@@ -351,10 +348,10 @@ public sealed class EditorReadyWaitTests
                     pipeName = ProtocolConstants.BuildPipeName(projectHash),
                     state = "idle",
                     lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                    token = token,
                 },
             ],
         });
-        InstanceRegistryFile.WriteTokenSidecar(registryPath, projectHash, token);
     }
 
     private static string CreateUnityProject(string root, string name)
