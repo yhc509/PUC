@@ -128,8 +128,8 @@ ucli asset create --project "$PROJECT_ROOT" --type scriptable-object --path Asse
 # 기본 구조 확인 (깊이 제한 + 기본값 생략으로 토큰 절약)
 ucli scene inspect --project "$PROJECT_ROOT" --path Assets/Scenes/SampleScene.unity --max-depth 2 --omit-defaults --output compact
 
-# 특정 노드의 component 값까지 확인 (patch 전 필수)
-ucli scene inspect --project "$PROJECT_ROOT" --path Assets/Scenes/SampleScene.unity --with-values --output compact
+# 특정 노드의 component 값까지 확인 (patch 전 필수). --with-values에는 항상 --omit-defaults를 붙여 기본값을 생략한다
+ucli scene inspect --project "$PROJECT_ROOT" --path Assets/Scenes/SampleScene.unity --with-values --omit-defaults --output compact
 ```
 
 ### 오브젝트 추가
@@ -189,7 +189,10 @@ ucli material info --project "$PROJECT_ROOT" --path Assets/Materials/MyMat.mat -
 ## 스크린샷
 
 ```bash
-# Game View 캡처 (--view 생략 시 game이 기본)
+# Game View 캡처 — 에이전트가 읽을 캡처는 jpg + max-width로 토큰 절약 (--view 생략 시 game이 기본)
+ucli screenshot --project "$PROJECT_ROOT" --path /tmp/capture.jpg --format jpg --quality 75 --max-width 1024 --output compact
+
+# lossless가 필요할 때만 PNG
 ucli screenshot --project "$PROJECT_ROOT" --path /tmp/capture.png --output compact
 
 # Scene View 캡처
@@ -240,8 +243,10 @@ ucli test run --project "$PROJECT_ROOT" --mode edit --filter <related-name> --ou
 live 작업 뒤 기본 검증:
 
 ```bash
+# --type 생략 시 error/warning/log를 한 번에 반환 — 호출을 2회로 나눌 필요 없다
+ucli read-console --project "$PROJECT_ROOT" --limit 10 --output compact
+# 특정 타입만 필요할 때만 좁힌다
 ucli read-console --project "$PROJECT_ROOT" --type error --limit 10 --output compact
-ucli read-console --project "$PROJECT_ROOT" --type warning --limit 10 --output compact
 ```
 
 에러나 경고가 있으면 성공으로 바로 닫지 않는다.
