@@ -713,6 +713,9 @@ public static partial class CliArgumentParser
                 case CommandKind.SceneInspect when token == "--with-values":
                     parsed.SceneWithValues = true;
                     break;
+                case CommandKind.SceneInspect when token == "--node":
+                    parsed.SceneTarget = RequireValue(tokens, "--node");
+                    break;
                 case CommandKind.SceneInspect when token == "--max-depth":
                     parsed.MaxDepth = RequireInt(RequireValue(tokens, "--max-depth"), "--max-depth");
                     break;
@@ -775,6 +778,9 @@ public static partial class CliArgumentParser
                     break;
                 case CommandKind.PrefabInspect when token == "--with-values":
                     parsed.PrefabWithValues = true;
+                    break;
+                case CommandKind.PrefabInspect when token == "--node":
+                    parsed.SceneTarget = RequireValue(tokens, "--node");
                     break;
                 case CommandKind.PrefabInspect when token == "--max-depth":
                     parsed.MaxDepth = RequireInt(RequireValue(tokens, "--max-depth"), "--max-depth");

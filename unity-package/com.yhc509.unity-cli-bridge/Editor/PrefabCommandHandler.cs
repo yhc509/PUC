@@ -50,7 +50,10 @@ namespace UnityCliBridge.Bridge.Editor
 
             try
             {
-                return PrefabInspector.BuildInspectPayload(path, root, args.withValues, maxDepth, args.omitDefaults);
+                GameObject? targetRoot = string.IsNullOrWhiteSpace(args.node)
+                    ? null
+                    : PrefabInspector.ResolveNode(root, args.node, "prefab-inspect");
+                return PrefabInspector.BuildInspectPayload(path, root, args.withValues, maxDepth, args.omitDefaults, targetRoot);
             }
             finally
             {

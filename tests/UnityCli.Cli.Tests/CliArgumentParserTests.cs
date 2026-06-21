@@ -590,6 +590,7 @@ public sealed class CliArgumentParserTests
             "prefab",
             "inspect",
             "--path", "Assets/Prefabs/Enemy.prefab",
+            "--node", "/Root[0]/Arm[0]",
             "--with-values",
             "--max-depth", "3",
             "--omit-defaults"
@@ -597,6 +598,7 @@ public sealed class CliArgumentParserTests
 
         Assert.Equal(CommandKind.PrefabInspect, parsed.Kind);
         Assert.Equal("Assets/Prefabs/Enemy.prefab", parsed.PrefabPath);
+        Assert.Equal("/Root[0]/Arm[0]", parsed.SceneTarget);
         Assert.True(parsed.PrefabWithValues);
         Assert.Equal(3, parsed.MaxDepth);
         Assert.True(parsed.OmitDefaults);
@@ -609,6 +611,7 @@ public sealed class CliArgumentParserTests
             "prefab",
             "inspect",
             "--path", "Assets/Prefabs/Enemy.prefab",
+            "--node", "/Root[0]/Arm[0]",
             "--max-depth", "2",
             "--omit-defaults"
         ]);
@@ -616,6 +619,7 @@ public sealed class CliArgumentParserTests
         var args = ProtocolJson.Deserialize<PrefabInspectArgs>(parsed.ToEnvelope().argumentsJson);
         Assert.NotNull(args);
         Assert.Equal("Assets/Prefabs/Enemy.prefab", args.path);
+        Assert.Equal("/Root[0]/Arm[0]", args.node);
         Assert.Equal(2, args.maxDepth);
         Assert.True(args.omitDefaults);
     }
@@ -709,12 +713,14 @@ public sealed class CliArgumentParserTests
             "scene",
             "inspect",
             "--path", "Assets/Scenes/System.unity",
+            "--node", "/Player[0]/Arm[0]",
             "--max-depth", "3",
             "--omit-defaults"
         ]);
 
         Assert.Equal(CommandKind.SceneInspect, parsed.Kind);
         Assert.Equal("Assets/Scenes/System.unity", parsed.ScenePath);
+        Assert.Equal("/Player[0]/Arm[0]", parsed.SceneTarget);
         Assert.Equal(3, parsed.MaxDepth);
         Assert.True(parsed.OmitDefaults);
     }
@@ -740,6 +746,7 @@ public sealed class CliArgumentParserTests
             "scene",
             "inspect",
             "--path", "Assets/Scenes/System.unity",
+            "--node", "/Player[0]/Arm[0]",
             "--with-values",
             "--max-depth", "4",
             "--omit-defaults"
@@ -748,6 +755,7 @@ public sealed class CliArgumentParserTests
         var args = ProtocolJson.Deserialize<SceneInspectArgs>(parsed.ToEnvelope().argumentsJson);
         Assert.NotNull(args);
         Assert.Equal("Assets/Scenes/System.unity", args.path);
+        Assert.Equal("/Player[0]/Arm[0]", args.node);
         Assert.True(args.withValues);
         Assert.Equal(4, args.maxDepth);
         Assert.True(args.omitDefaults);

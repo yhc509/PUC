@@ -138,6 +138,7 @@ unity-cli asset delete --path ... --force                # Delete
 # Open and inspect
 unity-cli scene open --path Assets/Scenes/Main.unity
 unity-cli scene inspect --path ... --with-values --omit-defaults
+unity-cli scene inspect --path ... --node "/Player[0]/Arm[0]" --max-depth 2
 
 # Build scenes with convenience commands
 unity-cli scene add-object --name Cube --primitive Cube \
@@ -162,6 +163,7 @@ unity-cli scene patch --path ... --spec-file patch.json
 unity-cli prefab create --path Assets/Prefabs/Enemy.prefab \
   --spec-json '{"root":{"name":"Enemy","children":[...]}}'
 unity-cli prefab inspect --path ... --with-values
+unity-cli prefab inspect --path ... --node "/Root[0]/Arm[0]" --max-depth 2
 unity-cli prefab patch --path ... --spec-json '{"operations":[...]}'
 unity-cli prefab patch --path ... --spec-file destructive-patch.json --force
 

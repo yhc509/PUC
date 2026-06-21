@@ -308,6 +308,7 @@ namespace UnityCli.Protocol
     public sealed class SceneInspectArgs
     {
         public string path = string.Empty;
+        public string node = string.Empty;
         public bool withValues;
         public int? maxDepth;
         public bool omitDefaults;
@@ -344,6 +345,7 @@ namespace UnityCli.Protocol
     public sealed class PrefabInspectArgs
     {
         public string path = string.Empty;
+        public string node = string.Empty;
         public bool withValues;
         public int? maxDepth;
         public bool omitDefaults;
