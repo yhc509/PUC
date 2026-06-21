@@ -180,23 +180,9 @@ namespace UnityCliBridge.Bridge.Editor
                 });
             }
 
-            IEnumerable<PackageRecord> filteredRecords = records.OrderBy(record => record.name, StringComparer.OrdinalIgnoreCase);
-            if (!string.IsNullOrWhiteSpace(args.filter))
-            {
-                string filter = args.filter.Trim();
-                filteredRecords = filteredRecords.Where(record =>
-                    record.name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0
-                    || record.displayName.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0);
-            }
-
-            if (args.limit > 0)
-            {
-                filteredRecords = filteredRecords.Take(args.limit);
-            }
-
             return ProtocolJson.Serialize(new PackageListPayload
             {
-                packages = filteredRecords.ToArray(),
+                packages = PackageListFilterUtility.ApplyPackageListFilter(records, args),
             });
         }
 
