@@ -1475,7 +1475,18 @@ test_package_list() {
   run_cli_main_timeout 120000 package list
   assert_success_response || return 1
   assert_output_contains "\"packages\": [" || return 1
-  TEST_MESSAGE="package list returned the installed package set"
+
+  run_cli_main_timeout 120000 package list --filter "com.unity" --limit 1
+  assert_success_response || return 1
+  assert_output_contains "\"packages\": [" || return 1
+  assert_output_contains "\"name\": \"com.unity" || return 1
+  local unity_package_count
+  unity_package_count="$(printf '%s\n' "$LAST_OUTPUT" | grep -oF '"name": "com.unity' | wc -l | tr -d ' ')"
+  if [[ "$unity_package_count" != "1" ]]; then
+    TEST_FAILURE="Expected package list --limit 1 to return one matching package, got $unity_package_count from: $LAST_COMMAND | output=$(compact_output "$LAST_OUTPUT")"
+    return 1
+  fi
+  TEST_MESSAGE="package list returned installed packages and supported filter/limit"
 }
 
 test_package_search() {

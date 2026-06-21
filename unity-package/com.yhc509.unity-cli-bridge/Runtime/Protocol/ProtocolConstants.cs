@@ -17,6 +17,7 @@ namespace UnityCli.Protocol
         public const int MaxExecuteTimeoutMs = 600_000;
         public const int DefaultConsoleLimit = 50;
         public const int DefaultAssetFindLimit = 50;
+        public const int DefaultPackageListLimit = 0;
         public const int DefaultPackageRequestTimeoutSeconds = 300;
         public const int DefaultPackageLiveTimeoutMs = 360_000;
         public const int DefaultCompileRefreshWaitTimeoutSeconds = 120;
