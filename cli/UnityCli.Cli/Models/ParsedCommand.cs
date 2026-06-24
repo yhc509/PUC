@@ -66,6 +66,9 @@ public enum CommandKind
     QaWait,
     QaWaitUntil,
     QaRunSequence,
+    RecordStart,
+    RecordStop,
+    RecordStatus,
 }
 
 public sealed class ParsedCommand
@@ -112,6 +115,12 @@ public sealed class ParsedCommand
     public bool TestWait { get; set; }
     public bool Wait { get; set; }
     public string? TestRunId { get; set; }
+    public string? RecordPath { get; set; }
+    public int? RecordDuration { get; set; }
+    public bool RecordWait { get; set; }
+    public int? RecordFps { get; set; }
+    public int? RecordMaxWidth { get; set; }
+    public string? RecordRunId { get; set; }
     public string? ExecuteCodeSnippet { get; set; }
     public string? ExecuteCodeFile { get; set; }
     public string? ExecuteCodeArgsJson { get; set; }
@@ -274,6 +283,9 @@ public sealed class ParsedCommand
                 CommandKind.TestList => ProtocolConstants.CommandTestList,
                 CommandKind.TestRun => ProtocolConstants.CommandTestRun,
                 CommandKind.TestResults => ProtocolConstants.CommandTestResults,
+                CommandKind.RecordStart => ProtocolConstants.CommandRecordStart,
+                CommandKind.RecordStop => ProtocolConstants.CommandRecordStop,
+                CommandKind.RecordStatus => ProtocolConstants.CommandRecordStatus,
                 _ => throw new CliUsageException($"지원하지 않는 live 명령입니다: {Kind}"),
             },
             argumentsJson = BuildArgumentsJson(),
@@ -344,6 +356,18 @@ public sealed class ParsedCommand
             {
                 runId = TestRunId ?? string.Empty,
             },
+            CommandKind.RecordStart => new RecordStartArgs
+            {
+                path = RecordPath,
+                fps = RecordFps ?? 0,
+                maxWidth = RecordMaxWidth ?? 0,
+                durationSeconds = RecordDuration ?? 0,
+            },
+            CommandKind.RecordStatus => new RecordStatusArgs
+            {
+                recordingId = RecordRunId,
+            },
+            CommandKind.RecordStop => new { },
             CommandKind.ExecuteCode => new ExecuteCodeArgs
             {
                 code = ResolveExecuteCode(),
