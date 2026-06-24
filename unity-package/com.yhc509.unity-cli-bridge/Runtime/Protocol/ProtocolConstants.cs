@@ -47,6 +47,9 @@ namespace UnityCli.Protocol
         public const string ErrorRecordRequiresPlaymode = "RECORD_REQUIRES_PLAYMODE";
         public const string ErrorRecordInProgress = "RECORD_IN_PROGRESS";
         public const string ErrorRecordNotActive = "RECORD_NOT_ACTIVE";
+        public const string ErrorRecordFailed = "RECORD_FAILED";
+        public const string ErrorRecordInterrupted = "RECORD_INTERRUPTED";
+        public const string ErrorRecordNotFound = "RECORD_NOT_FOUND";
         public const string ErrorRecordTimeout = "RECORD_TIMEOUT";
         public const string ErrorCompileWaitTimeout = "COMPILE_WAIT_TIMEOUT";
         public const string ErrorRefreshWaitTimeout = "REFRESH_WAIT_TIMEOUT";

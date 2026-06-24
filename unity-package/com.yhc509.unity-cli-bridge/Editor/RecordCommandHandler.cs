@@ -14,6 +14,8 @@ namespace UnityCliBridge.Bridge.Editor
         private static readonly object _activeLock = new object();
         private static bool _hasActiveRecording;
         private static RecorderController? _controller;
+        private static RecorderControllerSettings? _controllerSettings;
+        private static MovieRecorderSettings? _movieSettings;
         private static string? _recordingId;
         private static string? _targetPath;
         private static string? _outputBasePath;
@@ -163,8 +165,11 @@ namespace UnityCliBridge.Bridge.Editor
 
                 var controllerSettings = ScriptableObject.CreateInstance<RecorderControllerSettings>();
                 var movieSettings = ScriptableObject.CreateInstance<MovieRecorderSettings>();
+                _controllerSettings = controllerSettings;
+                _movieSettings = movieSettings;
                 movieSettings.name = "UCB Recording";
                 movieSettings.Enabled = true;
+                // Recorder 5.x keeps this API obsolete-but-present; future versions may need an adapter.
                 movieSettings.OutputFormat = MovieRecorderSettings.VideoRecorderOutputFormat.MP4;
                 movieSettings.ImageInputSettings = new GameViewInputSettings
                 {
@@ -222,35 +227,30 @@ namespace UnityCliBridge.Bridge.Editor
             try
             {
                 _controller?.StopRecording();
+                finalPath = MoveProducedFileToTargetIfNeeded(producedPath, _targetPath);
+
+                var result = BuildResultPayload(recordingId, status, finalPath);
+                WriteSidecar(recordingId, result);
+                return ProtocolJson.Serialize(result);
+            }
+            catch (Exception ex)
+            {
+                var failed = BuildResultPayload(recordingId, "Failed", finalPath);
+                TryWriteFailedSidecar(recordingId, failed, ex);
+                throw new CommandFailureException(
+                    ProtocolConstants.ErrorRecordFailed,
+                    "Recording " + recordingId + " failed to finalize: " + ex.Message);
             }
             finally
             {
-                _controller = null;
+                ClearState();
             }
+        }
 
-            if (!string.IsNullOrWhiteSpace(_targetPath))
-            {
-                string resolved = _targetPath!;
-                string? directory = Path.GetDirectoryName(resolved);
-                if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
-                {
-                    Directory.CreateDirectory(directory!);
-                }
-
-                if (File.Exists(resolved))
-                {
-                    File.Delete(resolved);
-                }
-
-                if (File.Exists(producedPath))
-                {
-                    File.Move(producedPath, resolved);
-                    finalPath = resolved;
-                }
-            }
-
+        private static RecordResultPayload BuildResultPayload(string recordingId, string status, string finalPath)
+        {
             var fileInfo = new FileInfo(finalPath);
-            var result = new RecordResultPayload
+            return new RecordResultPayload
             {
                 recordingId = recordingId,
                 status = status,
@@ -261,10 +261,78 @@ namespace UnityCliBridge.Bridge.Editor
                 width = _width,
                 height = _height,
             };
+        }
 
-            WriteSidecar(recordingId, result);
-            ClearState();
-            return ProtocolJson.Serialize(result);
+        private static string MoveProducedFileToTargetIfNeeded(string producedPath, string? targetPath)
+        {
+            if (string.IsNullOrWhiteSpace(targetPath) || !File.Exists(producedPath))
+            {
+                return producedPath;
+            }
+
+            string resolved = targetPath!;
+            string producedFullPath = Path.GetFullPath(producedPath);
+            string targetFullPath = Path.GetFullPath(resolved);
+            if (string.Equals(producedFullPath, targetFullPath, StringComparison.Ordinal))
+            {
+                return resolved;
+            }
+
+            string? directory = Path.GetDirectoryName(targetFullPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory!);
+            }
+
+            string targetDirectory = directory ?? Directory.GetCurrentDirectory();
+            string fileName = Path.GetFileName(targetFullPath);
+            string tempPath = Path.Combine(targetDirectory, "." + fileName + "." + Guid.NewGuid().ToString("N") + ".tmp");
+            bool installed = false;
+            try
+            {
+                File.Copy(producedPath, tempPath);
+                if (File.Exists(targetFullPath))
+                {
+                    File.Replace(tempPath, targetFullPath, null);
+                }
+                else
+                {
+                    File.Move(tempPath, targetFullPath);
+                }
+
+                installed = true;
+                File.Delete(producedPath);
+                return resolved;
+            }
+            finally
+            {
+                if (!installed && File.Exists(tempPath))
+                {
+                    try
+                    {
+                        File.Delete(tempPath);
+                    }
+                    catch
+                    {
+                        // Keep finalize failure focused on the original file operation.
+                    }
+                }
+            }
+        }
+
+        private static void TryWriteFailedSidecar(string recordingId, RecordResultPayload payload, Exception cause)
+        {
+            try
+            {
+                WriteSidecar(recordingId, payload);
+            }
+            catch (Exception sidecarException)
+            {
+                Debug.LogError("[UCB] record failed and could not write failure sidecar: "
+                    + cause
+                    + "\nSidecar error: "
+                    + sidecarException);
+            }
         }
 
         private static Vector2 GetGameViewResolution()
@@ -300,6 +368,7 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             _controller = null;
+            DestroyRecorderSettings();
             _recordingId = null;
             _targetPath = null;
             _outputBasePath = null;
@@ -357,7 +426,6 @@ namespace UnityCliBridge.Bridge.Editor
                     catch (Exception ex)
                     {
                         Debug.LogError("[UCB] record auto-stop failed: " + ex);
-                        ClearState();
                     }
                 }
             }
@@ -396,6 +464,41 @@ namespace UnityCliBridge.Bridge.Editor
 
                 _hasActiveRecording = true;
                 return true;
+            }
+        }
+
+        private static void DestroyRecorderSettings()
+        {
+            if (_movieSettings != null)
+            {
+                try
+                {
+                    UnityEngine.Object.DestroyImmediate(_movieSettings);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning("[UCB] failed to destroy movie recorder settings: " + ex.Message);
+                }
+                finally
+                {
+                    _movieSettings = null;
+                }
+            }
+
+            if (_controllerSettings != null)
+            {
+                try
+                {
+                    UnityEngine.Object.DestroyImmediate(_controllerSettings);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning("[UCB] failed to destroy recorder controller settings: " + ex.Message);
+                }
+                finally
+                {
+                    _controllerSettings = null;
+                }
             }
         }
     }
