@@ -663,6 +663,7 @@ public static partial class CliArgumentParser
                     parsed.QaSequenceRecord = true;
                     break;
                 case CommandKind.QaRunSequence when token == "--record-path":
+                    parsed.QaSequenceRecord = true;
                     parsed.QaSequenceRecordPath = RequireValue(tokens, "--record-path");
                     break;
                 case CommandKind.AssetFind when token == "--name":

@@ -835,6 +835,23 @@ public sealed class QaParserTests
     }
 
     [Fact]
+    public void Parse_QaRunSequence_RecordPath_ImpliesRecord()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "qa", "run-sequence",
+            "--spec-json", MinimalSequenceSpec,
+            "--record-path", "out.mp4",
+        ]);
+        var envelope = parsed.ToEnvelope();
+        var arguments = ParseArguments(envelope.argumentsJson);
+
+        Assert.True(parsed.QaSequenceRecord);
+        Assert.Equal("out.mp4", parsed.QaSequenceRecordPath);
+        Assert.True(arguments.GetProperty("record").GetBoolean());
+        Assert.Equal("out.mp4", arguments.GetProperty("recordPath").GetString());
+    }
+
+    [Fact]
     public void Parse_QaRunSequence_MissingSpec_ThrowsUsage()
     {
         var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["qa", "run-sequence"]));
