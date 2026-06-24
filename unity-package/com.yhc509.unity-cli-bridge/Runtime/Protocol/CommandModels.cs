@@ -97,6 +97,44 @@ namespace UnityCli.Protocol
     }
 
     [Serializable]
+    public sealed class RecordStartArgs
+    {
+        public string? path;
+        public int fps;
+        public int maxWidth;
+        public int durationSeconds;
+    }
+
+    [Serializable]
+    public sealed class RecordStatusArgs
+    {
+        public string? recordingId;
+    }
+
+    [Serializable]
+    public sealed class RecordStartedPayload
+    {
+        public string recordingId = string.Empty;
+        public string status = string.Empty;
+        public string targetPath = string.Empty;
+        public string startedAt = string.Empty;
+        public int durationSeconds;
+    }
+
+    [Serializable]
+    public sealed class RecordResultPayload
+    {
+        public string recordingId = string.Empty;
+        public string status = string.Empty;
+        public string path = string.Empty;
+        public long durationMs;
+        public long fileSizeBytes;
+        public int fps;
+        public int width;
+        public int height;
+    }
+
+    [Serializable]
     public sealed class ExecuteCodeArgs
     {
         public string code = string.Empty;
