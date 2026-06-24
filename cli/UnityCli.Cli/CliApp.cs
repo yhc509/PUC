@@ -281,6 +281,11 @@ public static class CliApp
                     return await PollTestResultsAsync(parsed, target, ipcClient, response, cts.Token);
                 }
 
+                if (ShouldPollRecordStatus(parsed, response))
+                {
+                    return await PollRecordStatusAsync(parsed, target, sendCommandAsync, response, cts.Token);
+                }
+
                 if (ShouldPollEditorReady(parsed, response))
                 {
                     TimeSpan waitTimeout = ResolveEditorReadyWaitTimeout(parsed);
@@ -350,6 +355,13 @@ public static class CliApp
             return totalMs >= int.MaxValue ? int.MaxValue : Math.Max(1, (int)Math.Ceiling(totalMs));
         }
 
+        if (parsed.Kind == CommandKind.RecordStart && parsed.RecordWait)
+        {
+            int durationSeconds = parsed.RecordDuration ?? ProtocolConstants.MaxRecordDurationSeconds;
+            double totalMs = Math.Max(liveTimeoutMs, (durationSeconds + 15) * 1000d);
+            return totalMs >= int.MaxValue ? int.MaxValue : Math.Max(1, (int)Math.Ceiling(totalMs));
+        }
+
         return liveTimeoutMs;
     }
 
@@ -358,6 +370,13 @@ public static class CliApp
         return parsed.Kind == CommandKind.TestRun
             && parsed.TestWait
             && string.Equals(parsed.TestMode, "play", StringComparison.Ordinal)
+            && string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal);
+    }
+
+    internal static bool ShouldPollRecordStatus(ParsedCommand parsed, ResponseEnvelope response)
+    {
+        return parsed.Kind == CommandKind.RecordStart
+            && parsed.RecordWait
             && string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal);
     }
 
@@ -453,6 +472,80 @@ public static class CliApp
         }.ToEnvelope();
 
         return await ipcClient.SendAsync(target, command, ProtocolConstants.DefaultLiveTimeoutMs, cancellationToken);
+    }
+
+    internal static async Task<ResponseEnvelope> PollRecordStatusAsync(
+        ParsedCommand original,
+        InstanceRecord target,
+        Func<InstanceRecord, CommandEnvelope, int, CancellationToken, Task<ResponseEnvelope>> sendAsync,
+        ResponseEnvelope startedResponse,
+        CancellationToken cancellationToken,
+        Func<TimeSpan, CancellationToken, Task>? delayAsync = null,
+        TimeSpan? pollInterval = null)
+    {
+        var started = DeserializeData<RecordStartedPayload>(startedResponse);
+        if (started is null || string.IsNullOrWhiteSpace(started.recordingId))
+        {
+            return startedResponse;
+        }
+
+        delayAsync ??= Task.Delay;
+        TimeSpan interval = pollInterval ?? TimeSpan.FromSeconds(1);
+        int durationSeconds = original.RecordDuration ?? ProtocolConstants.MaxRecordDurationSeconds;
+        DateTime deadline = DateTime.UtcNow.AddSeconds(durationSeconds + 15);
+        while (DateTime.UtcNow < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await delayAsync(interval, cancellationToken);
+
+            var poll = await SendRecordStatusPollAsync(target, sendAsync, started.recordingId, cancellationToken);
+            if (!string.Equals(poll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+            {
+                return poll;
+            }
+
+            var result = DeserializeData<RecordResultPayload>(poll);
+            if (result is null || !string.Equals(result.status, "Recording", StringComparison.Ordinal))
+            {
+                return poll;
+            }
+        }
+
+        var finalPoll = await SendRecordStatusPollAsync(target, sendAsync, started.recordingId, cancellationToken);
+        if (!string.Equals(finalPoll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+        {
+            return finalPoll;
+        }
+
+        var finalResult = DeserializeData<RecordResultPayload>(finalPoll);
+        if (finalResult is not null && string.Equals(finalResult.status, "Recording", StringComparison.Ordinal))
+        {
+            return ResponseEnvelope.Failure(
+                finalPoll.requestId,
+                finalPoll.target,
+                ProtocolConstants.ErrorRecordTimeout,
+                "Recording " + started.recordingId + " did not finalize before the wait timeout.",
+                retryable: false,
+                finalPoll.durationMs,
+                finalPoll.transport,
+                finalPoll.data?.GetRawText());
+        }
+
+        return finalPoll;
+    }
+
+    private static async Task<ResponseEnvelope> SendRecordStatusPollAsync(
+        InstanceRecord target,
+        Func<InstanceRecord, CommandEnvelope, int, CancellationToken, Task<ResponseEnvelope>> sendAsync,
+        string recordingId,
+        CancellationToken cancellationToken)
+    {
+        var command = new ParsedCommand(CommandKind.RecordStatus)
+        {
+            RecordRunId = recordingId,
+        }.ToEnvelope();
+
+        return await sendAsync(target, command, ProtocolConstants.DefaultLiveTimeoutMs, cancellationToken);
     }
 
     internal static async Task<ResponseEnvelope> PollEditorReadyAsync(
@@ -725,7 +818,7 @@ public static class CliApp
             : totalSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
     }
 
-    private static T? DeserializeData<T>(ResponseEnvelope response)
+    internal static T? DeserializeData<T>(ResponseEnvelope response)
     {
         if (!response.data.HasValue)
         {
