@@ -53,6 +53,52 @@ public sealed class RecordPollTests
         Assert.True(call >= 3);
     }
 
+    [Theory]
+    [InlineData("Interrupted", ProtocolConstants.ErrorRecordInterrupted)]
+    [InlineData("NotFound", ProtocolConstants.ErrorRecordNotFound)]
+    [InlineData("Failed", ProtocolConstants.ErrorRecordFailed)]
+    public async Task PollRecordStatus_ConvertsTerminalFailureStatusToFailure(string status, string expectedCode)
+    {
+        var target = new InstanceRecord
+        {
+            projectHash = "target-1",
+            projectName = "Sample",
+        };
+
+        Task<ResponseEnvelope> Fake(
+            InstanceRecord _,
+            CommandEnvelope command,
+            int timeoutMs,
+            CancellationToken cancellationToken)
+        {
+            var payload = new RecordResultPayload
+            {
+                recordingId = "abc",
+                status = status,
+                path = "out.mp4",
+            };
+            return Task.FromResult(Success(payload));
+        }
+
+        var startedResponse = Success(new RecordStartedPayload
+        {
+            recordingId = "abc",
+            status = "STARTED",
+            durationSeconds = 2,
+        });
+
+        var result = await CliApp.PollRecordStatusAsync(
+            new ParsedCommand(CommandKind.RecordStart) { RecordDuration = 2, RecordWait = true },
+            target,
+            Fake,
+            startedResponse,
+            CancellationToken.None,
+            delayAsync: (_, _) => Task.CompletedTask);
+
+        Assert.Equal(ProtocolConstants.StatusError, result.status);
+        Assert.Equal(expectedCode, result.error!.code);
+    }
+
     private static ResponseEnvelope Success<T>(T data)
     {
         return ResponseEnvelope.Success(
