@@ -197,6 +197,8 @@ public sealed class ParsedCommand
     public int QaWaitTimeout { get; set; } = ProtocolConstants.DefaultQaWaitUntilTimeoutMs;
     public QaRunSequenceArgs? QaSequenceArgs { get; set; }
     public int QaSequenceTimeoutMs { get; set; }
+    public bool QaSequenceRecord { get; set; }
+    public string? QaSequenceRecordPath { get; set; }
 
     public CommandEnvelope ToEnvelope()
     {
@@ -586,6 +588,8 @@ public sealed class ParsedCommand
             args.timeoutMs = QaSequenceTimeoutMs;
         }
 
+        args.record = QaSequenceRecord;
+        args.recordPath = QaSequenceRecordPath;
         return args;
     }
 

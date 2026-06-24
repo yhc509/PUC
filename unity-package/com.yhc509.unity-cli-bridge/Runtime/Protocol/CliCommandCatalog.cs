@@ -646,13 +646,18 @@ namespace UnityCli.Protocol
                 isAllowedWhileBusy: false),
             new CliCommandDescriptor(
                 "qa run-sequence",
-                "qa run-sequence --spec-json <json|@file> [--timeout <ms>]",
+                "qa run-sequence --spec-json <json|@file> [--timeout <ms>] [--record] [--record-path <out.mp4>]",
                 "Runs a linear sequence of condition-gated action steps in the bridge: each step waits (ANDed conditions) then executes its actions, with no per-step screenshot round-trip. Conditions read built-in state (active/gone/transform/scene/log/interactable) or game-exposed IQaQueryable values, compared with ==/!=/>=/<=/near/changed. Actions reuse qa key/tap/swipe/wait. Returns the completed step count, or the stopped step with its unmet conditions and a state snapshot on timeout. Requires Play Mode; no force-rule.",
                 CliCommandGroup.QaWorkflows,
                 ProtocolConstants.CommandQaRunSequence,
                 canUseLocal: false,
                 canUseLive: true,
                 isAllowedWhileBusy: false,
+                notes: new[]
+                {
+                    "--record captures the sequence interval as an mp4 via Unity Recorder and returns recordingPath when finalized.",
+                    "--record-path moves the finalized mp4 to the requested path.",
+                },
                 defaultLiveTimeoutMs: ProtocolConstants.MaxQaRunSequenceTimeoutMs + 5_000),
             new CliCommandDescriptor(
                 "qa wait",

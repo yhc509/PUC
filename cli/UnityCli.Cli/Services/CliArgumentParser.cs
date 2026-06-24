@@ -659,6 +659,12 @@ public static partial class CliArgumentParser
                 case CommandKind.QaRunSequence when token == "--timeout":
                     parsed.QaSequenceTimeoutMs = RequireInt(RequireValue(tokens, "--timeout"), "--timeout");
                     break;
+                case CommandKind.QaRunSequence when token == "--record":
+                    parsed.QaSequenceRecord = true;
+                    break;
+                case CommandKind.QaRunSequence when token == "--record-path":
+                    parsed.QaSequenceRecordPath = RequireValue(tokens, "--record-path");
+                    break;
                 case CommandKind.AssetFind when token == "--name":
                     parsed.AssetName = RequireValue(tokens, "--name");
                     break;

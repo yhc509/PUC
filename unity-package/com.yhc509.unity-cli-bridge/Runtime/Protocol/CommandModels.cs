@@ -733,6 +733,8 @@ namespace UnityCli.Protocol
     {
         public QaSequenceStep[] steps = Array.Empty<QaSequenceStep>();
         public int timeoutMs;
+        public bool record;
+        public string? recordPath;
     }
 
     [Serializable]
@@ -772,6 +774,7 @@ namespace UnityCli.Protocol
         public bool hasFailure;
         public QaSequenceFailure failedStep = new QaSequenceFailure();
         public long elapsedMs;
+        public string recordingPath = string.Empty;
     }
 
     [Serializable]

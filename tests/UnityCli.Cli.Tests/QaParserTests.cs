@@ -817,6 +817,24 @@ public sealed class QaParserTests
     }
 
     [Fact]
+    public void Parse_QaRunSequence_RecordOptions_BuildsWireArgs()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "qa", "run-sequence",
+            "--spec-json", MinimalSequenceSpec,
+            "--record",
+            "--record-path", "out.mp4",
+        ]);
+        var envelope = parsed.ToEnvelope();
+        var arguments = ParseArguments(envelope.argumentsJson);
+
+        Assert.True(parsed.QaSequenceRecord);
+        Assert.Equal("out.mp4", parsed.QaSequenceRecordPath);
+        Assert.True(arguments.GetProperty("record").GetBoolean());
+        Assert.Equal("out.mp4", arguments.GetProperty("recordPath").GetString());
+    }
+
+    [Fact]
     public void Parse_QaRunSequence_MissingSpec_ThrowsUsage()
     {
         var ex = Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["qa", "run-sequence"]));
@@ -851,6 +869,7 @@ public sealed class QaParserTests
         CliCommandDescriptor? descriptor = CliCommandCatalog.FindByCommand("qa run-sequence");
         Assert.NotNull(descriptor);
         Assert.Contains("--spec-json", descriptor!.Synopsis);
+        Assert.Contains("--record", descriptor.Synopsis);
         Assert.Contains("IQaQueryable", descriptor.Summary);
         Assert.Equal(ProtocolConstants.CommandQaRunSequence, descriptor.ProtocolCommand);
     }
