@@ -174,6 +174,45 @@ namespace UnityCli.Protocol
                     "Play Mode --view game captures at the native Game View size first; larger --width/--height requests warn and save at native resolution instead of upscaling.",
                 }),
             new CliCommandDescriptor(
+                "record start",
+                "record start [--path <output.mp4>] [--fps <n> (default: 30)] [--max-width <n>] [--duration <seconds>] [--wait]",
+                "Starts recording the Game View to an mp4 file via Unity Recorder. Returns immediately with a recordingId. Requires Play Mode.",
+                CliCommandGroup.EditorControl,
+                ProtocolConstants.CommandRecordStart,
+                canUseLocal: false,
+                canUseLive: true,
+                isAllowedWhileBusy: true,
+                notes: new[]
+                {
+                    "Live-only. Requires Play Mode.",
+                    "--duration auto-stops after N seconds; without it, recording runs until `record stop` or the 600s safety cap.",
+                    "--wait polls until the recording is finalized and requires --duration.",
+                    "--max-width scales the captured frame width; unset keeps the native Game View size.",
+                }),
+            new CliCommandDescriptor(
+                "record stop",
+                "record stop",
+                "Stops the active recording, finalizes the mp4, and returns the output path.",
+                CliCommandGroup.EditorControl,
+                ProtocolConstants.CommandRecordStop,
+                canUseLocal: false,
+                canUseLive: true,
+                isAllowedWhileBusy: true,
+                notes: new[]
+                {
+                    "Live-only.",
+                    "Fails with RECORD_NOT_ACTIVE when no recording is active.",
+                }),
+            new CliCommandDescriptor(
+                "record status",
+                "record status [--recording-id <id>]",
+                "Reports whether a recording is active and the result of a finished recording.",
+                CliCommandGroup.EditorControl,
+                ProtocolConstants.CommandRecordStatus,
+                canUseLocal: false,
+                canUseLive: true,
+                isAllowedWhileBusy: true),
+            new CliCommandDescriptor(
                 "execute",
                 "execute (--code <csharp> | --file <path>) [--args <json>] [--timeout <초>] --force",
                 "Executes arbitrary C# code in the running editor context with optional JSON arguments, structured __pucResult return values, and an optional cooperative timeout; always requires --force.",
