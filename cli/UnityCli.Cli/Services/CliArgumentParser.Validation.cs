@@ -367,6 +367,14 @@ public static partial class CliArgumentParser
         }
     }
 
+    private static void ValidateRecordOptions(ParsedCommand parsed)
+    {
+        if (parsed.Kind == CommandKind.RecordStart && parsed.RecordWait && parsed.RecordDuration is null)
+        {
+            throw new CliUsageException("`record start --wait`는 `--duration <초>`와 함께 사용해야 합니다 (수동 녹화는 `record stop`으로 종료).");
+        }
+    }
+
     private static void ValidateMaterialOptions(ParsedCommand parsed)
     {
         switch (parsed.Kind)
@@ -618,6 +626,9 @@ public static partial class CliArgumentParser
             CommandKind.TestList => "test list",
             CommandKind.TestRun => "test run",
             CommandKind.TestResults => "test results",
+            CommandKind.RecordStart => "record start",
+            CommandKind.RecordStop => "record stop",
+            CommandKind.RecordStatus => "record status",
             CommandKind.PackageList => "package list",
             CommandKind.PackageAdd => "package add",
             CommandKind.PackageRemove => "package remove",

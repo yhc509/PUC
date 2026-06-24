@@ -74,6 +74,7 @@ public static partial class CliArgumentParser
             "package" => ParsePackage(tokens),
             "material" => ParseMaterial(tokens),
             "qa" => ParseQa(tokens),
+            "record" => ParseRecordCommand(tokens),
             "instances" => ParseInstances(tokens),
             "doctor" => new ParsedCommand(CommandKind.Doctor),
             "raw" => new ParsedCommand(CommandKind.Raw),
@@ -331,6 +332,23 @@ public static partial class CliArgumentParser
         return new ParsedCommand(CommandKind.TestResults);
     }
 
+    private static ParsedCommand ParseRecordCommand(Queue<string> tokens)
+    {
+        if (tokens.Count == 0)
+        {
+            throw new CliUsageException("`record` 다음에는 `start`, `stop`, `status` 중 하나가 필요합니다.");
+        }
+
+        var subCommand = tokens.Dequeue().ToLowerInvariant();
+        return subCommand switch
+        {
+            "start" => new ParsedCommand(CommandKind.RecordStart),
+            "stop" => new ParsedCommand(CommandKind.RecordStop),
+            "status" => new ParsedCommand(CommandKind.RecordStatus),
+            _ => throw new CliUsageException($"알 수 없는 record 하위 명령입니다: {subCommand}"),
+        };
+    }
+
     private static ParsedCommand ParseMaterial(Queue<string> tokens)
     {
         if (tokens.Count == 0)
@@ -523,6 +541,24 @@ public static partial class CliArgumentParser
                     break;
                 case CommandKind.TestResults when token == "--run-id":
                     parsed.TestRunId = RequireValue(tokens, "--run-id");
+                    break;
+                case CommandKind.RecordStart when token == "--path":
+                    parsed.RecordPath = RequireValue(tokens, "--path");
+                    break;
+                case CommandKind.RecordStart when token == "--duration":
+                    parsed.RecordDuration = RequireInt(RequireValue(tokens, "--duration"), "--duration");
+                    break;
+                case CommandKind.RecordStart when token == "--fps":
+                    parsed.RecordFps = RequireInt(RequireValue(tokens, "--fps"), "--fps");
+                    break;
+                case CommandKind.RecordStart when token == "--max-width":
+                    parsed.RecordMaxWidth = RequireInt(RequireValue(tokens, "--max-width"), "--max-width");
+                    break;
+                case CommandKind.RecordStart when token == "--wait":
+                    parsed.RecordWait = true;
+                    break;
+                case CommandKind.RecordStatus when token == "--recording-id":
+                    parsed.RecordRunId = RequireValue(tokens, "--recording-id");
                     break;
                 case CommandKind.MaterialInfo when token == "--path":
                 case CommandKind.MaterialSet when token == "--path":
@@ -843,6 +879,7 @@ public static partial class CliArgumentParser
         ValidateScreenshotOptions(parsed);
         ValidatePackageOptions(parsed);
         ValidateTestOptions(parsed);
+        ValidateRecordOptions(parsed);
         ValidateMaterialOptions(parsed);
         ValidateQaOptions(parsed);
         ValidateExecuteOptions(parsed);
