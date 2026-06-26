@@ -445,6 +445,9 @@ public static partial class CliArgumentParser
                 case CommandKind.ReadConsole when token == "--type":
                     parsed.ConsoleType = RequireValue(tokens, "--type");
                     break;
+                case CommandKind.ReadConsole when token == "--no-stacktrace":
+                    parsed.ConsoleNoStackTrace = true;
+                    break;
                 case CommandKind.ExecuteMenu when token == "--path":
                     parsed.MenuPath = RequireValue(tokens, "--path");
                     break;
@@ -518,6 +521,9 @@ public static partial class CliArgumentParser
                 case CommandKind.TestList when token == "--mode":
                     parsed.TestMode = RequireTestMode(RequireValue(tokens, "--mode"), allowAll: true);
                     break;
+                case CommandKind.TestList when token == "--no-detail":
+                    parsed.TestNoDetail = true;
+                    break;
                 case CommandKind.TestRun when token == "--mode":
                     parsed.TestMode = RequireTestMode(RequireValue(tokens, "--mode"), allowAll: false);
                     break;
@@ -533,6 +539,9 @@ public static partial class CliArgumentParser
                 case CommandKind.TestRun when token == "--no-domain-reload":
                     parsed.TestNoDomainReload = true;
                     break;
+                case CommandKind.TestRun when token == "--failures-only":
+                    parsed.TestFailuresOnly = true;
+                    break;
                 case CommandKind.TestRun when token == "--timeout":
                     parsed.TestTimeoutSeconds = RequireInt(RequireValue(tokens, "--timeout"), "--timeout");
                     break;
@@ -541,6 +550,9 @@ public static partial class CliArgumentParser
                     break;
                 case CommandKind.TestResults when token == "--run-id":
                     parsed.TestRunId = RequireValue(tokens, "--run-id");
+                    break;
+                case CommandKind.TestResults when token == "--failures-only":
+                    parsed.TestFailuresOnly = true;
                     break;
                 case CommandKind.RecordStart when token == "--path":
                     parsed.RecordPath = RequireValue(tokens, "--path");
@@ -613,6 +625,20 @@ public static partial class CliArgumentParser
                     break;
                 case CommandKind.QaWorldDump when token == "--include-offscreen":
                     parsed.QaWorldDumpIncludeOffscreen = true;
+                    break;
+                case CommandKind.QaUiDump when token == "--limit":
+                case CommandKind.QaWorldDump when token == "--limit":
+                    parsed.QaDumpLimit = RequireInt(RequireValue(tokens, "--limit"), "--limit", minimumValue: 0);
+                    break;
+                case CommandKind.QaUiDump when token == "--interactable-only":
+                    parsed.QaDumpInteractableOnly = true;
+                    break;
+                case CommandKind.QaUiDump when token == "--text":
+                case CommandKind.QaWorldDump when token == "--text":
+                    parsed.QaDumpText = RequireValue(tokens, "--text");
+                    break;
+                case CommandKind.QaUiDump when token == "--omit-rect":
+                    parsed.QaDumpOmitRect = true;
                     break;
                 case CommandKind.QaSwipe when token == "--from":
                     parsed.QaSwipeFrom = RequireValue(tokens, "--from");
@@ -868,6 +894,9 @@ public static partial class CliArgumentParser
                     break;
                 case CommandKind.PrefabAddComponent when token == "--values":
                     parsed.SceneComponentValues = RequireValue(tokens, "--values");
+                    break;
+                case CommandKind.InstancesList when token == "--brief":
+                    parsed.InstancesBrief = true;
                     break;
                 default:
                     if (parsed.Kind == CommandKind.AssetCreate && token.StartsWith("--", StringComparison.Ordinal))

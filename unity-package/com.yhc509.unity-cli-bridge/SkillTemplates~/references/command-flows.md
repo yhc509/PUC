@@ -3,13 +3,14 @@
 ## 실행 파일 찾기
 
 - `UNITY_CLI_BIN`이 있으면 그것을 우선 사용한다.
-- `command -v unity-cli` 결과가 있으면 그 경로를 사용한다.
+- PATH에 `ucli` 또는 `unity-cli`가 있으면 그 경로를 사용한다.
 - 둘 다 없으면 현재 작업 디렉터리나 상위 디렉터리의 `unity-cli` 실행 파일을 찾는다.
-- 셋 다 없으면 설치가 필요하다고 보고 진행을 멈춘다.
+- repo 루트에서 작업 중이라면 `./scripts/publish-osx-arm64.sh`로 `dist/unity-cli/unity-cli`를 빌드할 수 있다.
+- 그래도 없으면 설치가 필요하다고 보고 진행을 멈춘다. 반복 호출이 잦으면 `ucli` alias나 symlink를 추가한다.
 
 ## 프로젝트 결정
 
-**모든 명령에 `--project`를 반드시 붙인다.** 생략하면 CLI가 임의의 live 인스턴스에 연결하여 잘못된 프로젝트에 명령이 실행될 수 있다.
+**모든 명령에 `--project`를 반드시 붙인다.** 생략하면 CLI가 현재 작업 디렉터리의 Unity 프로젝트, `instances use`로 고정한 핀, 또는 단일 live 인스턴스로 라우팅할 수 있으므로 자동화 작업에서는 항상 명시한다.
 
 ```bash
 # 현재 디렉터리가 Unity 프로젝트라면
@@ -18,6 +19,9 @@ PROJECT="$(pwd -P)"
 # 실행 중인 프로젝트 이름을 알고 있다면
 PROJECT="<your-project>"
 
+# unity-cli 레포에서 개발/테스트 중이라면
+PROJECT="unity-cli-bridge-sample"
+
 # 특정 프로젝트를 경로로 지정하려면
 PROJECT="/path/to/YourProject"
 ```
@@ -25,8 +29,13 @@ PROJECT="/path/to/YourProject"
 여러 프로젝트가 동시에 열려 있을 때 확인:
 
 ```bash
-ucli instances list
+ucli instances list --brief
 ```
+
+- `--project`는 프로젝트 이름이나 전체 경로 모두 가능하다.
+- macOS에서는 항상 `pwd -P`로 실제 경로를 사용한다.
+- 반복 작업에서 기본 대상을 고정하고 싶다면 `ucli instances use <projectPath|projectName>`를 쓴다.
+- 12자 hash 입력은 충돌 시 ambiguous 에러로 거부된다.
 
 ## 상태 확인
 
@@ -201,15 +210,56 @@ ucli screenshot --project "$PROJECT" --path /tmp/capture.png --output compact
 ucli screenshot --project "$PROJECT" --path /tmp/scene.png --view scene --output compact
 ```
 
+## 테스트 러너
+
+`test list` / `test run` / `test results`로 Editor 재시작 없이 Test Runner를 트리거한다.
+
+기본 조회와 실행:
+
+```bash
+ucli test list --project "$PROJECT" --mode all --no-detail --output compact
+ucli test run --project "$PROJECT" --mode edit --filter PlayerControllerTests --failures-only --output compact
+ucli test run --project "$PROJECT" --mode play --filter Smoke --wait --failures-only --output compact
+ucli test results --project "$PROJECT" --run-id <runId> --failures-only --output compact
+```
+
+- `test list --mode all`은 EditMode와 PlayMode 테스트를 같이 나열한다
+- `test run --mode edit`은 동기 응답으로 결과 payload를 바로 반환한다
+- `test run --mode play`는 기본적으로 `STARTED`와 `runId`를 즉시 반환한다
+- PlayMode 결과까지 한 번에 기다려야 하면 `--wait`를 붙여 CLI가 폴링하게 한다
+- `--filter`는 test full name의 대소문자 무시 substring이다
+- `test results --run-id <runId>`는 이미 시작된 run의 디스크 캐시나 진행 상태를 다시 읽는다
+- `--failures-only`는 summary count를 유지하면서 `tests[]`만 non-passed로 줄인다
+- `test list --no-detail`은 `fullName`과 `mode`만 반환한다
+
+PlayMode domain reload를 생략할 수 있는 경우:
+
+```bash
+ucli test run --project "$PROJECT" --mode play --filter Smoke --wait --no-domain-reload --failures-only --output compact
+```
+
+- `--no-domain-reload`는 PlayMode 전용 속도 옵션이다
+- static state leakage 위험이 있으므로 테스트가 자체 reset을 보장할 때만 쓴다
+- EditMode와 함께 쓰면 usage error다
+
+AI repair loop는 짧게 유지한다:
+
+```bash
+ucli refresh --project "$PROJECT" --output compact
+ucli test run --project "$PROJECT" --mode edit --filter <related-name> --failures-only --output compact
+```
+
+실패하면 failing test name, message, stack trace를 기준으로 수정하고 같은 filter로 재실행한다. non-`Completed` 결과는 envelope `status: error`와 CLI exit code 1로 반환된다.
+
 ## 검증 루틴
 
 live 작업 뒤 기본 검증:
 
 ```bash
 # --type 생략 시 error/warning/log를 한 번에 반환 — 호출을 2회로 나눌 필요 없다
-ucli read-console --project "$PROJECT" --limit 10 --output compact
+ucli read-console --project "$PROJECT" --limit 10 --no-stacktrace --output compact
 # 특정 타입만 필요할 때만 좁힌다
-ucli read-console --project "$PROJECT" --type error --limit 10 --output compact
+ucli read-console --project "$PROJECT" --type error --limit 10 --no-stacktrace --output compact
 ```
 
 에러나 경고가 있으면 성공으로 바로 닫지 않는다.

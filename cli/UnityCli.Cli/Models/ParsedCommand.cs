@@ -88,10 +88,12 @@ public sealed class ParsedCommand
     public bool TimeoutMsSpecified { get; set; }
     public int ConsoleLimit { get; set; } = ProtocolConstants.DefaultConsoleLimit;
     public string? ConsoleType { get; set; }
+    public bool ConsoleNoStackTrace { get; set; }
     public string? MenuPath { get; set; }
     public bool MenuList { get; set; }
     public string? MenuListPrefix { get; set; }
     public string? InstanceTarget { get; set; }
+    public bool InstancesBrief { get; set; }
     public string? RawJson { get; set; }
     public string? ScreenshotView { get; set; }
     public string? ScreenshotCamera { get; set; }
@@ -110,7 +112,9 @@ public sealed class ParsedCommand
     public string? TestFilter { get; set; }
     public string? TestCategory { get; set; }
     public string? TestAssembly { get; set; }
+    public bool TestNoDetail { get; set; }
     public bool TestNoDomainReload { get; set; }
+    public bool TestFailuresOnly { get; set; }
     public int? TestTimeoutSeconds { get; set; }
     public bool TestWait { get; set; }
     public bool Wait { get; set; }
@@ -183,6 +187,10 @@ public sealed class ParsedCommand
     public int? QaTapY { get; set; }
     public int? QaScreenshotWidth { get; set; }
     public int? QaScreenshotHeight { get; set; }
+    public int QaDumpLimit { get; set; }
+    public bool QaDumpInteractableOnly { get; set; }
+    public string? QaDumpText { get; set; }
+    public bool QaDumpOmitRect { get; set; }
     public bool QaWorldDumpIncludeOffscreen { get; set; }
     public string? QaSwipeFrom { get; set; }
     public string? QaSwipeTo { get; set; }
@@ -304,6 +312,7 @@ public sealed class ParsedCommand
             {
                 limit = ConsoleLimit,
                 type = ConsoleType,
+                noStackTrace = ConsoleNoStackTrace,
             },
             CommandKind.ExecuteMenu => new ExecuteMenuArgs
             {
@@ -344,6 +353,7 @@ public sealed class ParsedCommand
             CommandKind.TestList => new TestListArgs
             {
                 mode = TestMode ?? "all",
+                noDetail = TestNoDetail,
             },
             CommandKind.TestRun => new TestRunArgs
             {
@@ -353,10 +363,12 @@ public sealed class ParsedCommand
                 assembly = TestAssembly ?? string.Empty,
                 noDomainReload = TestNoDomainReload,
                 timeoutSeconds = TestTimeoutSeconds ?? 0,
+                failuresOnly = TestFailuresOnly,
             },
             CommandKind.TestResults => new TestResultsArgs
             {
                 runId = TestRunId ?? string.Empty,
+                failuresOnly = TestFailuresOnly,
             },
             CommandKind.RecordStart => new RecordStartArgs
             {
@@ -414,12 +426,18 @@ public sealed class ParsedCommand
             {
                 screenshotWidth = QaScreenshotWidth ?? 0,
                 screenshotHeight = QaScreenshotHeight ?? 0,
+                limit = QaDumpLimit,
+                interactableOnly = QaDumpInteractableOnly,
+                text = QaDumpText ?? string.Empty,
+                omitRect = QaDumpOmitRect,
             },
             CommandKind.QaWorldDump => new QaWorldDumpArgs
             {
                 screenshotWidth = QaScreenshotWidth ?? 0,
                 screenshotHeight = QaScreenshotHeight ?? 0,
                 includeOffscreen = QaWorldDumpIncludeOffscreen,
+                limit = QaDumpLimit,
+                text = QaDumpText ?? string.Empty,
             },
             CommandKind.QaSwipe => new QaSwipeArgs
             {

@@ -362,6 +362,35 @@ public sealed class CliAppTests
     }
 
     [Fact]
+    public async Task RunAsync_JsonInstancesListBrief_TrimsInternalInstanceFields()
+    {
+        using var projects = new TempDirectory();
+        string projectRoot = CreateUnityProject(projects.Path, "SampleProject");
+        string canonicalProjectRoot = ProtocolConstants.GetCanonicalPath(projectRoot);
+        string projectHash = ProtocolConstants.ComputeProjectHash(canonicalProjectRoot);
+        string registryContents =
+            $$"""
+            {"activeProjectRoot":"{{canonicalProjectRoot.Replace("\\", "\\\\")}}","instances":[{"projectRoot":"{{canonicalProjectRoot.Replace("\\", "\\\\")}}","projectName":"SampleProject","projectHash":"{{projectHash}}","pipeName":"{{ProtocolConstants.BuildPipeName(projectHash).Replace("\\", "\\\\")}}","editorProcessId":1234,"unityVersion":"6000.3.10f1","state":"idle","lastSeenUtc":"{{DateTimeOffset.UtcNow.ToString("O")}}","capabilities":["qa"]}]}
+            """;
+
+        var result = await InvokeAsync(["--json", "instances", "list", "--brief"], registryContents: registryContents, currentDirectory: projectRoot);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(string.Empty, result.Stderr);
+
+        var response = ParseResponse(result.Stdout);
+        JsonElement instance = response.data!.Value.GetProperty("instances")[0];
+        Assert.Equal("SampleProject", instance.GetProperty("projectName").GetString());
+        Assert.Equal(canonicalProjectRoot, instance.GetProperty("projectRoot").GetString());
+        Assert.Equal(projectHash, instance.GetProperty("projectHash").GetString());
+        Assert.Equal("idle", instance.GetProperty("state").GetString());
+        Assert.False(instance.TryGetProperty("pipeName", out _));
+        Assert.False(instance.TryGetProperty("lastSeenUtc", out _));
+        Assert.False(instance.TryGetProperty("editorProcessId", out _));
+        Assert.False(instance.TryGetProperty("capabilities", out _));
+    }
+
+    [Fact]
     public async Task RunAsync_JsonDoctor_WhenProtocolMismatch_ReportsLiveErrorFields()
     {
         if (OperatingSystem.IsWindows())

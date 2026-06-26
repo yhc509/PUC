@@ -11,9 +11,12 @@ public sealed class CliArgumentParserTests
     public void Parse_TestList_DefaultsToAllMode()
     {
         var parsed = CliArgumentParser.Parse(["test", "list"]);
+        var args = ProtocolJson.Deserialize<TestListArgs>(parsed.ToEnvelope().argumentsJson);
 
         Assert.Equal(CommandKind.TestList, parsed.Kind);
         Assert.Equal("all", parsed.TestMode);
+        Assert.NotNull(args);
+        Assert.False(args!.noDetail);
     }
 
     [Fact]
@@ -23,6 +26,18 @@ public sealed class CliArgumentParserTests
 
         Assert.Equal(CommandKind.TestList, parsed.Kind);
         Assert.Equal("edit", parsed.TestMode);
+    }
+
+    [Fact]
+    public void Parse_TestList_AcceptsNoDetail()
+    {
+        var parsed = CliArgumentParser.Parse(["test", "list", "--no-detail"]);
+        var args = ProtocolJson.Deserialize<TestListArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.Equal(CommandKind.TestList, parsed.Kind);
+        Assert.True(parsed.TestNoDetail);
+        Assert.NotNull(args);
+        Assert.True(args!.noDetail);
     }
 
     [Fact]
@@ -51,9 +66,11 @@ public sealed class CliArgumentParserTests
             "--category", "Smoke",
             "--assembly", "UnityCliBridge.Bridge.Editor.Tests",
             "--no-domain-reload",
+            "--failures-only",
             "--timeout", "600",
             "--wait",
         ]);
+        var args = ProtocolJson.Deserialize<TestRunArgs>(parsed.ToEnvelope().argumentsJson);
 
         Assert.Equal(CommandKind.TestRun, parsed.Kind);
         Assert.Equal("play", parsed.TestMode);
@@ -61,8 +78,11 @@ public sealed class CliArgumentParserTests
         Assert.Equal("Smoke", parsed.TestCategory);
         Assert.Equal("UnityCliBridge.Bridge.Editor.Tests", parsed.TestAssembly);
         Assert.True(parsed.TestNoDomainReload);
+        Assert.True(parsed.TestFailuresOnly);
         Assert.Equal(600, parsed.TestTimeoutSeconds);
         Assert.True(parsed.TestWait);
+        Assert.NotNull(args);
+        Assert.True(args!.failuresOnly);
     }
 
     [Fact]
@@ -101,6 +121,52 @@ public sealed class CliArgumentParserTests
         var withId = CliArgumentParser.Parse(["test", "results", "--run-id", "abc123"]);
         Assert.Equal(CommandKind.TestResults, withId.Kind);
         Assert.Equal("abc123", withId.TestRunId);
+    }
+
+    [Fact]
+    public void Parse_TestResults_AcceptsFailuresOnly()
+    {
+        var parsed = CliArgumentParser.Parse(["test", "results", "--run-id", "abc123", "--failures-only"]);
+        var args = ProtocolJson.Deserialize<TestResultsArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.Equal(CommandKind.TestResults, parsed.Kind);
+        Assert.Equal("abc123", parsed.TestRunId);
+        Assert.True(parsed.TestFailuresOnly);
+        Assert.NotNull(args);
+        Assert.True(args!.failuresOnly);
+    }
+
+    [Fact]
+    public void Parse_ReadConsole_DefaultsToIncludingStackTrace()
+    {
+        var parsed = CliArgumentParser.Parse(["read-console"]);
+        var args = ProtocolJson.Deserialize<ReadConsoleArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.Equal(CommandKind.ReadConsole, parsed.Kind);
+        Assert.NotNull(args);
+        Assert.False(args!.noStackTrace);
+    }
+
+    [Fact]
+    public void Parse_ReadConsole_AcceptsNoStackTrace()
+    {
+        var parsed = CliArgumentParser.Parse(["read-console", "--limit", "10", "--no-stacktrace"]);
+        var args = ProtocolJson.Deserialize<ReadConsoleArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.Equal(CommandKind.ReadConsole, parsed.Kind);
+        Assert.True(parsed.ConsoleNoStackTrace);
+        Assert.NotNull(args);
+        Assert.Equal(10, args!.limit);
+        Assert.True(args.noStackTrace);
+    }
+
+    [Fact]
+    public void Parse_InstancesList_AcceptsBrief()
+    {
+        var parsed = CliArgumentParser.Parse(["instances", "list", "--brief"]);
+
+        Assert.Equal(CommandKind.InstancesList, parsed.Kind);
+        Assert.True(parsed.InstancesBrief);
     }
 
     [Fact]

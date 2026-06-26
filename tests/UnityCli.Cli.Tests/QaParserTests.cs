@@ -141,6 +141,44 @@ public sealed class QaParserTests
     }
 
     [Fact]
+    public void Parse_QaUiDump_DefaultsToUnfilteredFullRect()
+    {
+        var parsed = CliArgumentParser.Parse(["qa", "ui-dump"]);
+        var args = ProtocolJson.Deserialize<QaUiDumpArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.Equal(CommandKind.QaUiDump, parsed.Kind);
+        Assert.NotNull(args);
+        Assert.Equal(0, args!.limit);
+        Assert.False(args.interactableOnly);
+        Assert.Equal(string.Empty, args.text);
+        Assert.False(args.omitRect);
+    }
+
+    [Fact]
+    public void Parse_QaUiDump_AcceptsTrimFilters()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "qa", "ui-dump",
+            "--limit", "20",
+            "--interactable-only",
+            "--text", "Start",
+            "--omit-rect"
+        ]);
+        var args = ProtocolJson.Deserialize<QaUiDumpArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.Equal(CommandKind.QaUiDump, parsed.Kind);
+        Assert.Equal(20, parsed.QaDumpLimit);
+        Assert.True(parsed.QaDumpInteractableOnly);
+        Assert.Equal("Start", parsed.QaDumpText);
+        Assert.True(parsed.QaDumpOmitRect);
+        Assert.NotNull(args);
+        Assert.Equal(20, args!.limit);
+        Assert.True(args.interactableOnly);
+        Assert.Equal("Start", args.text);
+        Assert.True(args.omitRect);
+    }
+
+    [Fact]
     public void Parse_QaSwipe_AcceptsDuration()
     {
         var parsed = CliArgumentParser.Parse(["qa", "swipe", "--from", "100,200", "--to", "300,400", "--duration", "500"]);
@@ -686,6 +724,40 @@ public sealed class QaParserTests
 
         Assert.Equal(CommandKind.QaWorldDump, parsed.Kind);
         Assert.True(parsed.QaWorldDumpIncludeOffscreen);
+    }
+
+    [Fact]
+    public void Parse_QaWorldDump_DefaultsToUnfiltered()
+    {
+        var parsed = CliArgumentParser.Parse(["qa", "world-dump"]);
+        var args = ProtocolJson.Deserialize<QaWorldDumpArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.Equal(CommandKind.QaWorldDump, parsed.Kind);
+        Assert.NotNull(args);
+        Assert.Equal(0, args!.limit);
+        Assert.Equal(string.Empty, args.text);
+        Assert.False(args.includeOffscreen);
+    }
+
+    [Fact]
+    public void Parse_QaWorldDump_AcceptsTrimFilters()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "qa", "world-dump",
+            "--include-offscreen",
+            "--limit", "5",
+            "--text", "Enemy"
+        ]);
+        var args = ProtocolJson.Deserialize<QaWorldDumpArgs>(parsed.ToEnvelope().argumentsJson);
+
+        Assert.Equal(CommandKind.QaWorldDump, parsed.Kind);
+        Assert.True(parsed.QaWorldDumpIncludeOffscreen);
+        Assert.Equal(5, parsed.QaDumpLimit);
+        Assert.Equal("Enemy", parsed.QaDumpText);
+        Assert.NotNull(args);
+        Assert.True(args!.includeOffscreen);
+        Assert.Equal(5, args.limit);
+        Assert.Equal("Enemy", args.text);
     }
 
     [Fact]

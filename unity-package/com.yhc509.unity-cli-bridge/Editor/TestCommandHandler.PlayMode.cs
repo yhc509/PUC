@@ -46,7 +46,7 @@ namespace UnityCliBridge.Bridge.Editor
         {
             string runId = Guid.NewGuid().ToString("N");
             int timeoutSec = ResolveTestTimeoutSeconds(args);
-            BeginRun_PersistSession(runId, "play", timeoutSec, args.noDomainReload);
+            BeginRun_PersistSession(runId, "play", timeoutSec, args.noDomainReload, args.failuresOnly);
 
             TestRunnerCallbacks? callbacks = null;
             try
@@ -94,13 +94,13 @@ namespace UnityCliBridge.Bridge.Editor
                 return;
             }
 
-            StartPlayModeWatchdog(runId, timeoutSec, completion, projectHash, requestId);
+            StartPlayModeWatchdog(runId, timeoutSec, completion, projectHash, requestId, args.failuresOnly);
         }
 
         internal static void RestorePlayModeRunFromSession(string runId, int timeoutSeconds)
         {
             EnsurePlayModeCallbacksFromSession(runId);
-            StartPlayModeWatchdog(runId, timeoutSeconds, null, null, null);
+            StartPlayModeWatchdog(runId, timeoutSeconds, null, null, null, GetActiveFailuresOnly());
         }
 
         internal static void MarkRestoredPlayModeRunTimedOut(string runId)
@@ -162,7 +162,8 @@ namespace UnityCliBridge.Bridge.Editor
             int timeoutSec,
             TaskCompletionSource<ResponseEnvelope>? completion,
             string? projectHash,
-            string? requestId)
+            string? requestId,
+            bool failuresOnly)
         {
             StopPlayModeWatchdog();
 
@@ -191,7 +192,8 @@ namespace UnityCliBridge.Bridge.Editor
                             requestId!,
                             projectHash,
                             finalJson!,
-                            0));
+                            0,
+                            failuresOnly));
                     }
                     else if (!startResponseSent)
                     {
@@ -217,7 +219,8 @@ namespace UnityCliBridge.Bridge.Editor
                         requestId!,
                         projectHash,
                         completedJson!,
-                        0));
+                        0,
+                        failuresOnly));
                 }
 
                 if (!startResponseSent

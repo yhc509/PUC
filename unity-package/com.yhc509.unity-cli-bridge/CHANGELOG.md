@@ -4,6 +4,8 @@
 
 ### Added
 - Play Mode mp4 recording via `record start`, `record stop`, `record status`, and `qa run-sequence --record`.
+- `qa ui-dump` and `qa world-dump` now accept token-trimming filters (`--limit`, `--text`, plus UI-only `--interactable-only` and `--omit-rect`) while preserving default output when omitted (#130).
+- List-style responses now have opt-in trims: `read-console --no-stacktrace`, `test list --no-detail`, `test run/results --failures-only`, and `instances list --brief` (#131).
 
 ### Fixed
 - `qa ui-dump` text extraction now stays within each clickable element's owned label subtree, preventing nested clickable controls from borrowing each other's labels.

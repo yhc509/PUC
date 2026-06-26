@@ -2,8 +2,10 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using UnityCli.Protocol;
 using UnityCliBridge.Bridge;
 using UnityEditor;
@@ -431,10 +433,26 @@ namespace UnityCliBridge.Bridge.Editor
 
             List<QaUiElement> elements = CollectClickableUiElements(screenshotWidth, screenshotHeight, screenSize);
             elements.Sort(CompareUiElements);
+            QaUiElement[] filteredElements = QaDumpProjectionUtility.ApplyUiDumpFilters(elements, args);
+            if (args.omitRect)
+            {
+                return JsonConvert.SerializeObject(new
+                {
+                    elements = filteredElements.Select(element => new
+                    {
+                        element.path,
+                        element.type,
+                        element.text,
+                        element.interactable,
+                        element.centerX,
+                        element.centerY,
+                    }).ToArray(),
+                }, BridgeJsonSettings.CamelCaseIgnoreNull);
+            }
 
             return ProtocolJson.Serialize(new QaUiDumpPayload
             {
-                elements = elements.ToArray(),
+                elements = filteredElements,
             });
         }
 
@@ -741,10 +759,29 @@ namespace UnityCliBridge.Bridge.Editor
             List<QaWorldElement> elements = CollectWorldTappables(
                 camera, args.includeOffscreen, screenshotWidth, screenshotHeight, screenSize);
             elements.Sort(CompareWorldElements);
+            QaWorldElement[] filteredElements = QaDumpProjectionUtility.ApplyWorldDumpFilters(elements, args);
+            bool includeOnScreen = QaDumpProjectionUtility.ShouldIncludeWorldOnScreenField(filteredElements, args);
+            bool includeHasAction = QaDumpProjectionUtility.ShouldIncludeWorldHasActionField(filteredElements);
+            bool useTrimProjection = args.limit > 0 || !string.IsNullOrWhiteSpace(args.text);
+            if (useTrimProjection && (!includeOnScreen || !includeHasAction))
+            {
+                return JsonConvert.SerializeObject(new
+                {
+                    elements = filteredElements.Select(element => new
+                    {
+                        element.path,
+                        element.label,
+                        element.centerX,
+                        element.centerY,
+                        onScreen = includeOnScreen ? (bool?)element.onScreen : null,
+                        hasAction = includeHasAction ? (bool?)element.hasAction : null,
+                    }).ToArray(),
+                }, BridgeJsonSettings.CamelCaseIgnoreNull);
+            }
 
             return ProtocolJson.Serialize(new QaWorldDumpPayload
             {
-                elements = elements.ToArray(),
+                elements = filteredElements,
             });
         }
 
