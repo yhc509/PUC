@@ -641,7 +641,8 @@ namespace UnityCliBridge.Bridge.Editor
             string runId,
             string mode,
             int timeoutSeconds,
-            bool noDomainReload)
+            bool noDomainReload,
+            bool failuresOnly = false)
         {
             ClearInlineResultFromSession();
             SessionState.SetString(ProtocolConstants.TestSessionKeyActiveRunId, runId);
@@ -649,6 +650,7 @@ namespace UnityCliBridge.Bridge.Editor
             SessionState.SetString(ProtocolConstants.TestSessionKeyActiveStartedAt, DateTime.UtcNow.ToString("O"));
             SessionState.SetInt(ProtocolConstants.TestSessionKeyActiveTimeoutSeconds, timeoutSeconds);
             SessionState.SetBool(ProtocolConstants.TestSessionKeyActiveNoDomainReload, noDomainReload);
+            SessionState.SetBool(ProtocolConstants.TestSessionKeyActiveFailuresOnly, failuresOnly);
         }
 
         internal static void StoreActiveRunGuid(string runGuid)
@@ -667,6 +669,7 @@ namespace UnityCliBridge.Bridge.Editor
                 SessionState.EraseInt(ProtocolConstants.TestSessionKeyActiveTimeoutSeconds);
                 SessionState.EraseString(ProtocolConstants.TestSessionKeyActiveRunGuid);
                 SessionState.EraseBool(ProtocolConstants.TestSessionKeyActiveNoDomainReload);
+                SessionState.EraseBool(ProtocolConstants.TestSessionKeyActiveFailuresOnly);
                 SessionState.EraseInt(ProtocolConstants.TestSessionKeyProgressCompleted);
                 SessionState.EraseInt(ProtocolConstants.TestSessionKeyProgressTotal);
                 SessionState.EraseInt(ProtocolConstants.TestSessionKeyCallbacksInstanceId);
@@ -775,6 +778,13 @@ namespace UnityCliBridge.Bridge.Editor
 
             startedAtUtc = DateTime.UtcNow;
             return false;
+        }
+
+        internal static bool GetActiveFailuresOnly()
+        {
+            return SessionState.GetBool(
+                ProtocolConstants.TestSessionKeyActiveFailuresOnly,
+                false);
         }
 
         private static bool IsActiveRunPastDeadline(DateTime startedAtUtc, int timeoutSeconds)
