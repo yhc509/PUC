@@ -81,17 +81,32 @@ public sealed class TrimProjectionUtilityTests
     }
 
     [Fact]
-    public void WorldProjection_OnlyIncludesOnScreenWhenIncludeOffscreenHasMixedValues()
+    public void WorldProjection_IncludesOnScreenOnlyWhenIncludeOffscreenRequested()
     {
-        QaWorldElement[] elements =
+        QaWorldElement[] mixed =
         [
             World("Visible", onScreen: true, hasAction: true),
             World("Hidden", onScreen: false, hasAction: true),
         ];
+        QaWorldElement[] singleOffscreen =
+        [
+            World("Hidden", onScreen: false, hasAction: true),
+        ];
+        QaWorldElement[] allOffscreen =
+        [
+            World("Hidden A", onScreen: false, hasAction: true),
+            World("Hidden B", onScreen: false, hasAction: true),
+        ];
 
-        Assert.False(QaDumpProjectionUtility.ShouldIncludeWorldOnScreenField(elements, new QaWorldDumpArgs()));
+        Assert.False(QaDumpProjectionUtility.ShouldIncludeWorldOnScreenField(mixed, new QaWorldDumpArgs()));
         Assert.True(QaDumpProjectionUtility.ShouldIncludeWorldOnScreenField(
-            elements,
+            mixed,
+            new QaWorldDumpArgs { includeOffscreen = true }));
+        Assert.True(QaDumpProjectionUtility.ShouldIncludeWorldOnScreenField(
+            singleOffscreen,
+            new QaWorldDumpArgs { includeOffscreen = true }));
+        Assert.True(QaDumpProjectionUtility.ShouldIncludeWorldOnScreenField(
+            allOffscreen,
             new QaWorldDumpArgs { includeOffscreen = true }));
     }
 
@@ -141,6 +156,30 @@ public sealed class TrimProjectionUtilityTests
     }
 
     [Fact]
+    public void ApplyFailuresOnly_DoesNotMutateOriginalPayload()
+    {
+        var payload = new TestRunResultPayload
+        {
+            runId = "run-1",
+            mode = "edit",
+            status = "Completed",
+            tests =
+            [
+                new TestResultEntry { fullName = "PassedTest", outcome = "Passed" },
+                new TestResultEntry { fullName = "FailedTest", outcome = "Failed" },
+            ],
+        };
+        string originalJson = ProtocolJson.Serialize(payload);
+
+        TestRunResultPayload result = TestResultProjectionUtility.ApplyFailuresOnly(payload, failuresOnly: true);
+
+        Assert.Single(result.tests);
+        Assert.Equal(2, payload.tests.Length);
+        Assert.Equal("PassedTest", payload.tests[0].fullName);
+        Assert.Equal(originalJson, ProtocolJson.Serialize(payload));
+    }
+
+    [Fact]
     public void ApplyFailuresOnly_DefaultReturnsSamePayload()
     {
         var payload = new TestRunResultPayload();
@@ -155,6 +194,80 @@ public sealed class TrimProjectionUtilityTests
     {
         Assert.False(ConsoleLogProjectionUtility.ShouldOmitStackTrace(new ReadConsoleArgs()));
         Assert.True(ConsoleLogProjectionUtility.ShouldOmitStackTrace(new ReadConsoleArgs { noStackTrace = true }));
+    }
+
+    [Fact]
+    public void ConsoleProjection_NoStackTraceDoesNotMutateSourceEntries()
+    {
+        ConsoleLogEntry[] entries =
+        [
+            new ConsoleLogEntry
+            {
+                timestampUtc = "2026-06-26T00:00:00.0000000Z",
+                type = "Error",
+                message = "Boom",
+                stackTrace = "Original stack",
+            },
+        ];
+
+        ConsoleLogEntryWithoutStackTrace[] result = ConsoleLogProjectionUtility.ApplyNoStackTrace(entries);
+        string resultJson = ProtocolJson.Serialize(new { entries = result });
+
+        Assert.Equal("Original stack", entries[0].stackTrace);
+        Assert.Single(result);
+        Assert.Equal("Boom", result[0].message);
+        Assert.DoesNotContain("stackTrace", resultJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QaDumpPayloadSerialization_DefaultUiDumpKeepsLegacyFields()
+    {
+        string json = ProtocolJson.Serialize(new QaUiDumpPayload
+        {
+            elements =
+            [
+                new QaUiElement
+                {
+                    path = "/Canvas[0]/Start[0]",
+                    type = "Button",
+                    text = "Start",
+                    interactable = true,
+                    x = 10,
+                    y = 20,
+                    width = 100,
+                    height = 40,
+                    centerX = 60,
+                    centerY = 40,
+                },
+            ],
+        });
+
+        Assert.Contains("\"interactable\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"x\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"y\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"width\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"height\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"centerX\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"centerY\"", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QaDumpPayloadSerialization_DefaultWorldDumpKeepsLegacyFields()
+    {
+        string json = ProtocolJson.Serialize(new QaWorldDumpPayload
+        {
+            elements =
+            [
+                World("Visible", onScreen: true, hasAction: false),
+            ],
+        });
+
+        Assert.Contains("\"label\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"path\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"centerX\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"centerY\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"onScreen\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"hasAction\"", json, StringComparison.Ordinal);
     }
 
     private static QaUiElement Ui(string text, bool interactable)

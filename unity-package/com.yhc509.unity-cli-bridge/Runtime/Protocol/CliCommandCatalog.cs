@@ -499,7 +499,7 @@ namespace UnityCli.Protocol
                 canUseLocal: false,
                 canUseLive: true,
                 isAllowedWhileBusy: false,
-                notes: new[] { "Returns full test names, assemblies, modes, and categories." }),
+                notes: new[] { "Returns full test names, assemblies, modes, and categories; with --no-detail, returns only fullName and mode." }),
             new CliCommandDescriptor(
                 "test run",
                 "test run --mode <edit|play> [--filter <substring>] [--category <name>] [--assembly <name>] [--no-domain-reload] [--failures-only] [--timeout <seconds>] [--wait]",
@@ -638,7 +638,7 @@ namespace UnityCli.Protocol
             new CliCommandDescriptor(
                 "qa world-dump",
                 "qa world-dump [--include-offscreen] [--limit N] [--text <substring>] [--screenshot-width <int> --screenshot-height <int>]",
-                "Dumps non-UI world objects that opt in via IQaTappable/QaTappable (label, hierarchy path, image-space center, onScreen, hasAction) as JSON; requires Play Mode. Use --limit and --text to reduce payload size; filtered responses omit constant onScreen/hasAction fields when they carry no per-element signal. Feed a returned path to `qa tap --target`. Off-screen objects are excluded unless --include-offscreen is set. Coordinates use the last captured screenshot size unless overridden.",
+                "Dumps non-UI world objects that opt in via IQaTappable/QaTappable (label, hierarchy path, image-space center, onScreen, hasAction) as JSON; requires Play Mode. Use --limit and --text to reduce payload size; filtered responses keep onScreen when --include-offscreen is set, otherwise omit it, and omit constant hasAction when it carries no per-element signal. Feed a returned path to `qa tap --target`. Off-screen objects are excluded unless --include-offscreen is set. Coordinates use the last captured screenshot size unless overridden.",
                 CliCommandGroup.QaWorkflows,
                 ProtocolConstants.CommandQaWorldDump,
                 canUseLocal: false,

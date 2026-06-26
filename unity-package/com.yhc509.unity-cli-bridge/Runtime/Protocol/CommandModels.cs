@@ -556,6 +556,14 @@ namespace UnityCli.Protocol
     }
 
     [Serializable]
+    public sealed class ConsoleLogEntryWithoutStackTrace
+    {
+        public string timestampUtc = string.Empty;
+        public string type = string.Empty;
+        public string message = string.Empty;
+    }
+
+    [Serializable]
     public sealed class QaClickArgs
     {
         public string? qaId;
@@ -882,6 +890,23 @@ namespace UnityCli.Protocol
 
             return args.noStackTrace;
         }
+
+        public static ConsoleLogEntryWithoutStackTrace[] ApplyNoStackTrace(IReadOnlyList<ConsoleLogEntry> entries)
+        {
+            if (entries == null)
+            {
+                throw new ArgumentNullException(nameof(entries));
+            }
+
+            return entries
+                .Select(entry => new ConsoleLogEntryWithoutStackTrace
+                {
+                    timestampUtc = entry.timestampUtc,
+                    type = entry.type,
+                    message = entry.message,
+                })
+                .ToArray();
+        }
     }
 
     public static class QaDumpProjectionUtility
@@ -961,7 +986,7 @@ namespace UnityCli.Protocol
                 throw new ArgumentNullException(nameof(args));
             }
 
-            return args.includeOffscreen && HasMixedOnScreenValues(elements);
+            return args.includeOffscreen;
         }
 
         public static bool ShouldIncludeWorldHasActionField(IReadOnlyList<QaWorldElement> elements)
@@ -972,25 +997,6 @@ namespace UnityCli.Protocol
             }
 
             return elements.Any(element => !element.hasAction);
-        }
-
-        private static bool HasMixedOnScreenValues(IReadOnlyList<QaWorldElement> elements)
-        {
-            if (elements.Count <= 1)
-            {
-                return false;
-            }
-
-            bool first = elements[0].onScreen;
-            for (int index = 1; index < elements.Count; index++)
-            {
-                if (elements[index].onScreen != first)
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
     }
 

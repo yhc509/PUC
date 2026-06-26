@@ -1075,12 +1075,7 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 return JsonConvert.SerializeObject(new
                 {
-                    entries = entries.Select(entry => new
-                    {
-                        entry.timestampUtc,
-                        entry.type,
-                        entry.message,
-                    }).ToArray(),
+                    entries = ConsoleLogProjectionUtility.ApplyNoStackTrace(entries),
                 }, BridgeJsonSettings.CamelCaseIgnoreNull);
             }
 
