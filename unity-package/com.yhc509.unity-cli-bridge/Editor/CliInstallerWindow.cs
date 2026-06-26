@@ -88,13 +88,21 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 GUILayout.Label("Package Info", EditorStyles.boldLabel);
                 EditorGUILayout.LabelField("Package Version", FormatVersion(_packageVersion));
-                if (IsUpdateAvailable())
+
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.LabelField("Latest Release", GetLatestReleaseVersionLabel(), UpdateAvailableLabelStyle);
-                }
-                else
-                {
-                    EditorGUILayout.LabelField("Latest Release", GetLatestReleaseVersionLabel());
+                    EditorGUILayout.PrefixLabel("Latest Release");
+                    EditorGUILayout.LabelField(
+                        GetLatestReleaseVersionLabel(),
+                        IsUpdateAvailable() ? UpdateAvailableLabelStyle : EditorStyles.label);
+
+                    using (new EditorGUI.DisabledScope(_isFetchingLatestVersion))
+                    {
+                        if (GUILayout.Button("Refresh", GUILayout.Width(72f)))
+                        {
+                            RefreshLatestReleaseVersion(true);
+                        }
+                    }
                 }
 
                 DrawLinkButton("Repository", CliInstallerState.GetRepositoryUrl(), "Open Repository");
