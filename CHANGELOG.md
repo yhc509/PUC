@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-06-26
+
+### Added
+- The **Unity CLI Manager** window (`Window > Unity CLI Manager`) now has a **Refresh** button beside the latest-release version in the Package Info section. It re-checks GitHub for the newest published CLI release right away, bypassing the cached value (which otherwise lingers for up to an hour), so a just-published release shows up without waiting for the cache to expire.
+
 ## [0.3.4] - 2026-06-26
 
 ### Added
