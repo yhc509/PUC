@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Play Mode mp4 recording via `record start`, `record stop`, `record status`, and `qa run-sequence --record`.
+
+### Compatibility
+- This package now depends on `com.unity.recorder`; importing projects will pull it in.
+- Recording declares `com.unity.recorder` `2.5.2` as the dependency floor, but the resolved Recorder version varies by Unity version. The feature has been verified with Unity 6 and Recorder `5.1.x`; Unity 2021.3 with Recorder `2.5.x` is a known limitation and has not yet been live-verified.
+
 ## [0.3.3] - 2026-06-21
 
 ### Added
@@ -18,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [0.3.2] - 2026-06-21
 
 ### Added
+- Play Mode mp4 recording via `record start`, `record stop`, `record status`, and `qa run-sequence --record`.
 - `qa click`, `qa tap`, and `qa swipe` now accept `--button left|right` so Play Mode QA can drive right-click and right-drag input paths. The default remains `left`.
 
 ### Fixed
@@ -29,6 +37,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Security
 - Asset path normalization now rejects path-traversal inputs (absolute or drive-qualified paths and `.`/`..` segments) and adds a canonical Assets/Packages containment check, so inputs like `Assets/../ProjectSettings/foo` can no longer escape the intended root (#69).
 - Scene and prefab component patching now refuses serialized fields that are hidden from `inspect`, so the patchable surface matches what `inspect` shows instead of letting hand-written property paths reach internal or non-editable fields. `SerializeReference` (`$type`) assignments are validated against the field's declared type and must be a constructible, assignable type.
+
+### Compatibility
+- This package now depends on `com.unity.recorder`; importing projects will pull it in.
+- Recording declares `com.unity.recorder` `2.5.2` as the dependency floor, but the resolved Recorder version varies by Unity version. The feature has been verified with Unity 6 and Recorder `5.1.x`; Unity 2021.3 with Recorder `2.5.x` is a known limitation and has not yet been live-verified.
 
 ## [0.3.1] - 2026-06-12
 

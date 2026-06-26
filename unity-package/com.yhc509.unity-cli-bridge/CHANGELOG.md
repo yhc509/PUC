@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Play Mode mp4 recording via `record start`, `record stop`, `record status`, and `qa run-sequence --record`.
+
+### Compatibility
+- This package now depends on `com.unity.recorder`; importing projects will pull it in.
+- Recording declares `com.unity.recorder` `2.5.2` as the dependency floor, but the resolved Recorder version varies by Unity version. The feature has been verified with Unity 6 and Recorder `5.1.x`; Unity 2021.3 with Recorder `2.5.x` is a known limitation and has not yet been live-verified.
+
 ## [0.3.3] - 2026-06-21
 
 ### Added

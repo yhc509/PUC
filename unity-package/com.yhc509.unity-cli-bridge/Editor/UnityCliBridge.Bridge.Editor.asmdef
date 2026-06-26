@@ -4,7 +4,8 @@
   "references": [
     "UnityCliBridge.Bridge.Runtime",
     "UnityEditor.TestRunner",
-    "Unity.InputSystem"
+    "Unity.InputSystem",
+    "Unity.Recorder.Editor"
   ],
   "includePlatforms": [
     "Editor"

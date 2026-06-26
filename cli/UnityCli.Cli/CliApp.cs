@@ -281,6 +281,11 @@ public static class CliApp
                     return await PollTestResultsAsync(parsed, target, ipcClient, response, cts.Token);
                 }
 
+                if (ShouldPollRecordStatus(parsed, response))
+                {
+                    return await PollRecordStatusAsync(parsed, target, sendCommandAsync, response, cts.Token);
+                }
+
                 if (ShouldPollEditorReady(parsed, response))
                 {
                     TimeSpan waitTimeout = ResolveEditorReadyWaitTimeout(parsed);
@@ -293,7 +298,7 @@ public static class CliApp
                         timeout: waitTimeout);
                 }
 
-                return NormalizeTestResultEnvelope(parsed.Kind, response);
+                return NormalizeResultEnvelope(parsed.Kind, response);
             }
             catch (Exception ex)
             {
@@ -350,6 +355,13 @@ public static class CliApp
             return totalMs >= int.MaxValue ? int.MaxValue : Math.Max(1, (int)Math.Ceiling(totalMs));
         }
 
+        if (parsed.Kind == CommandKind.RecordStart && parsed.RecordWait)
+        {
+            int durationSeconds = parsed.RecordDuration ?? ProtocolConstants.MaxRecordDurationSeconds;
+            double totalMs = Math.Max(liveTimeoutMs, (durationSeconds + 15) * 1000d);
+            return totalMs >= int.MaxValue ? int.MaxValue : Math.Max(1, (int)Math.Ceiling(totalMs));
+        }
+
         return liveTimeoutMs;
     }
 
@@ -358,6 +370,13 @@ public static class CliApp
         return parsed.Kind == CommandKind.TestRun
             && parsed.TestWait
             && string.Equals(parsed.TestMode, "play", StringComparison.Ordinal)
+            && string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal);
+    }
+
+    internal static bool ShouldPollRecordStatus(ParsedCommand parsed, ResponseEnvelope response)
+    {
+        return parsed.Kind == CommandKind.RecordStart
+            && parsed.RecordWait
             && string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal);
     }
 
@@ -453,6 +472,92 @@ public static class CliApp
         }.ToEnvelope();
 
         return await ipcClient.SendAsync(target, command, ProtocolConstants.DefaultLiveTimeoutMs, cancellationToken);
+    }
+
+    internal static async Task<ResponseEnvelope> PollRecordStatusAsync(
+        ParsedCommand original,
+        InstanceRecord target,
+        Func<InstanceRecord, CommandEnvelope, int, CancellationToken, Task<ResponseEnvelope>> sendAsync,
+        ResponseEnvelope startedResponse,
+        CancellationToken cancellationToken,
+        Func<TimeSpan, CancellationToken, Task>? delayAsync = null,
+        TimeSpan? pollInterval = null)
+    {
+        var started = DeserializeData<RecordStartedPayload>(startedResponse);
+        if (started is null || string.IsNullOrWhiteSpace(started.recordingId))
+        {
+            return startedResponse;
+        }
+
+        delayAsync ??= Task.Delay;
+        TimeSpan interval = pollInterval ?? TimeSpan.FromSeconds(1);
+        int durationSeconds = original.RecordDuration ?? ProtocolConstants.MaxRecordDurationSeconds;
+        DateTime deadline = DateTime.UtcNow.AddSeconds(durationSeconds + 15);
+        while (DateTime.UtcNow < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await delayAsync(interval, cancellationToken);
+
+            var poll = await SendRecordStatusPollAsync(target, sendAsync, started.recordingId, cancellationToken);
+            if (!string.Equals(poll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+            {
+                return poll;
+            }
+
+            poll = NormalizeRecordResultEnvelope(CommandKind.RecordStatus, poll);
+            if (!string.Equals(poll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+            {
+                return poll;
+            }
+
+            var result = DeserializeData<RecordResultPayload>(poll);
+            if (result is null || !string.Equals(result.status, "Recording", StringComparison.Ordinal))
+            {
+                return poll;
+            }
+        }
+
+        var finalPoll = await SendRecordStatusPollAsync(target, sendAsync, started.recordingId, cancellationToken);
+        if (!string.Equals(finalPoll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+        {
+            return finalPoll;
+        }
+
+        finalPoll = NormalizeRecordResultEnvelope(CommandKind.RecordStatus, finalPoll);
+        if (!string.Equals(finalPoll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+        {
+            return finalPoll;
+        }
+
+        var finalResult = DeserializeData<RecordResultPayload>(finalPoll);
+        if (finalResult is not null && string.Equals(finalResult.status, "Recording", StringComparison.Ordinal))
+        {
+            return ResponseEnvelope.Failure(
+                finalPoll.requestId,
+                finalPoll.target,
+                ProtocolConstants.ErrorRecordTimeout,
+                "Recording " + started.recordingId + " did not finalize before the wait timeout.",
+                retryable: false,
+                finalPoll.durationMs,
+                finalPoll.transport,
+                finalPoll.data?.GetRawText());
+        }
+
+        return finalPoll;
+    }
+
+    private static async Task<ResponseEnvelope> SendRecordStatusPollAsync(
+        InstanceRecord target,
+        Func<InstanceRecord, CommandEnvelope, int, CancellationToken, Task<ResponseEnvelope>> sendAsync,
+        string recordingId,
+        CancellationToken cancellationToken)
+    {
+        var command = new ParsedCommand(CommandKind.RecordStatus)
+        {
+            RecordRunId = recordingId,
+        }.ToEnvelope();
+
+        return await sendAsync(target, command, ProtocolConstants.DefaultLiveTimeoutMs, cancellationToken);
     }
 
     internal static async Task<ResponseEnvelope> PollEditorReadyAsync(
@@ -725,7 +830,7 @@ public static class CliApp
             : totalSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
     }
 
-    private static T? DeserializeData<T>(ResponseEnvelope response)
+    internal static T? DeserializeData<T>(ResponseEnvelope response)
     {
         if (!response.data.HasValue)
         {
@@ -747,6 +852,12 @@ public static class CliApp
         }
 
         return JsonSerializer.Deserialize<T>(data.GetRawText(), ProtocolJson.Default);
+    }
+
+    private static ResponseEnvelope NormalizeResultEnvelope(CommandKind kind, ResponseEnvelope response)
+    {
+        response = NormalizeTestResultEnvelope(kind, response);
+        return NormalizeRecordResultEnvelope(kind, response);
     }
 
     internal static ResponseEnvelope NormalizeTestResultEnvelope(CommandKind kind, ResponseEnvelope response)
@@ -774,6 +885,33 @@ public static class CliApp
             ProtocolHelpers.BuildTestRunResultErrorMessage(result));
     }
 
+    internal static ResponseEnvelope NormalizeRecordResultEnvelope(CommandKind kind, ResponseEnvelope response)
+    {
+        if (kind is not (CommandKind.RecordStatus or CommandKind.RecordStop))
+        {
+            return response;
+        }
+
+        if (!string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+        {
+            return response;
+        }
+
+        var result = DeserializeData<RecordResultPayload>(response);
+        if (result is null
+            || string.Equals(result.status, "Recording", StringComparison.Ordinal)
+            || string.Equals(result.status, "Completed", StringComparison.Ordinal))
+        {
+            return response;
+        }
+
+        return BuildRecordResultFailureEnvelope(
+            response,
+            result,
+            GetRecordResultErrorCode(result.status),
+            BuildRecordResultErrorMessage(result));
+    }
+
     private static ResponseEnvelope BuildTestResultFailureEnvelope(
         ResponseEnvelope source,
         TestRunResultPayload result,
@@ -792,6 +930,65 @@ public static class CliApp
     }
 
     private static string GetDataDetailsJson(ResponseEnvelope source, TestRunResultPayload fallback)
+    {
+        if (!source.data.HasValue)
+        {
+            return ProtocolJson.Serialize(fallback);
+        }
+
+        JsonElement data = source.data.Value;
+        if (data.ValueKind == JsonValueKind.String)
+        {
+            string? json = data.GetString();
+            return string.IsNullOrWhiteSpace(json)
+                ? ProtocolJson.Serialize(fallback)
+                : json;
+        }
+
+        return data.GetRawText();
+    }
+
+    private static ResponseEnvelope BuildRecordResultFailureEnvelope(
+        ResponseEnvelope source,
+        RecordResultPayload result,
+        string errorCode,
+        string message)
+    {
+        return ResponseEnvelope.Failure(
+            source.requestId,
+            source.target,
+            errorCode,
+            message,
+            retryable: false,
+            source.durationMs,
+            source.transport,
+            GetRecordDataDetailsJson(source, result));
+    }
+
+    private static string GetRecordResultErrorCode(string? status)
+    {
+        return status switch
+        {
+            "Interrupted" => ProtocolConstants.ErrorRecordInterrupted,
+            "NotFound" => ProtocolConstants.ErrorRecordNotFound,
+            "Failed" => ProtocolConstants.ErrorRecordFailed,
+            _ => ProtocolConstants.ErrorRecordFailed,
+        };
+    }
+
+    private static string BuildRecordResultErrorMessage(RecordResultPayload result)
+    {
+        string id = string.IsNullOrWhiteSpace(result.recordingId) ? "recording" : "Recording " + result.recordingId;
+        return result.status switch
+        {
+            "Interrupted" => id + " was interrupted before it completed.",
+            "NotFound" => id + " was not found.",
+            "Failed" => id + " failed to finalize.",
+            _ => id + " ended with status " + result.status + ".",
+        };
+    }
+
+    private static string GetRecordDataDetailsJson(ResponseEnvelope source, RecordResultPayload fallback)
     {
         if (!source.data.HasValue)
         {

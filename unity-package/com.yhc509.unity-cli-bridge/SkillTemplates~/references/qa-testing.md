@@ -32,7 +32,7 @@ status → play → (입력 시뮬레이션) → 검증 (로그 + 스크린샷) 
 | `qa wait-until --object-exists <path>` | Bridge 폴링 | 오브젝트 존재 대기 |
 | `qa wait-until --object-interactable <path>` | Bridge 폴링 | 버튼/대상 클릭 가능 대기 |
 | `qa wait-until --object-gone <path>` | Bridge 폴링 | 로딩/오브젝트 비활성 또는 파괴 대기 |
-| `qa run-sequence --spec-json @seq.json` | Bridge deferred state machine | 조건 대기와 입력 액션을 한 요청에서 순차 실행 |
+| `qa run-sequence --spec-json @seq.json [--record]` | Bridge deferred state machine | 조건 대기와 입력 액션을 한 요청에서 순차 실행, 선택적으로 mp4 녹화 |
 
 ## 입력 방식 판단 기준
 
@@ -181,7 +181,10 @@ Use `qa run-sequence` when a test needs to wait for state, press or tap, wait ag
 
 ```bash
 ucli qa run-sequence --spec-json @seq-ok.json --timeout 60000 --project "$P" --json
+ucli qa run-sequence --spec-json @seq-ok.json --record --record-path /tmp/qa-seq.mp4 --timeout 60000 --project "$P" --json
 ```
+
+`--record`를 붙이면 sequence가 실행되는 구간만 Unity Recorder로 mp4 캡처하고, 완료 또는 타임아웃 응답의 `recordingPath`에 최종 경로를 담는다. `--record-path`를 생략하면 `Library/com.yhc509.unity-cli-bridge/recordings/` 아래에 저장된다.
 
 `seq-ok.json`:
 

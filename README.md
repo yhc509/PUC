@@ -105,6 +105,10 @@ unity-cli compile --wait                   # Wait until compile/import finishes 
 unity-cli refresh --wait                   # Refresh assets and wait for Editor readiness
 unity-cli screenshot --path /tmp/shot.png  # Game View capture (default), or --view scene
 unity-cli screenshot --format jpg --quality 70 --max-width 1024 --path /tmp/shot.jpg
+unity-cli record start --duration 5 --wait --path /tmp/play.mp4
+unity-cli record start                     # Manual recording; stop with record stop
+unity-cli record status
+unity-cli record stop
 unity-cli read-console --type error        # Check for errors after any operation
 unity-cli execute-menu --list "GameObject" # Browse Unity menus
 unity-cli execute --code "Debug.Log(1);" --force  # Run arbitrary C# (escape hatch)
@@ -119,6 +123,10 @@ unity-cli execute --file my-script.cs --force --timeout 60
 Assign a value to `__pucResult` when the caller needs a structured return value. The response includes `hasResult: true` and `result` as type-preserving JSON, with `float` formatted using G9 and `double` using G17 for round-trip precision. Editor-assembly custom `[PucCommand]` methods can return `ExecuteValueSerializer.Serialize(obj)`; runtime-assembly commands must serialize precise JSON themselves.
 
 `--timeout`(기본 30초, 상한 600초)은 **협력적** cancel입니다. 사용자 코드가 `__pucToken.ThrowIfCancellationRequested()`(또는 다른 token API)를 호출해야 강제 종료됩니다. 호출하지 않으면 main thread를 계속 점유하므로 `--force`를 쓰는 사용자가 책임집니다.
+
+`record start` captures the Play Mode Game View as mp4 via Unity Recorder. It returns `STARTED` plus a `recordingId` immediately; add `--duration N --wait` to auto-stop and poll until the mp4 is finalized. Without `--duration`, stop manually with `record stop`. Outputs default to `Library/com.yhc509.unity-cli-bridge/recordings/`; pass `--path` to move the finalized mp4.
+
+Recording depends on Unity Recorder. The package declares `com.unity.recorder` `2.5.2` as the minimum, while Unity may resolve a newer compatible version for the Editor version in use, such as Recorder `5.1.x` on Unity 6. Recording has been verified with Unity 6 and Recorder `5.1.x`; the Unity 2021.3 plus Recorder `2.5.x` path is a known limitation and has not yet been live-verified.
 
 ### Assets
 
@@ -239,6 +247,7 @@ unity-cli qa wait-until --scene GameScene --timeout 5000
 unity-cli qa wait-until --object-interactable StartButton --timeout 5000
 unity-cli qa wait-until --object-gone LoadingSpinner --timeout 5000
 unity-cli qa run-sequence --spec-json @seq.json --timeout 60000
+unity-cli qa run-sequence --spec-json @seq.json --record --record-path /tmp/qa-seq.mp4
 ```
 
 `qa ui-dump` returns clickable UI elements with hierarchy `path`, visible `text`, `interactable`, and image-space rect/center fields. Feed a returned `path` to `qa click --target`, or `centerX`/`centerY` to `qa tap --x --y`.
@@ -249,7 +258,7 @@ unity-cli qa run-sequence --spec-json @seq.json --timeout 60000
 
 When multiple `qa wait-until` conditions are supplied, every condition must be satisfied (AND). `qa wait-until --object-interactable` waits for an active target whose effective interactable state is true; non-Selectable objects without that state are treated as interactable once active. `qa wait-until --object-gone` waits until an active target can no longer be resolved, which covers deactivated or destroyed objects.
 
-`qa run-sequence` sends a JSON `steps` array to the bridge in one deferred request. Each step waits for all conditions, then runs its actions without a per-step CLI round trip. Conditions can check `active`, `gone`, `transform`, `scene`, `log`, `interactable`, or game state exposed by `IQaQueryable`; `transform` and `query` conditions support `==`, `!=`, `>=`, `<=`, `near`, and `changed`. Actions support `key`, `tap`, `swipe`, and `wait`. On timeout the response reports `completedSteps`, `failedStep.unmet`, and `failedStep.stateSnapshot`.
+`qa run-sequence` sends a JSON `steps` array to the bridge in one deferred request. Each step waits for all conditions, then runs its actions without a per-step CLI round trip. Conditions can check `active`, `gone`, `transform`, `scene`, `log`, `interactable`, or game state exposed by `IQaQueryable`; `transform` and `query` conditions support `==`, `!=`, `>=`, `<=`, `near`, and `changed`. Actions support `key`, `tap`, `swipe`, and `wait`. On timeout the response reports `completedSteps`, `failedStep.unmet`, and `failedStep.stateSnapshot`. Add `--record` to capture the sequence interval as mp4; the response includes `recordingPath` when the recording finalizes.
 
 ```json
 {
