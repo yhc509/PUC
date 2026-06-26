@@ -3,7 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using UnityCli.Protocol;
 using UnityEditor;
 using UnityEditor.TestTools.TestRunner.Api;
@@ -195,11 +197,11 @@ namespace UnityCliBridge.Bridge.Editor
                 Complete(ResponseEnvelope.Success(
                     requestId,
                     projectHash,
-                    ProtocolJson.Serialize(new TestListPayload
+                    SerializeTestListPayload(new TestListPayload
                     {
                         mode = args.mode,
                         tests = tests.ToArray(),
-                    }),
+                    }, args),
                     stopwatch.ElapsedMilliseconds,
                     ProtocolConstants.TransportLive));
             }
@@ -527,7 +529,7 @@ namespace UnityCliBridge.Bridge.Editor
 
             if (File.Exists(filePath))
             {
-                return File.ReadAllText(filePath);
+                return ApplyTestResultProjection(File.ReadAllText(filePath), args.failuresOnly);
             }
 
             string inlineRunId = SessionState.GetString(
@@ -540,7 +542,7 @@ namespace UnityCliBridge.Bridge.Editor
                     string.Empty);
                 if (!string.IsNullOrWhiteSpace(inlineJson))
                 {
-                    return inlineJson;
+                    return ApplyTestResultProjection(inlineJson, args.failuresOnly);
                 }
             }
 
@@ -639,7 +641,8 @@ namespace UnityCliBridge.Bridge.Editor
             string runId,
             string mode,
             int timeoutSeconds,
-            bool noDomainReload)
+            bool noDomainReload,
+            bool failuresOnly = false)
         {
             ClearInlineResultFromSession();
             SessionState.SetString(ProtocolConstants.TestSessionKeyActiveRunId, runId);
@@ -647,6 +650,7 @@ namespace UnityCliBridge.Bridge.Editor
             SessionState.SetString(ProtocolConstants.TestSessionKeyActiveStartedAt, DateTime.UtcNow.ToString("O"));
             SessionState.SetInt(ProtocolConstants.TestSessionKeyActiveTimeoutSeconds, timeoutSeconds);
             SessionState.SetBool(ProtocolConstants.TestSessionKeyActiveNoDomainReload, noDomainReload);
+            SessionState.SetBool(ProtocolConstants.TestSessionKeyActiveFailuresOnly, failuresOnly);
         }
 
         internal static void StoreActiveRunGuid(string runGuid)
@@ -665,6 +669,7 @@ namespace UnityCliBridge.Bridge.Editor
                 SessionState.EraseInt(ProtocolConstants.TestSessionKeyActiveTimeoutSeconds);
                 SessionState.EraseString(ProtocolConstants.TestSessionKeyActiveRunGuid);
                 SessionState.EraseBool(ProtocolConstants.TestSessionKeyActiveNoDomainReload);
+                SessionState.EraseBool(ProtocolConstants.TestSessionKeyActiveFailuresOnly);
                 SessionState.EraseInt(ProtocolConstants.TestSessionKeyProgressCompleted);
                 SessionState.EraseInt(ProtocolConstants.TestSessionKeyProgressTotal);
                 SessionState.EraseInt(ProtocolConstants.TestSessionKeyCallbacksInstanceId);
@@ -775,6 +780,13 @@ namespace UnityCliBridge.Bridge.Editor
             return false;
         }
 
+        internal static bool GetActiveFailuresOnly()
+        {
+            return SessionState.GetBool(
+                ProtocolConstants.TestSessionKeyActiveFailuresOnly,
+                false);
+        }
+
         private static bool IsActiveRunPastDeadline(DateTime startedAtUtc, int timeoutSeconds)
         {
             DateTime deadline = startedAtUtc.AddSeconds(timeoutSeconds + ProtocolConstants.TestRunCancelGraceSeconds);
@@ -833,8 +845,10 @@ namespace UnityCliBridge.Bridge.Editor
             string requestId,
             string? projectHash,
             string resultJson,
-            long durationMs)
+            long durationMs,
+            bool failuresOnly = false)
         {
+            resultJson = ApplyTestResultProjection(resultJson, failuresOnly);
             if (TryDeserializeTestRunResult(resultJson, out TestRunResultPayload result)
                 && ProtocolHelpers.IsTestRunResultStatusError(result.status))
             {
@@ -874,6 +888,39 @@ namespace UnityCliBridge.Bridge.Editor
 
             result = new TestRunResultPayload();
             return false;
+        }
+
+        private static string SerializeTestListPayload(TestListPayload payload, TestListArgs args)
+        {
+            if (TestResultProjectionUtility.ShouldIncludeTestListDetail(args))
+            {
+                return ProtocolJson.Serialize(payload);
+            }
+
+            return JsonConvert.SerializeObject(new
+            {
+                payload.mode,
+                tests = payload.tests.Select(test => new
+                {
+                    test.fullName,
+                    test.mode,
+                }).ToArray(),
+            }, BridgeJsonSettings.CamelCaseIgnoreNull);
+        }
+
+        private static string ApplyTestResultProjection(string resultJson, bool failuresOnly)
+        {
+            if (!failuresOnly)
+            {
+                return resultJson;
+            }
+
+            if (!TryDeserializeTestRunResult(resultJson, out TestRunResultPayload result))
+            {
+                return resultJson;
+            }
+
+            return ProtocolJson.Serialize(TestResultProjectionUtility.ApplyFailuresOnly(result, failuresOnly));
         }
 
         private static void CleanupStaleTestRunTempFiles()

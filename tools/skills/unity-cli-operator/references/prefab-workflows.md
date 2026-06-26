@@ -10,10 +10,10 @@
 ## 생성 흐름
 
 ```bash
-ucli prefab create --project "$PROJECT_ROOT" --path Assets/Prefabs/Enemy.prefab --spec-file /tmp/enemy-prefab.json --force --output compact
+ucli prefab create --project "$PROJECT" --path Assets/Prefabs/Enemy.prefab --spec-file /tmp/enemy-prefab.json --force --output compact
 ```
 
-빠르게 시작할 때는 `assets/prefab-create-basic.json`을 복사해서 수정한다.
+빠르게 시작할 때는 설치된 스킬의 `assets/prefab-create-basic.json`을 복사해서 수정한다.
 
 > **spec에는 `root` 래핑이 필수다.** `{"root": {"name": "Enemy", "children": [...]}}` 형식으로 작성한다. `root` 없이 바로 `{"name": "Enemy"}`를 넣으면 파싱 실패한다.
 
@@ -21,10 +21,10 @@ ucli prefab create --project "$PROJECT_ROOT" --path Assets/Prefabs/Enemy.prefab 
 
 ```bash
 # 구조 확인 (깊이 제한 + 기본값 생략)
-ucli prefab inspect --project "$PROJECT_ROOT" --path Assets/Prefabs/Enemy.prefab --max-depth 2 --omit-defaults --output compact
+ucli prefab inspect --project "$PROJECT" --path Assets/Prefabs/Enemy.prefab --max-depth 2 --omit-defaults --output compact
 
 # component 값까지 확인 (patch 전 필수)
-ucli prefab inspect --project "$PROJECT_ROOT" --path Assets/Prefabs/Enemy.prefab --with-values --output compact
+ucli prefab inspect --project "$PROJECT" --path Assets/Prefabs/Enemy.prefab --with-values --output compact
 ```
 
 inspect 결과에서 꼭 보는 값:
@@ -38,7 +38,7 @@ inspect 결과에서 꼭 보는 값:
 ## 수정 흐름
 
 ```bash
-ucli prefab patch --project "$PROJECT_ROOT" --path Assets/Prefabs/Enemy.prefab --spec-file /tmp/enemy-patch.json --output compact
+ucli prefab patch --project "$PROJECT" --path Assets/Prefabs/Enemy.prefab --spec-file /tmp/enemy-patch.json --output compact
 ```
 
 지원 op:
@@ -50,7 +50,7 @@ ucli prefab patch --project "$PROJECT_ROOT" --path Assets/Prefabs/Enemy.prefab -
 - `remove-component`
 - `set-component-values`
 
-빠르게 시작할 때는 `assets/prefab-patch-boxcollider.json`�� 기준으로 잡는다.
+빠르게 시작할 때는 설치된 스킬의 `assets/prefab-patch-boxcollider.json`을 기준으로 잡는다.
 
 ### set-node vs set-component-values
 

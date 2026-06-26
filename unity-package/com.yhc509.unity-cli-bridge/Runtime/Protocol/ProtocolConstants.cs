@@ -126,6 +126,7 @@ namespace UnityCli.Protocol
         public const string TestSessionKeyActiveTimeoutSeconds = "UCB.Test.activeTimeoutSeconds";
         public const string TestSessionKeyActiveRunGuid = "UCB.Test.activeRunGuid";
         public const string TestSessionKeyActiveNoDomainReload = "UCB.Test.activeNoDomainReload";
+        public const string TestSessionKeyActiveFailuresOnly = "UCB.Test.activeFailuresOnly";
         public const string TestSessionKeyProgressCompleted = "UCB.Test.progress.completed";
         public const string TestSessionKeyProgressTotal = "UCB.Test.progress.total";
         public const string TestSessionKeyInlineResultRunId = "UCB.Test.inlineResult.runId";

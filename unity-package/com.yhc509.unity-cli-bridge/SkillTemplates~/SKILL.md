@@ -10,18 +10,10 @@ description: "Use when the user wants to operate Unity through Unity CLI Bridge 
 ## Quick Workflow
 
 1. 실행 파일을 찾는다.
-- 우선순위는 `UNITY_CLI_BIN` 환경 변수, `unity-cli` (PATH 상의 설치된 바이너리), 현재 작업 디렉터리나 상위 디렉터리의 `unity-cli` 실행 파일 순서다.
-- `ucli`가 PATH에 있으면 그대로 사용한다. 매 호출마다 변수를 재정의하지 않는다.
-- 셋 다 없으면 `unity-cli`를 먼저 설치하고 PATH를 잡는다. 필요하면 `ucli` 같은 짧은 alias를 추가한다.
+- 우선순위, `ucli` alias, 설치 fallback은 [references/command-flows.md](references/command-flows.md)의 `실행 파일 찾기`를 따른다.
 
 2. **대상 프로젝트를 결정하고 `--project`를 항상 명시한다.**
-- CLI는 `--project` 없이 호출하면 아무 live 인스턴스에 연결한다. **의도하지 않은 프로젝트에 명령이 실행될 수 있으므로 반드시 명시한다.**
-- 프로젝트 결정 우선순위:
-  1. 사용자가 프로젝트를 명시적으로 지정한 경우 → 그대로 사용
-  2. 현재 작업 디렉터리(`pwd -P`)가 Unity 프로젝트 내부인 경우 → 해당 프로젝트
-  3. 여러 프로젝트가 실행 중이면 `instances list`로 확인 후 사용자에게 물어본다
-- macOS에서는 항상 `pwd -P`로 실제 경로를 사용한다.
-- `--project`는 프로젝트 이름(예: `<your-project>`)이나 전체 경로 모두 가능하다.
+- `--project` 명시, `pwd -P`, 다중 인스턴스 라우팅은 [references/command-flows.md](references/command-flows.md)의 `프로젝트 결정`을 따른다.
 
 3. 쓰기 작업 전에는 상태를 본다.
 - 먼저 `status --json --project <name>`으로 live 연결, busy 상태, 현재 프로젝트가 맞는지 확인한다.
@@ -33,7 +25,7 @@ description: "Use when the user wants to operate Unity through Unity CLI Bridge 
 - 문제 해결은 `references/troubleshooting.md`
 
 5. 작업 뒤에는 반드시 검증한다.
-- live 작업 뒤에는 `read-console --limit N --output compact` 한 번으로 error/warning/log를 함께 본다. `--type`을 생략하면 모든 타입이 반환되므로 호출을 error/warning 2회로 나눌 필요가 없다. 특정 타입만 필요할 때만 `--type error`로 좁힌다.
+- live 작업 뒤 검증 루틴과 `read-console --no-stacktrace --output compact` 패턴은 [references/command-flows.md](references/command-flows.md)의 `검증 루틴`을 따른다.
 
 ## Operating Rules
 
@@ -42,7 +34,7 @@ description: "Use when the user wants to operate Unity through Unity CLI Bridge 
 - `execute --code 'Debug.Log(__pucArgsJson);' --args '{"k":"v"}' --force`로 넘긴 JSON은 사용자 코드에서 `__pucArgsJson` 문자열 변수로 읽는다.
 - `execute --args` 사용자 코드에서는 wrapper 예약 prefix인 `__puc_internal_*` 변수를 선언하지 않는다.
 - `execute --args` 값에는 secret/credential을 넣지 않는다. CodeDOM 컴파일 중 OS temp에 `.cs` 파일이 잠시 생성될 수 있다.
-- **LLM이 소비하는 명령에는 `--output compact`를 기본으로 붙인다.** envelope 메타를 제거하여 토큰을 절약한다.
+- **LLM이 소비하는 명령에는 `--output compact`를 기본으로 붙인다.** 이유와 예외는 [references/command-flows.md](references/command-flows.md)의 `상태 확인` 절 설명을 따른다.
 - `scene patch` 전에는 가능하면 `scene inspect --with-values`를 먼저 실행해서 GameObject path와 field 이름을 확인한다.
 - `prefab patch` 전에는 가능하면 `prefab inspect --with-values`를 먼저 실행해서 path와 field 이름을 확인한다.
 - inspect 응답이 클 때는 `--max-depth N`으로 깊이를 제한하고 `--omit-defaults`로 기본값을 생략한다. **`--with-values`에는 항상 `--omit-defaults`를 함께 붙여** 0/null/false/빈 값 기본값을 잘라낸다(컴포넌트당 30~55% 절약).
@@ -58,7 +50,7 @@ description: "Use when the user wants to operate Unity through Unity CLI Bridge 
 - Play Mode 영상을 남겨야 하면 `record start --duration N --wait --path /tmp/out.mp4`를 쓴다. 수동 녹화는 `record start` 후 `record status`, `record stop` 순서로 종료한다. `record start`는 Play Mode 전용이며 Unity Recorder dependency가 필요하다.
 - `qa tap --x --y`에는 `screenshot`에서 확인한 이미지 좌표를 그대로 넣는다. 응답의 `imageOrigin`은 `top-left`, `coordinateOrigin`은 `bottom-left`다.
 - 별도 Y-flip이나 해상도 스케일 변환은 하지 않는다. Bridge가 마지막 `screenshot` 크기 또는 명시한 `--screenshot-width`/`--screenshot-height`를 기준으로 내부 처리한다.
-- 좌표를 추측하지 말고 탭 대상을 먼저 열거한다: uGUI 버튼은 `qa ui-dump --output compact`, 비-UI 월드 오브젝트(전투 그리드 유닛 등)는 `qa world-dump --output compact`. 둘 다 `centerX`/`centerY` 이미지 좌표를 그대로 반환하며, 대형 화면 dump에서는 envelope 제거 효과가 특히 크다.
+- 좌표를 추측하지 말고 탭 대상을 먼저 열거한다: uGUI 버튼은 `qa ui-dump --limit 30 --interactable-only --omit-rect --output compact`, 비-UI 월드 오브젝트(전투 그리드 유닛 등)는 `qa world-dump --limit 30 --output compact`. 찾을 텍스트/라벨을 알면 `--text <substring>`으로 서버사이드 필터링한다. 둘 다 `centerX`/`centerY` 이미지 좌표를 그대로 반환하며, 대형 화면 dump에서는 envelope 제거 효과가 특히 크다.
 - `qa world-dump`는 게임이 opt-in한 오브젝트만 본다: 게임 컴포넌트가 `UnityCliBridge.Bridge.IQaTappable`을 구현하거나 `QaTappable` 마커를 부착해야 한다. 화면 밖은 `--include-offscreen`을 줄 때만 포함된다.
 - 열거된 월드 오브젝트는 `qa tap --target <path>`로 탭한다. 오브젝트의 `TryQaTap()`이 처리하면 그대로, 아니면 anchor 좌표에 Input System 탭을 주입한다 — `qa tap --x --y`(EventSystem)가 닿지 않는 raw Input System polling 입력에도 도달한다. 같은 이름 형제는 첫 매치로만 잡히니 고유 이름/label을 부여한다. 상세는 [references/qa-testing.md](references/qa-testing.md).
 - 조건 대기와 다단계 입력은 `qa run-sequence --spec-json @file`로 한 번에 보낸다. 영상이 필요하면 `--record --record-path /tmp/seq.mp4`를 붙여 sequence 구간만 mp4로 남긴다. 상세는 [references/qa-testing.md](references/qa-testing.md).

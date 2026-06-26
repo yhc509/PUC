@@ -30,7 +30,7 @@ public static class CliApp
             var response = parsed.Kind switch
             {
                 CommandKind.Status => await RunStatusAsync(registryStore, projectRoot),
-                CommandKind.InstancesList => ListInstances(registryStore, projectRoot),
+                CommandKind.InstancesList => ListInstances(registryStore, projectRoot, parsed),
                 CommandKind.InstancesUse => UseInstance(registryStore, parsed),
                 CommandKind.Doctor => await RunDoctorAsync(registryStore, locator, parsed, projectRoot),
                 CommandKind.QaWait => await RunQaWait(parsed),
@@ -91,22 +91,37 @@ public static class CliApp
         return locator.TryFindProjectRoot(Environment.CurrentDirectory);
     }
 
-    private static ResponseEnvelope ListInstances(InstanceRegistryStore registryStore, string? projectRoot)
+    private static ResponseEnvelope ListInstances(InstanceRegistryStore registryStore, string? projectRoot, ParsedCommand parsed)
     {
         var registry = registryStore.Load();
         var canonicalCurrent = !string.IsNullOrWhiteSpace(projectRoot)
             ? ProtocolConstants.GetCanonicalPath(projectRoot)
             : null;
-        var data = new
-        {
-            activeProjectRoot = registry.activeProjectRoot,
-            currentProjectRoot = canonicalCurrent,
-            currentProjectHash = canonicalCurrent != null ? ProtocolConstants.ComputeProjectHash(canonicalCurrent) : null,
-            instances = registry.instances
-                .OrderBy(item => item.projectName, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(item => item.projectRoot, StringComparer.OrdinalIgnoreCase)
-                .ToArray(),
-        };
+        var sortedInstances = registry.instances
+            .OrderBy(item => item.projectName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.projectRoot, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        object data = parsed.InstancesBrief
+            ? new
+            {
+                activeProjectRoot = registry.activeProjectRoot,
+                currentProjectRoot = canonicalCurrent,
+                currentProjectHash = canonicalCurrent != null ? ProtocolConstants.ComputeProjectHash(canonicalCurrent) : null,
+                instances = sortedInstances.Select(item => new
+                {
+                    item.projectName,
+                    item.projectRoot,
+                    item.projectHash,
+                    item.state,
+                }).ToArray(),
+            }
+            : new
+            {
+                activeProjectRoot = registry.activeProjectRoot,
+                currentProjectRoot = canonicalCurrent,
+                currentProjectHash = canonicalCurrent != null ? ProtocolConstants.ComputeProjectHash(canonicalCurrent) : null,
+                instances = sortedInstances,
+            };
 
         return ResponseEnvelope.Success(
             Guid.NewGuid().ToString("N"),
@@ -414,7 +429,12 @@ public static class CliApp
             cancellationToken.ThrowIfCancellationRequested();
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
 
-            var poll = await SendTestResultsPollAsync(target, ipcClient, started.runId, cancellationToken);
+            var poll = await SendTestResultsPollAsync(
+                target,
+                ipcClient,
+                started.runId,
+                original.TestFailuresOnly,
+                cancellationToken);
             if (!string.Equals(poll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
             {
                 return poll;
@@ -438,7 +458,12 @@ public static class CliApp
             }
         }
 
-        var finalPoll = await SendTestResultsPollAsync(target, ipcClient, started.runId, cancellationToken);
+        var finalPoll = await SendTestResultsPollAsync(
+            target,
+            ipcClient,
+            started.runId,
+            original.TestFailuresOnly,
+            cancellationToken);
         finalPoll = NormalizeTestResultEnvelope(CommandKind.TestRun, finalPoll);
         if (!string.Equals(finalPoll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
         {
@@ -464,11 +489,13 @@ public static class CliApp
         InstanceRecord target,
         LocalIpcClient ipcClient,
         string runId,
+        bool failuresOnly,
         CancellationToken cancellationToken)
     {
         var command = new ParsedCommand(CommandKind.TestResults)
         {
             TestRunId = runId,
+            TestFailuresOnly = failuresOnly,
         }.ToEnvelope();
 
         return await ipcClient.SendAsync(target, command, ProtocolConstants.DefaultLiveTimeoutMs, cancellationToken);

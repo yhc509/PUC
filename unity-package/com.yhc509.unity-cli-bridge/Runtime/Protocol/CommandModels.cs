@@ -172,6 +172,7 @@ namespace UnityCli.Protocol
     {
         public int limit = ProtocolConstants.DefaultConsoleLimit;
         public string? type;
+        public bool noStackTrace;
     }
 
     [Serializable]
@@ -555,6 +556,14 @@ namespace UnityCli.Protocol
     }
 
     [Serializable]
+    public sealed class ConsoleLogEntryWithoutStackTrace
+    {
+        public string timestampUtc = string.Empty;
+        public string type = string.Empty;
+        public string message = string.Empty;
+    }
+
+    [Serializable]
     public sealed class QaClickArgs
     {
         public string? qaId;
@@ -592,6 +601,10 @@ namespace UnityCli.Protocol
     {
         public int screenshotWidth;
         public int screenshotHeight;
+        public int limit;
+        public bool interactableOnly;
+        public string text = string.Empty;
+        public bool omitRect;
     }
 
     [Serializable]
@@ -621,6 +634,8 @@ namespace UnityCli.Protocol
         public int screenshotWidth;
         public int screenshotHeight;
         public bool includeOffscreen;
+        public int limit;
+        public string text = string.Empty;
     }
 
     [Serializable]
@@ -781,6 +796,7 @@ namespace UnityCli.Protocol
     public sealed class TestListArgs
     {
         public string mode = "all";
+        public bool noDetail;
     }
 
     [Serializable]
@@ -808,6 +824,7 @@ namespace UnityCli.Protocol
         public string assembly = string.Empty;
         public bool noDomainReload;
         public int timeoutSeconds;
+        public bool failuresOnly;
     }
 
     [Serializable]
@@ -823,6 +840,7 @@ namespace UnityCli.Protocol
     public sealed class TestResultsArgs
     {
         public string runId = string.Empty;
+        public bool failuresOnly;
     }
 
     [Serializable]
@@ -859,5 +877,171 @@ namespace UnityCli.Protocol
         public long durationMs;
         public string message = string.Empty;
         public string stackTrace = string.Empty;
+    }
+
+    public static class ConsoleLogProjectionUtility
+    {
+        public static bool ShouldOmitStackTrace(ReadConsoleArgs args)
+        {
+            if (args == null)
+            {
+                throw new ArgumentNullException(nameof(args));
+            }
+
+            return args.noStackTrace;
+        }
+
+        public static ConsoleLogEntryWithoutStackTrace[] ApplyNoStackTrace(IReadOnlyList<ConsoleLogEntry> entries)
+        {
+            if (entries == null)
+            {
+                throw new ArgumentNullException(nameof(entries));
+            }
+
+            return entries
+                .Select(entry => new ConsoleLogEntryWithoutStackTrace
+                {
+                    timestampUtc = entry.timestampUtc,
+                    type = entry.type,
+                    message = entry.message,
+                })
+                .ToArray();
+        }
+    }
+
+    public static class QaDumpProjectionUtility
+    {
+        public static QaUiElement[] ApplyUiDumpFilters(IReadOnlyList<QaUiElement> elements, QaUiDumpArgs args)
+        {
+            if (elements == null)
+            {
+                throw new ArgumentNullException(nameof(elements));
+            }
+
+            if (args == null)
+            {
+                throw new ArgumentNullException(nameof(args));
+            }
+
+            IEnumerable<QaUiElement> query = elements;
+            if (args.interactableOnly)
+            {
+                query = query.Where(element => element.interactable);
+            }
+
+            string textFilter = args.text == null ? string.Empty : args.text.Trim();
+            if (!string.IsNullOrEmpty(textFilter))
+            {
+                query = query.Where(element =>
+                    element.text != null
+                    && element.text.IndexOf(textFilter, StringComparison.OrdinalIgnoreCase) >= 0);
+            }
+
+            if (args.limit > 0)
+            {
+                query = query.Take(args.limit);
+            }
+
+            return query.ToArray();
+        }
+
+        public static QaWorldElement[] ApplyWorldDumpFilters(IReadOnlyList<QaWorldElement> elements, QaWorldDumpArgs args)
+        {
+            if (elements == null)
+            {
+                throw new ArgumentNullException(nameof(elements));
+            }
+
+            if (args == null)
+            {
+                throw new ArgumentNullException(nameof(args));
+            }
+
+            IEnumerable<QaWorldElement> query = elements;
+            string textFilter = args.text == null ? string.Empty : args.text.Trim();
+            if (!string.IsNullOrEmpty(textFilter))
+            {
+                query = query.Where(element =>
+                    element.label != null
+                    && element.label.IndexOf(textFilter, StringComparison.OrdinalIgnoreCase) >= 0);
+            }
+
+            if (args.limit > 0)
+            {
+                query = query.Take(args.limit);
+            }
+
+            return query.ToArray();
+        }
+
+        public static bool ShouldIncludeWorldOnScreenField(IReadOnlyList<QaWorldElement> elements, QaWorldDumpArgs args)
+        {
+            if (elements == null)
+            {
+                throw new ArgumentNullException(nameof(elements));
+            }
+
+            if (args == null)
+            {
+                throw new ArgumentNullException(nameof(args));
+            }
+
+            return args.includeOffscreen;
+        }
+
+        public static bool ShouldIncludeWorldHasActionField(IReadOnlyList<QaWorldElement> elements)
+        {
+            if (elements == null)
+            {
+                throw new ArgumentNullException(nameof(elements));
+            }
+
+            return elements.Any(element => !element.hasAction);
+        }
+    }
+
+    public static class TestResultProjectionUtility
+    {
+        public static TestRunResultPayload ApplyFailuresOnly(TestRunResultPayload payload, bool failuresOnly)
+        {
+            if (payload == null)
+            {
+                throw new ArgumentNullException(nameof(payload));
+            }
+
+            if (!failuresOnly)
+            {
+                return payload;
+            }
+
+            return new TestRunResultPayload
+            {
+                runId = payload.runId,
+                mode = payload.mode,
+                status = payload.status,
+                startedAt = payload.startedAt,
+                durationMs = payload.durationMs,
+                summary = payload.summary,
+                tests = (payload.tests ?? Array.Empty<TestResultEntry>())
+                    .Where(entry => !IsPassed(entry))
+                    .ToArray(),
+                warnings = payload.warnings,
+            };
+        }
+
+        public static bool ShouldIncludeTestListDetail(TestListArgs args)
+        {
+            if (args == null)
+            {
+                throw new ArgumentNullException(nameof(args));
+            }
+
+            return !args.noDetail;
+        }
+
+        private static bool IsPassed(TestResultEntry entry)
+        {
+            return string.Equals(entry.outcome, "Passed", StringComparison.OrdinalIgnoreCase);
+        }
     }
 }

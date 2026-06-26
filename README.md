@@ -110,6 +110,7 @@ unity-cli record start                     # Manual recording; stop with record 
 unity-cli record status
 unity-cli record stop
 unity-cli read-console --type error        # Check for errors after any operation
+unity-cli read-console --type error --no-stacktrace
 unity-cli execute-menu --list "GameObject" # Browse Unity menus
 unity-cli execute --code "Debug.Log(1);" --force  # Run arbitrary C# (escape hatch)
 unity-cli execute --code "Debug.Log(__pucArgsJson);" --args '{"k":"v"}' --force
@@ -214,12 +215,13 @@ unity-cli package search --query "input"
 
 ```bash
 unity-cli test list --mode all
+unity-cli test list --mode all --no-detail
 unity-cli test run --mode edit --filter PlayerControllerTests
-unity-cli test run --mode play --filter Smoke --wait
-unity-cli test results --run-id <runId>
+unity-cli test run --mode play --filter Smoke --wait --failures-only
+unity-cli test results --run-id <runId> --failures-only
 ```
 
-`test run --mode edit` returns a synchronous result payload. `test run --mode play` starts the run and returns `STARTED` plus a `runId`; add `--wait` when the CLI should poll until the PlayMode result is ready. `--filter` is a case-insensitive substring match against each test's full name (`Namespace.Class.Method`), so a value like `Smoke` also matches every method on a `SmokeTests` class — when the class and method share a prefix, narrow it with a more specific fragment such as `Smoke_`. Cached results are stored under `Library/com.yhc509.unity-cli-bridge/test-runs/<runId>.json` and can be retrieved with `test results`. A non-`Completed` cached run result returns an error envelope and CLI exit code 1.
+`test run --mode edit` returns a synchronous result payload. `test run --mode play` starts the run and returns `STARTED` plus a `runId`; add `--wait` when the CLI should poll until the PlayMode result is ready. `--filter` is a case-insensitive substring match against each test's full name (`Namespace.Class.Method`), so a value like `Smoke` also matches every method on a `SmokeTests` class — when the class and method share a prefix, narrow it with a more specific fragment such as `Smoke_`. Cached results are stored under `Library/com.yhc509.unity-cli-bridge/test-runs/<runId>.json` and can be retrieved with `test results`. A non-`Completed` cached run result returns an error envelope and CLI exit code 1. Add `--failures-only` to `test run` or `test results` to keep summary counts intact while trimming `tests[]` to non-passed entries; add `--no-detail` to `test list` to return only `fullName` and `mode`.
 
 `--no-domain-reload` is an opt-in PlayMode-only speed option. It can avoid 30-120 seconds of domain reload overhead, but static state can leak between runs, so only use it for suites that reset their own state:
 
@@ -236,7 +238,9 @@ unity-cli qa click --qa-id StartButton
 unity-cli screenshot --view game --path /tmp/qa-reference.png
 unity-cli screenshot --view game --format jpg --quality 70 --max-width 1024 --path /tmp/qa-reference.jpg
 unity-cli qa ui-dump --json
+unity-cli qa ui-dump --text Start --interactable-only --limit 20 --omit-rect --json
 unity-cli qa world-dump --json
+unity-cli qa world-dump --text Enemy --limit 20 --json
 unity-cli qa tap --x 400 --y 300
 unity-cli qa tap --target /Battle/Units/Unit_Erich
 unity-cli qa tap --target /Battle/EndTurnZone --button right
@@ -250,9 +254,9 @@ unity-cli qa run-sequence --spec-json @seq.json --timeout 60000
 unity-cli qa run-sequence --spec-json @seq.json --record --record-path /tmp/qa-seq.mp4
 ```
 
-`qa ui-dump` returns clickable UI elements with hierarchy `path`, visible `text`, `interactable`, and image-space rect/center fields. Feed a returned `path` to `qa click --target`, or `centerX`/`centerY` to `qa tap --x --y`.
+`qa ui-dump` returns clickable UI elements with hierarchy `path`, visible `text`, `interactable`, and image-space rect/center fields. Feed a returned `path` to `qa click --target`, or `centerX`/`centerY` to `qa tap --x --y`. Add `--limit N`, `--interactable-only`, and `--text <substring>` to filter server-side after top-to-bottom sorting; add `--omit-rect` to omit `x`/`y`/`width`/`height` while keeping `centerX`/`centerY`.
 
-`qa world-dump` lists non-UI world objects that opt in via `IQaTappable` (implement on your own component) or the `QaTappable` marker component. Each entry has a `label`, hierarchy `path`, image-space `centerX`/`centerY`, `onScreen`, and `hasAction`. Feed a `path` to `qa tap --target`: left click invokes the object's `TryQaTap()` action when present, otherwise simulates an Input System tap at the object's anchor; right click uses pointer handlers when available and otherwise simulates right-button Input System input. Off-screen objects are excluded unless `--include-offscreen` is passed.
+`qa world-dump` lists non-UI world objects that opt in via `IQaTappable` (implement on your own component) or the `QaTappable` marker component. Each entry has a `label`, hierarchy `path`, image-space `centerX`/`centerY`, `onScreen`, and `hasAction`. Feed a `path` to `qa tap --target`: left click invokes the object's `TryQaTap()` action when present, otherwise simulates an Input System tap at the object's anchor; right click uses pointer handlers when available and otherwise simulates right-button Input System input. Off-screen objects are excluded unless `--include-offscreen` is passed. Add `--limit N` and `--text <substring>` to filter server-side; filtered responses keep `onScreen` when `--include-offscreen` is passed, otherwise omit it, and omit constant `hasAction` when it carries no per-element signal.
 
 `qa click`, `qa tap`, and `qa swipe` default to `--button left`; pass `--button right` to drive right-click or right-drag input paths.
 
@@ -296,6 +300,14 @@ unity-cli material info --path ... --omit-defaults                  # 71% smalle
 
 # --max-depth: limit hierarchy traversal depth
 unity-cli scene inspect --path ... --max-depth 2
+
+# dump/test/list trims: opt in only, default output remains unchanged
+unity-cli qa ui-dump --text Start --interactable-only --limit 10 --omit-rect
+unity-cli qa world-dump --text Enemy --limit 10
+unity-cli read-console --limit 20 --no-stacktrace
+unity-cli test run --mode edit --filter Player --failures-only
+unity-cli test list --mode all --no-detail
+unity-cli instances list --brief
 ```
 
 ## Repository Structure

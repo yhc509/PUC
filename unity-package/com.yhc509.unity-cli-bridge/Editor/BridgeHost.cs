@@ -5,11 +5,13 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
+using System.Linq;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using UnityCli.Protocol;
 using UnityEditor;
 using UnityEditor.Compilation;
@@ -1069,6 +1071,14 @@ namespace UnityCliBridge.Bridge.Editor
             ReadConsoleArgs args = ProtocolJson.Deserialize<ReadConsoleArgs>(argumentsJson) ?? new ReadConsoleArgs();
             int limit = args.limit <= 0 ? ProtocolConstants.DefaultConsoleLimit : args.limit;
             ConsoleLogEntry[] entries = ConsoleLogBuffer.Read(limit, args.type);
+            if (ConsoleLogProjectionUtility.ShouldOmitStackTrace(args))
+            {
+                return JsonConvert.SerializeObject(new
+                {
+                    entries = ConsoleLogProjectionUtility.ApplyNoStackTrace(entries),
+                }, BridgeJsonSettings.CamelCaseIgnoreNull);
+            }
+
             return ProtocolJson.Serialize(new ReadConsolePayload { entries = entries });
         }
 
