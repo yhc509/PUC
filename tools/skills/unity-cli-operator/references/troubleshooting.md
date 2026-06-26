@@ -25,7 +25,8 @@
 ## 로그 확인
 
 - 성공 응답만 보고 닫지 않는다.
-- live 작업 뒤에는 항상 `read-console --type error`와 `--type warning`을 같이 본다.
+- live 작업 뒤에는 먼저 `read-console --no-stacktrace --output compact` 한 번으로 error/warning/log를 같이 본다.
+- 특정 타입만 필요할 때만 `--type error`나 `--type warning`으로 좁힌다.
 - 새 에러나 경고가 있으면 먼저 그 원인을 설명하고, 성공으로 보고하지 않는다.
 
 ## Test Runner 에러 코드

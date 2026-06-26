@@ -10,18 +10,10 @@ description: "Use when the user wants to operate Unity through Unity CLI Bridge 
 ## Quick Workflow
 
 1. 실행 파일을 찾는다.
-- 우선순위는 `UNITY_CLI_BIN` 환경 변수, `unity-cli` (PATH 상의 설치된 바이너리), 현재 작업 디렉터리나 상위 디렉터리의 `unity-cli` 실행 파일 순서다.
-- `ucli`가 PATH에 있으면 그대로 사용한다. 매 호출마다 변수를 재정의하지 않는다.
-- 셋 다 없으면 `unity-cli`를 먼저 설치하고 PATH를 잡는다. 필요하면 `ucli` 같은 짧은 alias를 추가한다.
+- 우선순위, `ucli` alias, 설치 fallback은 [references/command-flows.md](references/command-flows.md)의 `실행 파일 찾기`를 따른다.
 
 2. **대상 프로젝트를 결정하고 `--project`를 항상 명시한다.**
-- CLI는 `--project` 없이 호출하면 아무 live 인스턴스에 연결한다. **의도하지 않은 프로젝트에 명령이 실행될 수 있으므로 반드시 명시한다.**
-- 프로젝트 결정 우선순위:
-  1. 사용자가 프로젝트를 명시적으로 지정한 경우 → 그대로 사용
-  2. 현재 작업 디렉터리(`pwd -P`)가 Unity 프로젝트 내부인 경우 → 해당 프로젝트
-  3. 여러 프로젝트가 실행 중이면 `instances list --brief`로 확인 후 사용자에게 물어본다
-- macOS에서는 항상 `pwd -P`로 실제 경로를 사용한다.
-- `--project`는 프로젝트 이름(예: `<your-project>`)이나 전체 경로 모두 가능하다.
+- `--project` 명시, `pwd -P`, 다중 인스턴스 라우팅은 [references/command-flows.md](references/command-flows.md)의 `프로젝트 결정`을 따른다.
 
 3. 쓰기 작업 전에는 상태를 본다.
 - 먼저 `status --json --project <name>`으로 live 연결, busy 상태, 현재 프로젝트가 맞는지 확인한다.
@@ -33,7 +25,7 @@ description: "Use when the user wants to operate Unity through Unity CLI Bridge 
 - 문제 해결은 `references/troubleshooting.md`
 
 5. 작업 뒤에는 반드시 검증한다.
-- live 작업 뒤에는 `read-console --limit N --no-stacktrace --output compact` 한 번으로 error/warning/log를 함께 본다. `--type`을 생략하면 모든 타입이 반환되므로 호출을 error/warning 2회로 나눌 필요가 없다. 특정 타입만 필요할 때만 `--type error`로 좁힌다.
+- live 작업 뒤 검증 루틴과 `read-console --no-stacktrace --output compact` 패턴은 [references/command-flows.md](references/command-flows.md)의 `검증 루틴`을 따른다.
 
 ## Operating Rules
 
@@ -42,7 +34,7 @@ description: "Use when the user wants to operate Unity through Unity CLI Bridge 
 - `execute --code 'Debug.Log(__pucArgsJson);' --args '{"k":"v"}' --force`로 넘긴 JSON은 사용자 코드에서 `__pucArgsJson` 문자열 변수로 읽는다.
 - `execute --args` 사용자 코드에서는 wrapper 예약 prefix인 `__puc_internal_*` 변수를 선언하지 않는다.
 - `execute --args` 값에는 secret/credential을 넣지 않는다. CodeDOM 컴파일 중 OS temp에 `.cs` 파일이 잠시 생성될 수 있다.
-- **LLM이 소비하는 명령에는 `--output compact`를 기본으로 붙인다.** envelope 메타를 제거하여 토큰을 절약한다.
+- **LLM이 소비하는 명령에는 `--output compact`를 기본으로 붙인다.** 이유와 예외는 [references/command-flows.md](references/command-flows.md)의 `상태 확인` 절 설명을 따른다.
 - `scene patch` 전에는 가능하면 `scene inspect --with-values`를 먼저 실행해서 GameObject path와 field 이름을 확인한다.
 - `prefab patch` 전에는 가능하면 `prefab inspect --with-values`를 먼저 실행해서 path와 field 이름을 확인한다.
 - inspect 응답이 클 때는 `--max-depth N`으로 깊이를 제한하고 `--omit-defaults`로 기본값을 생략한다. **`--with-values`에는 항상 `--omit-defaults`를 함께 붙여** 0/null/false/빈 값 기본값을 잘라낸다(컴포넌트당 30~55% 절약).
