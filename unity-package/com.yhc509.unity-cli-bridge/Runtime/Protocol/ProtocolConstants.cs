@@ -44,6 +44,13 @@ namespace UnityCli.Protocol
         public const string ErrorTestRunNotFound = "TEST_RUN_NOT_FOUND";
         public const string ErrorTestInvalidMode = "TEST_INVALID_MODE";
         public const string ErrorTestPlayModeEntryFailed = "TEST_PLAYMODE_ENTRY_FAILED";
+        public const string ErrorRecordRequiresPlaymode = "RECORD_REQUIRES_PLAYMODE";
+        public const string ErrorRecordInProgress = "RECORD_IN_PROGRESS";
+        public const string ErrorRecordNotActive = "RECORD_NOT_ACTIVE";
+        public const string ErrorRecordFailed = "RECORD_FAILED";
+        public const string ErrorRecordInterrupted = "RECORD_INTERRUPTED";
+        public const string ErrorRecordNotFound = "RECORD_NOT_FOUND";
+        public const string ErrorRecordTimeout = "RECORD_TIMEOUT";
         public const string ErrorCompileWaitTimeout = "COMPILE_WAIT_TIMEOUT";
         public const string ErrorRefreshWaitTimeout = "REFRESH_WAIT_TIMEOUT";
         public const string ErrorSceneForceRequired = "SCENE_FORCE_REQUIRED";
@@ -65,6 +72,9 @@ namespace UnityCli.Protocol
         public const string CommandStop = "stop";
         public const string CommandExecuteMenu = "execute-menu";
         public const string CommandScreenshot = "screenshot";
+        public const string CommandRecordStart = "record-start";
+        public const string CommandRecordStop = "record-stop";
+        public const string CommandRecordStatus = "record-status";
         public const string CommandExecuteCode = "execute-code";
         public const string CommandCustom = "custom";
         public const string CommandTestList = "test-list";
@@ -128,6 +138,13 @@ namespace UnityCli.Protocol
         public const string TestRunsDirectoryRelative = "Library/com.yhc509.unity-cli-bridge/test-runs";
         public const string TestLastRunFileRelative = "Library/com.yhc509.unity-cli-bridge/last-run.json";
         public const string TestRunInterruptedMessage = "EditMode run interrupted by domain reload — no result available";
+        public const string RecordingsDirectoryRelative = "Library/com.yhc509.unity-cli-bridge/recordings";
+        public const int DefaultRecordFps = 30;
+        public const int MaxRecordDurationSeconds = 600;
+        public const string RecordSessionKeyActiveId = "UCB.Record.activeId";
+        public const string RecordSessionKeyTargetPath = "UCB.Record.targetPath";
+        public const string RecordSessionKeyStartedAt = "UCB.Record.startedAt";
+        public const string RecordSessionKeyDurationSeconds = "UCB.Record.durationSeconds";
         public static readonly string[] SupportedScenePrimitiveNames =
         {
             "Cube",

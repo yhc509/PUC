@@ -97,6 +97,44 @@ namespace UnityCli.Protocol
     }
 
     [Serializable]
+    public sealed class RecordStartArgs
+    {
+        public string? path;
+        public int fps;
+        public int maxWidth;
+        public int durationSeconds;
+    }
+
+    [Serializable]
+    public sealed class RecordStatusArgs
+    {
+        public string? recordingId;
+    }
+
+    [Serializable]
+    public sealed class RecordStartedPayload
+    {
+        public string recordingId = string.Empty;
+        public string status = string.Empty;
+        public string targetPath = string.Empty;
+        public string startedAt = string.Empty;
+        public int durationSeconds;
+    }
+
+    [Serializable]
+    public sealed class RecordResultPayload
+    {
+        public string recordingId = string.Empty;
+        public string status = string.Empty;
+        public string path = string.Empty;
+        public long durationMs;
+        public long fileSizeBytes;
+        public int fps;
+        public int width;
+        public int height;
+    }
+
+    [Serializable]
     public sealed class ExecuteCodeArgs
     {
         public string code = string.Empty;
@@ -695,6 +733,8 @@ namespace UnityCli.Protocol
     {
         public QaSequenceStep[] steps = Array.Empty<QaSequenceStep>();
         public int timeoutMs;
+        public bool record;
+        public string? recordPath;
     }
 
     [Serializable]
@@ -734,6 +774,7 @@ namespace UnityCli.Protocol
         public bool hasFailure;
         public QaSequenceFailure failedStep = new QaSequenceFailure();
         public long elapsedMs;
+        public string recordingPath = string.Empty;
     }
 
     [Serializable]

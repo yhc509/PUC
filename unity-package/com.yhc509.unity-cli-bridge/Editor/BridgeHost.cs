@@ -57,6 +57,7 @@ namespace UnityCliBridge.Bridge.Editor
         private readonly TestCommandHandler _testCommandHandler;
         private readonly MaterialCommandHandler _materialCommandHandler;
         private readonly QaCommandHandler _qaCommandHandler;
+        private readonly RecordCommandHandler _recordCommandHandler;
         private NamedPipeOwnershipLock? _namedPipeOwnershipLock;
 #if !UNITY_5_3_OR_NEWER || UNITY_6000_0_OR_NEWER
         private Socket? _unixListener;
@@ -94,6 +95,7 @@ namespace UnityCliBridge.Bridge.Editor
             _testCommandHandler = new TestCommandHandler();
             _materialCommandHandler = new MaterialCommandHandler();
             _qaCommandHandler = new QaCommandHandler();
+            _recordCommandHandler = new RecordCommandHandler();
 
             TestCommandHandler.RestoreLockFromSession();
             DomainReloadDisableScope.RestoreIfOrphaned();
@@ -989,6 +991,10 @@ namespace UnityCliBridge.Bridge.Editor
                 else if (_packageCommandHandler.CanHandle(command.command))
                 {
                     data = _packageCommandHandler.Handle(command.command, command.argumentsJson);
+                }
+                else if (_recordCommandHandler.CanHandle(command.command))
+                {
+                    data = _recordCommandHandler.Handle(command.command, command.argumentsJson);
                 }
                 else
                 {

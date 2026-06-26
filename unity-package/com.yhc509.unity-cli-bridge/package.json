@@ -6,5 +6,8 @@
   "description": "Project-aware Unity Editor bridge for CLI control without manual servers or per-project ports.",
   "author": {
     "name": "yhc509"
+  },
+  "dependencies": {
+    "com.unity.recorder": "2.5.2"
   }
 }

@@ -52,6 +52,7 @@ The CLI executable and Codex skill are not included in the UPM package payload. 
 ## Notes
 
 - This package includes `Newtonsoft.Json.dll` in `Editor/Plugins` for scene/prefab spec parsing.
+- Play Mode recording depends on Unity Recorder. This package declares `com.unity.recorder` `2.5.2` as the minimum, while Unity may resolve a newer compatible version for the Editor version in use, such as Recorder `5.1.x` on Unity 6. Recording has been verified with Unity 6 and Recorder `5.1.x`; the Unity 2021.3 plus Recorder `2.5.x` path is a known limitation and has not yet been live-verified.
 - In Play Mode, `screenshot --view game` uses `ScreenCapture.CaptureScreenshotAsTexture()`. `--width` and `--height` can downscale the native Game View capture, but larger requests log a warning and save the native capture without upscaling.
 - `input-actions` assets are created as JSON files that Unity's Input System importer reads.
 - `scene inspect --with-values` is meant to be used as the source of truth when authoring `scene patch` specs.
