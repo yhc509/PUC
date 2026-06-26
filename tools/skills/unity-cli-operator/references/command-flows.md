@@ -206,10 +206,10 @@ ucli screenshot --project "$PROJECT_ROOT" --path /tmp/scene.png --view scene --o
 기본 조회와 실행:
 
 ```bash
-ucli test list --project "$PROJECT_ROOT" --mode all --output compact
-ucli test run --project "$PROJECT_ROOT" --mode edit --filter PlayerControllerTests --output compact
-ucli test run --project "$PROJECT_ROOT" --mode play --filter Smoke --wait --output compact
-ucli test results --project "$PROJECT_ROOT" --run-id <runId> --output compact
+ucli test list --project "$PROJECT_ROOT" --mode all --no-detail --output compact
+ucli test run --project "$PROJECT_ROOT" --mode edit --filter PlayerControllerTests --failures-only --output compact
+ucli test run --project "$PROJECT_ROOT" --mode play --filter Smoke --wait --failures-only --output compact
+ucli test results --project "$PROJECT_ROOT" --run-id <runId> --failures-only --output compact
 ```
 
 - `test list --mode all`은 EditMode와 PlayMode 테스트를 같이 나열한다
@@ -218,11 +218,13 @@ ucli test results --project "$PROJECT_ROOT" --run-id <runId> --output compact
 - PlayMode 결과까지 한 번에 기다려야 하면 `--wait`를 붙여 CLI가 폴링하게 한다
 - `--filter`는 test full name의 대소문자 무시 substring이다
 - `test results --run-id <runId>`는 이미 시작된 run의 디스크 캐시나 진행 상태를 다시 읽는다
+- `--failures-only`는 summary count를 유지하면서 `tests[]`만 non-passed로 줄인다
+- `test list --no-detail`은 `fullName`과 `mode`만 반환한다
 
 PlayMode domain reload를 생략할 수 있는 경우:
 
 ```bash
-ucli test run --project "$PROJECT_ROOT" --mode play --filter Smoke --wait --no-domain-reload --output compact
+ucli test run --project "$PROJECT_ROOT" --mode play --filter Smoke --wait --no-domain-reload --failures-only --output compact
 ```
 
 - `--no-domain-reload`는 PlayMode 전용 속도 옵션이다
@@ -233,7 +235,7 @@ AI repair loop는 짧게 유지한다:
 
 ```bash
 ucli refresh --project "$PROJECT_ROOT" --output compact
-ucli test run --project "$PROJECT_ROOT" --mode edit --filter <related-name> --output compact
+ucli test run --project "$PROJECT_ROOT" --mode edit --filter <related-name> --failures-only --output compact
 ```
 
 실패하면 failing test name, message, stack trace를 기준으로 수정하고 같은 filter로 재실행한다. non-`Completed` 결과는 envelope `status: error`와 CLI exit code 1로 반환된다.
@@ -244,9 +246,9 @@ live 작업 뒤 기본 검증:
 
 ```bash
 # --type 생략 시 error/warning/log를 한 번에 반환 — 호출을 2회로 나눌 필요 없다
-ucli read-console --project "$PROJECT_ROOT" --limit 10 --output compact
+ucli read-console --project "$PROJECT_ROOT" --limit 10 --no-stacktrace --output compact
 # 특정 타입만 필요할 때만 좁힌다
-ucli read-console --project "$PROJECT_ROOT" --type error --limit 10 --output compact
+ucli read-console --project "$PROJECT_ROOT" --type error --limit 10 --no-stacktrace --output compact
 ```
 
 에러나 경고가 있으면 성공으로 바로 닫지 않는다.

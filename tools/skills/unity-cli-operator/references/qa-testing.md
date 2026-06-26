@@ -11,7 +11,7 @@ status → play → (입력 시뮬레이션) → 검증 (로그 + 스크린샷) 
 1. `status --json`으로 `isCompiling: false` 확인
 2. `play`로 Play Mode 진입 (자동으로 `runInBackground = true` 설정됨)
 3. QA 커맨드로 입력 시뮬레이션
-4. **로그 검증**: `read-console --type error --limit N` + `read-console --type log --limit N`
+4. **로그 검증**: `read-console --type error --limit N --no-stacktrace` + `read-console --type log --limit N --no-stacktrace`
 5. **시각 검증**: `screenshot --view game --format jpg --quality 75 --max-width 1024 --path /tmp/qa-check.jpg` 후 이미지 확인 (lossless가 필요할 때만 `--format png`)
 6. `stop`으로 Play Mode 종료 (`runInBackground` 원래값 복원됨)
 
@@ -21,7 +21,7 @@ status → play → (입력 시뮬레이션) → 검증 (로그 + 스크린샷) 
 |--------|-----------|-----------|
 | `qa click --target <path>` | EventSystem.Execute | UI 버튼, 토글 등 클릭 |
 | `qa click --qa-id <id>` | EventSystem.Execute | [QaTarget] 어트리뷰트로 마킹된 대상 |
-| `qa ui-dump [--screenshot-width W --screenshot-height H]` | Bridge UI 구조 덤프 | 클릭 가능한 UI의 path/text/rect/center 조회 |
+| `qa ui-dump [--limit N] [--interactable-only] [--text S] [--omit-rect] [--screenshot-width W --screenshot-height H]` | Bridge UI 구조 덤프 | 클릭 가능한 UI의 path/text/rect/center 조회 |
 | `qa tap --x N --y N [--screenshot-width W --screenshot-height H]` | EventSystem raycast + Execute | 스크린샷 분석 결과 기반 UI 좌표 탭 |
 | `qa swipe --target <path> --from x,y --to x,y` | Input System target-relative swipe | UI 슬라이더, ScrollRect 드래그 |
 | `qa swipe --from x,y --to x,y [--screenshot-width W --screenshot-height H]` | Input System 스크린샷 좌표 | 스크린샷 분석 결과 기반 화면 스와이프 |
@@ -127,8 +127,8 @@ using UnityEngine.UI;
 `read-console`로 Debug.Log 출력과 에러를 확인한다.
 
 ```bash
-ucli read-console --type log --limit 5 --project "$P" --json
-ucli read-console --type error --limit 5 --project "$P" --json
+ucli read-console --type log --limit 5 --no-stacktrace --project "$P" --json
+ucli read-console --type error --limit 5 --no-stacktrace --project "$P" --json
 ```
 
 ### 시각 검증 (스크린샷)
@@ -157,7 +157,7 @@ ucli screenshot --view game --path /tmp/qa-check.png --project "$P" --json
 
 ### qa ui-dump Workflow
 1. Enter Play Mode and, if you already captured a reference image, keep its `width`/`height` available
-2. Dump candidates: `qa ui-dump` -> inspect each element's `path`, `text`, `interactable`, `x`, `y`, `width`, `height`, `centerX`, `centerY`
+2. Dump candidates: `qa ui-dump --limit 30 --interactable-only --omit-rect` -> inspect each element's `path`, `text`, `interactable`, `centerX`, `centerY`
 3. Prefer path click: `qa click --target <path>`
 4. If a coordinate tap is better, use `qa tap --x <centerX> --y <centerY>`
 
@@ -165,12 +165,14 @@ Returned `path` values are reliable when unique; if same-named siblings share a 
 
 If the dump should match a resized image, pass `--screenshot-width` and `--screenshot-height` together. Otherwise, the bridge uses the last successful `screenshot` dimensions when available.
 
+If the visible label is known, add `--text <substring>` so filtering happens in the Editor before serialization. Omit `--omit-rect` only when you need `x`/`y`/`width`/`height`; `centerX`/`centerY` remain available either way.
+
 ### Non-UI world objects (`qa world-dump`)
 
 UI elements come from `qa ui-dump`. For non-UI world objects (units on a battle grid, world-space interactables), the game opts them in:
 
 - Implement `UnityCliBridge.Bridge.IQaTappable` on your own component, or attach the `QaTappable` marker component (set `label`, optional `anchor`, optional `onQaTap`).
-- `qa world-dump` then lists them with `label`, `path`, image-space `centerX`/`centerY`, `onScreen`, `hasAction`.
+- `qa world-dump --limit 30` then lists them with `label`, `path`, image-space `centerX`/`centerY`, `onScreen`, `hasAction`; add `--text <substring>` when the label is known.
 - Tap with `qa tap --target <path>`. If the object's `TryQaTap()` handles it (e.g. `onQaTap` is wired), the bridge invokes it directly; otherwise the bridge simulates an Input System tap at the anchor, which reaches games that poll the Input System directly (where `qa tap --x --y`'s EventSystem path does not).
 - Off-screen objects are hidden unless you pass `--include-offscreen`.
 - Same-named sibling world objects share a path and resolve to the first match; give tappable objects unique names/labels to target them individually.
@@ -339,7 +341,7 @@ sleep 1
 ucli qa click --target "/Canvas/Button" --project "$P" --json
 
 # 로그 검증
-ucli read-console --type log --limit 5 --project "$P" --json
+ucli read-console --type log --limit 5 --no-stacktrace --project "$P" --json
 
 # 시각 검증
 ucli screenshot --view game --path /tmp/qa-click.png --project "$P" --json

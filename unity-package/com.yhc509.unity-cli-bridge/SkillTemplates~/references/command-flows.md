@@ -207,9 +207,9 @@ live 작업 뒤 기본 검증:
 
 ```bash
 # --type 생략 시 error/warning/log를 한 번에 반환 — 호출을 2회로 나눌 필요 없다
-ucli read-console --project "$PROJECT" --limit 10 --output compact
+ucli read-console --project "$PROJECT" --limit 10 --no-stacktrace --output compact
 # 특정 타입만 필요할 때만 좁힌다
-ucli read-console --project "$PROJECT" --type error --limit 10 --output compact
+ucli read-console --project "$PROJECT" --type error --limit 10 --no-stacktrace --output compact
 ```
 
 에러나 경고가 있으면 성공으로 바로 닫지 않는다.

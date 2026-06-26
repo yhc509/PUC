@@ -191,7 +191,8 @@ namespace UnityCliBridge.Bridge.Editor
                             requestId!,
                             projectHash,
                             finalJson!,
-                            0));
+                            0,
+                            args.failuresOnly));
                     }
                     else if (!startResponseSent)
                     {
@@ -217,7 +218,8 @@ namespace UnityCliBridge.Bridge.Editor
                         requestId!,
                         projectHash,
                         completedJson!,
-                        0));
+                        0,
+                        args.failuresOnly));
                 }
 
                 if (!startResponseSent

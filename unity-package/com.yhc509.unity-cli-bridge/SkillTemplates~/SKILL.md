@@ -19,7 +19,7 @@ description: "Use when the user wants to operate Unity through Unity CLI Bridge 
 - 프로젝트 결정 우선순위:
   1. 사용자가 프로젝트를 명시적으로 지정한 경우 → 그대로 사용
   2. 현재 작업 디렉터리(`pwd -P`)가 Unity 프로젝트 내부인 경우 → 해당 프로젝트
-  3. 여러 프로젝트가 실행 중이면 `instances list`로 확인 후 사용자에게 물어본다
+  3. 여러 프로젝트가 실행 중이면 `instances list --brief`로 확인 후 사용자에게 물어본다
 - macOS에서는 항상 `pwd -P`로 실제 경로를 사용한다.
 - `--project`는 프로젝트 이름(예: `<your-project>`)이나 전체 경로 모두 가능하다.
 
@@ -33,7 +33,7 @@ description: "Use when the user wants to operate Unity through Unity CLI Bridge 
 - 문제 해결은 `references/troubleshooting.md`
 
 5. 작업 뒤에는 반드시 검증한다.
-- live 작업 뒤에는 `read-console --limit N --output compact` 한 번으로 error/warning/log를 함께 본다. `--type`을 생략하면 모든 타입이 반환되므로 호출을 error/warning 2회로 나눌 필요가 없다. 특정 타입만 필요할 때만 `--type error`로 좁힌다.
+- live 작업 뒤에는 `read-console --limit N --no-stacktrace --output compact` 한 번으로 error/warning/log를 함께 본다. `--type`을 생략하면 모든 타입이 반환되므로 호출을 error/warning 2회로 나눌 필요가 없다. 특정 타입만 필요할 때만 `--type error`로 좁힌다.
 
 ## Operating Rules
 
@@ -58,7 +58,7 @@ description: "Use when the user wants to operate Unity through Unity CLI Bridge 
 - Play Mode 영상을 남겨야 하면 `record start --duration N --wait --path /tmp/out.mp4`를 쓴다. 수동 녹화는 `record start` 후 `record status`, `record stop` 순서로 종료한다. `record start`는 Play Mode 전용이며 Unity Recorder dependency가 필요하다.
 - `qa tap --x --y`에는 `screenshot`에서 확인한 이미지 좌표를 그대로 넣는다. 응답의 `imageOrigin`은 `top-left`, `coordinateOrigin`은 `bottom-left`다.
 - 별도 Y-flip이나 해상도 스케일 변환은 하지 않는다. Bridge가 마지막 `screenshot` 크기 또는 명시한 `--screenshot-width`/`--screenshot-height`를 기준으로 내부 처리한다.
-- 좌표를 추측하지 말고 탭 대상을 먼저 열거한다: uGUI 버튼은 `qa ui-dump --output compact`, 비-UI 월드 오브젝트(전투 그리드 유닛 등)는 `qa world-dump --output compact`. 둘 다 `centerX`/`centerY` 이미지 좌표를 그대로 반환하며, 대형 화면 dump에서는 envelope 제거 효과가 특히 크다.
+- 좌표를 추측하지 말고 탭 대상을 먼저 열거한다: uGUI 버튼은 `qa ui-dump --limit 30 --interactable-only --omit-rect --output compact`, 비-UI 월드 오브젝트(전투 그리드 유닛 등)는 `qa world-dump --limit 30 --output compact`. 찾을 텍스트/라벨을 알면 `--text <substring>`으로 서버사이드 필터링한다. 둘 다 `centerX`/`centerY` 이미지 좌표를 그대로 반환하며, 대형 화면 dump에서는 envelope 제거 효과가 특히 크다.
 - `qa world-dump`는 게임이 opt-in한 오브젝트만 본다: 게임 컴포넌트가 `UnityCliBridge.Bridge.IQaTappable`을 구현하거나 `QaTappable` 마커를 부착해야 한다. 화면 밖은 `--include-offscreen`을 줄 때만 포함된다.
 - 열거된 월드 오브젝트는 `qa tap --target <path>`로 탭한다. 오브젝트의 `TryQaTap()`이 처리하면 그대로, 아니면 anchor 좌표에 Input System 탭을 주입한다 — `qa tap --x --y`(EventSystem)가 닿지 않는 raw Input System polling 입력에도 도달한다. 같은 이름 형제는 첫 매치로만 잡히니 고유 이름/label을 부여한다. 상세는 [references/qa-testing.md](references/qa-testing.md).
 - 조건 대기와 다단계 입력은 `qa run-sequence --spec-json @file`로 한 번에 보낸다. 영상이 필요하면 `--record --record-path /tmp/seq.mp4`를 붙여 sequence 구간만 mp4로 남긴다. 상세는 [references/qa-testing.md](references/qa-testing.md).

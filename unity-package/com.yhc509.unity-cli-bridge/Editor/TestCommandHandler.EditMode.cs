@@ -99,7 +99,8 @@ namespace UnityCliBridge.Bridge.Editor
                         requestId,
                         projectHash,
                         resultJson!,
-                        stopwatch.ElapsedMilliseconds));
+                        stopwatch.ElapsedMilliseconds,
+                        args.failuresOnly));
                     Cleanup();
                     return;
                 }
@@ -121,7 +122,8 @@ namespace UnityCliBridge.Bridge.Editor
                             requestId,
                             projectHash,
                             finalJson!,
-                            stopwatch.ElapsedMilliseconds));
+                            stopwatch.ElapsedMilliseconds,
+                            args.failuresOnly));
                     }
                     else
                     {

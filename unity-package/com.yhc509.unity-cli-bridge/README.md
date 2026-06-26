@@ -61,6 +61,7 @@ The CLI executable and Codex skill are not included in the UPM package payload. 
 - `execute` is live-only and always requires `--force` because it runs arbitrary C# in the editor context.
 - `package remove` always requires `--force`.
 - Package Manager requests are single-flight. If another package command is already running, the bridge returns `PACKAGE_BUSY`; package commands use a 360-second CLI live timeout so the bridge can surface its 300-second `PACKAGE_TIMEOUT` response.
+- Token trim options are opt-in and preserve default output: `read-console --no-stacktrace`, `test list --no-detail`, `test run/results --failures-only`, `qa ui-dump --limit/--interactable-only/--text/--omit-rect`, and `qa world-dump --limit/--text`.
 - `custom` is live-only and invokes project-defined static methods marked with `[PucCommand("name")]`.
 - if the target scene is already loaded, `scene inspect` expects it to be clean and `scene patch` refuses unsaved target-scene changes even with `--force`.
 - `scene open` requires `--force` if the currently loaded scenes have unsaved changes that should be discarded.
