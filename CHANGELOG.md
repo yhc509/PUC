@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `qa click`, `qa tap`, and `qa swipe` now accept `--button left|right` so Play Mode QA can drive right-click and right-drag input paths. The default remains `left`.
 
 ### Fixed
+- Fixed package compilation on Unity 6000.5 and later after Unity object instance ID APIs became compile-time errors. On Unity 6000.4 and later, `execute` responses keep the `instanceID` field name but use Unity's newer numeric object identity representation.
 - Auth tokens are now stored in a per-instance owner-only sidecar file instead of the shared instance registry, so an Editor running an older package version can no longer strip a newer Editor's token and cause intermittent `UNAUTHORIZED` failures in mixed-version setups (#115).
 - The Unity CLI Manager window now refreshes status while open and handles prerelease or custom CLI version suffixes without clearing the installer state (#143).
 - Fixed #78: queued IPC commands that have not started yet are now cancelled when the CLI disconnects or times out, preventing delayed writes after the caller has already failed. Commands that have started still use at-least-once semantics, so check state before retrying mutation commands after a timeout.
