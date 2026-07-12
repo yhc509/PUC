@@ -10,6 +10,7 @@ namespace UnityCliBridge.Bridge.Editor
         private const string WindowTitle = "CLI Manager";
         private const string OpenWindowMenuItemPath = "Window/Unity CLI Manager";
         private const double AutoRefreshIntervalSeconds = 1d;
+        private const double StateLoadFailureAutoRetryDelaySeconds = 10d;
         private static readonly Vector2 WindowMinSize = new Vector2(420f, 340f);
         private static GUIStyle? _updateAvailableLabelStyle;
 
@@ -36,6 +37,7 @@ namespace UnityCliBridge.Bridge.Editor
         private bool _isUpdateAvailable;
         private SkillTarget _skillTarget;
         private double _nextAutoRefreshTime;
+        private double _nextStateLoadRetryTime;
 
         [MenuItem(OpenWindowMenuItemPath)]
         private static void OpenWindow()
@@ -368,7 +370,9 @@ namespace UnityCliBridge.Bridge.Editor
             _nextAutoRefreshTime = currentTime + AutoRefreshIntervalSeconds;
 
             bool shouldRepaint = false;
-            if (_hasLoadedState && HasInstallStateChanged())
+            if (_hasLoadedState
+                && currentTime >= _nextStateLoadRetryTime
+                && HasInstallStateChanged())
             {
                 RefreshState(false);
                 shouldRepaint = true;
@@ -410,10 +414,12 @@ namespace UnityCliBridge.Bridge.Editor
                 _pathCommand = GetPathCommand();
                 RefreshLatestReleaseVersion();
                 _hasLoadedState = true;
+                _nextStateLoadRetryTime = 0d;
             }
             catch (Exception exception)
             {
                 _hasLoadedState = true;
+                _nextStateLoadRetryTime = EditorApplication.timeSinceStartup + StateLoadFailureAutoRetryDelaySeconds;
                 _packageVersion = string.Empty;
                 _latestReleaseVersion = string.Empty;
                 _installedVersion = string.Empty;
@@ -450,6 +456,11 @@ namespace UnityCliBridge.Bridge.Editor
 
         private void HandleLatestReleaseVersionFetched(CliInstallerState.LatestReleaseFetchResult result)
         {
+            if (this == null)
+            {
+                return;
+            }
+
             try
             {
                 _latestReleaseVersion = result.LatestReleaseVersion ?? string.Empty;
@@ -464,7 +475,10 @@ namespace UnityCliBridge.Bridge.Editor
             }
             finally
             {
-                Repaint();
+                if (this != null)
+                {
+                    Repaint();
+                }
             }
         }
 

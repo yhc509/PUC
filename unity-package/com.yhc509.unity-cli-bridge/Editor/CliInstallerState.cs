@@ -485,7 +485,19 @@ namespace UnityCliBridge.Bridge.Editor
 
             public void Complete(LatestReleaseFetchResult result)
             {
-                _onComplete(result);
+                Delegate[] subscribers = _onComplete.GetInvocationList();
+                for (int i = 0; i < subscribers.Length; i++)
+                {
+                    Action<LatestReleaseFetchResult> subscriber = (Action<LatestReleaseFetchResult>)subscribers[i];
+                    try
+                    {
+                        subscriber(result);
+                    }
+                    catch (Exception exception)
+                    {
+                        Debug.LogException(exception);
+                    }
+                }
             }
 
             public void Dispose()
