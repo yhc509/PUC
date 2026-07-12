@@ -26,6 +26,9 @@ namespace UnityCliBridge.Bridge.Editor
         private string _pathCommand = string.Empty;
         private string _errorMessage = string.Empty;
         private string _skillFeedbackMessage = string.Empty;
+        private string _skillDestinationPath = string.Empty;
+        private string _installedSkillVersion = string.Empty;
+        private string _globalSkillPath = string.Empty;
         private string _cachedUpdateAvailabilityPackageVersion = string.Empty;
         private string _cachedUpdateAvailabilityLatestReleaseVersion = string.Empty;
         private MessageType _skillFeedbackType = MessageType.Info;
@@ -36,7 +39,10 @@ namespace UnityCliBridge.Bridge.Editor
         private bool _latestReleaseCheckFailed;
         private bool _isUpdateAvailable;
         private bool _stateLoadFailed;
+        private bool _isSkillInstalled;
+        private bool _isGlobalSkillInstalled;
         private SkillTarget _skillTarget;
+        private SkillScope _skillScope;
         private double _nextAutoRefreshTime;
         private double _nextStateLoadRetryTime;
 
@@ -245,11 +251,28 @@ namespace UnityCliBridge.Bridge.Editor
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
                 GUILayout.Label("AI Agent Skill", EditorStyles.boldLabel);
-                _skillTarget = (SkillTarget)EditorGUILayout.EnumPopup("Target", _skillTarget);
 
-                if (GUILayout.Button("Install Skill", GUILayout.Height(24f)))
+                EditorGUI.BeginChangeCheck();
+                _skillTarget = (SkillTarget)EditorGUILayout.EnumPopup("Target", _skillTarget);
+                _skillScope = (SkillScope)EditorGUILayout.EnumPopup("Scope", _skillScope);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    RefreshSkillState();
+                }
+
+                DrawSelectableValue("Path", _skillDestinationPath);
+                EditorGUILayout.LabelField("Skill", GetSkillStatusLabel());
+
+                if (GUILayout.Button(GetSkillButtonLabel(), GUILayout.Height(24f)))
                 {
                     InstallSkill();
+                }
+
+                if (_skillScope == SkillScope.Project && _isGlobalSkillInstalled)
+                {
+                    EditorGUILayout.HelpBox(
+                        "A global copy of this skill is also installed at `" + _globalSkillPath + "`. It may take precedence over the project copy. Switch Scope to Global and reinstall to update it, or delete it manually.",
+                        MessageType.Warning);
                 }
 
                 if (!string.IsNullOrWhiteSpace(_skillFeedbackMessage))
@@ -288,10 +311,10 @@ namespace UnityCliBridge.Bridge.Editor
         {
             try
             {
-                SkillInstaller.Install(_skillTarget);
-                string destination = SkillInstaller.GetDestination(_skillTarget);
+                SkillInstaller.Install(_skillTarget, _skillScope);
+                RefreshSkillState();
                 _skillFeedbackType = MessageType.Info;
-                _skillFeedbackMessage = "Installed to: " + destination;
+                _skillFeedbackMessage = "Installed to: " + _skillDestinationPath;
             }
             catch (Exception exception)
             {
@@ -414,6 +437,7 @@ namespace UnityCliBridge.Bridge.Editor
                 _platformDisplayName = CliInstallerState.GetPlatformDisplayName();
                 _pathCommand = GetPathCommand();
                 RefreshLatestReleaseVersion();
+                RefreshSkillState();
                 _hasLoadedState = true;
                 _stateLoadFailed = false;
                 _nextStateLoadRetryTime = 0d;
@@ -435,6 +459,7 @@ namespace UnityCliBridge.Bridge.Editor
                 _isFetchingLatestVersion = false;
                 _latestReleaseCheckFailed = false;
                 ResetUpdateAvailabilityCache();
+                RefreshSkillState();
 
                 if (string.IsNullOrWhiteSpace(_errorMessage))
                 {
@@ -597,6 +622,75 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             _isUpdateAvailable = CliInstallerState.CompareVersions(_packageVersion, _latestReleaseVersion) < 0;
+        }
+
+        private void RefreshSkillState()
+        {
+            try
+            {
+                _skillDestinationPath = SkillInstaller.GetDestination(_skillTarget, _skillScope);
+            }
+            catch (Exception exception)
+            {
+                _skillDestinationPath = exception.Message;
+            }
+
+            _isSkillInstalled = SkillInstaller.IsSkillInstalled(_skillTarget, _skillScope);
+            _installedSkillVersion = SkillInstaller.GetInstalledSkillVersion(_skillTarget, _skillScope) ?? string.Empty;
+
+            try
+            {
+                _globalSkillPath = SkillInstaller.GetDestination(_skillTarget, SkillScope.Global);
+            }
+            catch (Exception exception)
+            {
+                _globalSkillPath = exception.Message;
+            }
+
+            _isGlobalSkillInstalled = SkillInstaller.IsSkillInstalled(_skillTarget, SkillScope.Global);
+        }
+
+        private string GetSkillStatusLabel()
+        {
+            if (!_isSkillInstalled)
+            {
+                return "Not installed";
+            }
+
+            if (string.IsNullOrWhiteSpace(_installedSkillVersion))
+            {
+                return "Installed (version unknown)";
+            }
+
+            string installedLabel = "Installed (" + FormatVersion(_installedSkillVersion) + ")";
+            if (!string.IsNullOrWhiteSpace(_packageVersion)
+                && CliInstallerState.CompareVersions(_installedSkillVersion, _packageVersion) < 0)
+            {
+                return installedLabel + " -> update available (" + FormatVersion(_packageVersion) + ")";
+            }
+
+            return installedLabel;
+        }
+
+        private string GetSkillButtonLabel()
+        {
+            if (!_isSkillInstalled)
+            {
+                return "Install Skill";
+            }
+
+            if (string.IsNullOrWhiteSpace(_installedSkillVersion))
+            {
+                return "Update Skill";
+            }
+
+            if (!string.IsNullOrWhiteSpace(_packageVersion)
+                && CliInstallerState.CompareVersions(_installedSkillVersion, _packageVersion) < 0)
+            {
+                return "Update Skill";
+            }
+
+            return "Reinstall Skill";
         }
 
         private bool HasInstallStateChanged()

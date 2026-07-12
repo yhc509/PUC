@@ -44,10 +44,9 @@ For Git-based installation, use the package path inside the repository.
 
 If you are migrating from the old package, update the dependency key in `Packages/manifest.json` from `com.puc.bridge` to `com.yhc509.unity-cli-bridge`. If your Unity project references the bridge asmdefs directly, also rename `PUC.Editor` / `PUC.Runtime` references to `UnityCliBridge.Bridge.Editor` / `UnityCliBridge.Bridge.Runtime`.
 
-The CLI executable and Codex skill are not included in the UPM package payload. If you want the full `unity-cli-bridge` workflow, clone the mono-repo locally and use:
+The CLI executable is installed separately from **Window > Unity CLI Manager**. The package includes the AI Agent Skill template, and the same window can install it for Claude Code or Codex.
 
-- `cli/` for the `unity-cli` executable
-- `tools/skills/unity-cli-operator/` for the Codex skill
+By default, the skill installs into the current Unity project under `<project-root>/.claude/skills/` or `<project-root>/.codex/skills/`. Commit that folder if you want teammates to use the same skill version as the package. Choose global scope only when you want one user-wide copy.
 
 ## Notes
 
