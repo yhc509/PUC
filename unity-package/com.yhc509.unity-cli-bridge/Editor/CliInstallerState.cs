@@ -115,7 +115,10 @@ namespace UnityCliBridge.Bridge.Editor
                 return IsLatestReleaseFailureBackoffExpired();
             }
 
-            if (lastCheckTimeUtc.AddMinutes(CacheExpirationMinutes) > DateTimeOffset.UtcNow)
+            int cacheExpirationMinutes = string.IsNullOrWhiteSpace(GetCachedLatestReleaseVersion())
+                ? FailureRetryDelayMinutes
+                : CacheExpirationMinutes;
+            if (lastCheckTimeUtc.AddMinutes(cacheExpirationMinutes) > DateTimeOffset.UtcNow)
             {
                 return false;
             }
@@ -315,7 +318,30 @@ namespace UnityCliBridge.Bridge.Editor
 
         internal static int CompareVersions(string leftVersion, string rightVersion)
         {
-            return ParseVersion(leftVersion).CompareTo(ParseVersion(rightVersion));
+            ComparableVersion left;
+            ComparableVersion right;
+            if (!TryParseComparableVersion(leftVersion, out left)
+                || !TryParseComparableVersion(rightVersion, out right))
+            {
+                return 0;
+            }
+
+            int coreComparison = left.Core.CompareTo(right.Core);
+            if (coreComparison != 0)
+            {
+                return coreComparison;
+            }
+
+            bool leftIsPrerelease = !string.IsNullOrEmpty(left.Prerelease);
+            bool rightIsPrerelease = !string.IsNullOrEmpty(right.Prerelease);
+            if (leftIsPrerelease != rightIsPrerelease)
+            {
+                return leftIsPrerelease ? -1 : 1;
+            }
+
+            return leftIsPrerelease
+                ? string.CompareOrdinal(left.Prerelease, right.Prerelease)
+                : 0;
         }
 
         private static string? ParseLatestReleaseVersion(string responseText)
@@ -339,9 +365,37 @@ namespace UnityCliBridge.Bridge.Editor
                 : NormalizeVersion(tagName);
         }
 
-        private static Version ParseVersion(string version)
+        private static bool TryParseComparableVersion(string version, out ComparableVersion comparableVersion)
         {
-            return Version.Parse(NormalizeVersion(version));
+            comparableVersion = default;
+            if (string.IsNullOrWhiteSpace(version))
+            {
+                return false;
+            }
+
+            string normalizedVersion = NormalizeVersion(version);
+            int buildMetadataIndex = normalizedVersion.IndexOf('+');
+            string versionWithoutBuildMetadata = buildMetadataIndex >= 0
+                ? normalizedVersion.Substring(0, buildMetadataIndex)
+                : normalizedVersion;
+
+            string coreVersion = versionWithoutBuildMetadata;
+            string prerelease = string.Empty;
+            int prereleaseIndex = versionWithoutBuildMetadata.IndexOf('-');
+            if (prereleaseIndex >= 0)
+            {
+                coreVersion = versionWithoutBuildMetadata.Substring(0, prereleaseIndex);
+                prerelease = versionWithoutBuildMetadata.Substring(prereleaseIndex + 1);
+            }
+
+            Version core;
+            if (!Version.TryParse(coreVersion, out core))
+            {
+                return false;
+            }
+
+            comparableVersion = new ComparableVersion(core, prerelease);
+            return true;
         }
 
         private static string NormalizeVersion(string version)
@@ -438,6 +492,19 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 Request.Dispose();
             }
+        }
+
+        private readonly struct ComparableVersion
+        {
+            public ComparableVersion(Version core, string prerelease)
+            {
+                Core = core;
+                Prerelease = prerelease;
+            }
+
+            public Version Core { get; }
+
+            public string Prerelease { get; }
         }
 
         public readonly struct LatestReleaseFetchResult
