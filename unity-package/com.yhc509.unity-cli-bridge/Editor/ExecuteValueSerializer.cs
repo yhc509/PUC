@@ -65,7 +65,7 @@ namespace UnityCliBridge.Bridge.Editor
                 case Quaternion q: sb.Append($"{{\"x\":{F(q.x)},\"y\":{F(q.y)},\"z\":{F(q.z)},\"w\":{F(q.w)}}}"); return;
                 case Color c: sb.Append($"{{\"r\":{F(c.r)},\"g\":{F(c.g)},\"b\":{F(c.b)},\"a\":{F(c.a)}}}"); return;
                 case UnityEngine.Object unityObject:
-                    sb.Append("{\"instanceID\":").Append(UnityObjectIdentity.GetId(unityObject))
+                    sb.Append("{\"instanceID\":").Append(UnityObjectIdentity.GetWireId(unityObject))
                         .Append(",\"name\":");
                     WriteString(sb, unityObject ? unityObject.name : "<null>");
                     sb.Append(",\"type\":");

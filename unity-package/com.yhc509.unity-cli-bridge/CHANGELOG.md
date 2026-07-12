@@ -8,6 +8,7 @@
 - List-style responses now have opt-in trims: `read-console --no-stacktrace`, `test list --no-detail`, `test run/results --failures-only`, and `instances list --brief` (#131).
 
 ### Fixed
+- Fixed package compilation on Unity 6000.5 and later after Unity object instance ID APIs became compile-time errors. `execute` responses keep the `instanceID` field name and JSON number shape: older Unity versions continue returning the same signed instance ID values as before, while Unity 6000.4 and later may return a different numeric object identity from Unity's newer object identity system.
 - `qa ui-dump` text extraction now stays within each clickable element's owned label subtree, preventing nested clickable controls from borrowing each other's labels.
 
 ### Compatibility

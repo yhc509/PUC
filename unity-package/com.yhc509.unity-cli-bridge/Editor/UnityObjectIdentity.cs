@@ -17,6 +17,15 @@ namespace UnityCliBridge.Bridge.Editor
 #endif
         }
 
+        public static long GetWireId(UnityEngine.Object obj)
+        {
+#if UNITY_6000_4_OR_NEWER
+            return unchecked((long)EntityId.ToULong(obj.GetEntityId()));
+#else
+            return (long)obj.GetInstanceID();
+#endif
+        }
+
         public static UnityEngine.Object? FindById(ulong id)
         {
             if (id == 0UL)

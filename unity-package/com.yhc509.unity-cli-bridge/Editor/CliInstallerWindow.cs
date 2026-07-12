@@ -35,6 +35,7 @@ namespace UnityCliBridge.Bridge.Editor
         private bool _isFetchingLatestVersion;
         private bool _latestReleaseCheckFailed;
         private bool _isUpdateAvailable;
+        private bool _stateLoadFailed;
         private SkillTarget _skillTarget;
         private double _nextAutoRefreshTime;
         private double _nextStateLoadRetryTime;
@@ -372,7 +373,7 @@ namespace UnityCliBridge.Bridge.Editor
             bool shouldRepaint = false;
             if (_hasLoadedState
                 && currentTime >= _nextStateLoadRetryTime
-                && HasInstallStateChanged())
+                && (_stateLoadFailed || HasInstallStateChanged()))
             {
                 RefreshState(false);
                 shouldRepaint = true;
@@ -414,11 +415,13 @@ namespace UnityCliBridge.Bridge.Editor
                 _pathCommand = GetPathCommand();
                 RefreshLatestReleaseVersion();
                 _hasLoadedState = true;
+                _stateLoadFailed = false;
                 _nextStateLoadRetryTime = 0d;
             }
             catch (Exception exception)
             {
                 _hasLoadedState = true;
+                _stateLoadFailed = true;
                 _nextStateLoadRetryTime = EditorApplication.timeSinceStartup + StateLoadFailureAutoRetryDelaySeconds;
                 _packageVersion = string.Empty;
                 _latestReleaseVersion = string.Empty;
