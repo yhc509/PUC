@@ -41,16 +41,6 @@ namespace UnityCliBridge.Bridge.Editor
 
             if (Directory.Exists(destination))
             {
-                bool shouldOverwrite = EditorUtility.DisplayDialog(
-                    "Overwrite Skill?",
-                    "기존 스킬이 이미 설치되어 있습니다: " + destination + "\n덮어쓰시겠습니까?",
-                    "Overwrite",
-                    "Cancel");
-                if (!shouldOverwrite)
-                {
-                    return;
-                }
-
                 Directory.Delete(destination, true);
             }
 

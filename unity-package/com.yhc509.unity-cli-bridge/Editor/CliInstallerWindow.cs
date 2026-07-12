@@ -257,6 +257,8 @@ namespace UnityCliBridge.Bridge.Editor
                 _skillScope = (SkillScope)EditorGUILayout.EnumPopup("Scope", _skillScope);
                 if (EditorGUI.EndChangeCheck())
                 {
+                    _skillFeedbackType = MessageType.None;
+                    _skillFeedbackMessage = string.Empty;
                     RefreshSkillState();
                 }
 
@@ -311,6 +313,19 @@ namespace UnityCliBridge.Bridge.Editor
         {
             try
             {
+                if (_isSkillInstalled)
+                {
+                    bool shouldOverwrite = EditorUtility.DisplayDialog(
+                        "Overwrite Skill?",
+                        "기존 스킬이 이미 설치되어 있습니다: " + _skillDestinationPath + "\n덮어쓰시겠습니까?",
+                        "Overwrite",
+                        "Cancel");
+                    if (!shouldOverwrite)
+                    {
+                        return;
+                    }
+                }
+
                 SkillInstaller.Install(_skillTarget, _skillScope);
                 RefreshSkillState();
                 _skillFeedbackType = MessageType.Info;
