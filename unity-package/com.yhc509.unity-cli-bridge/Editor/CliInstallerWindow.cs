@@ -9,6 +9,8 @@ namespace UnityCliBridge.Bridge.Editor
     {
         private const string WindowTitle = "CLI Manager";
         private const string OpenWindowMenuItemPath = "Window/Unity CLI Manager";
+        private const double AutoRefreshIntervalSeconds = 1d;
+        private const double StateLoadFailureAutoRetryDelaySeconds = 10d;
         private static readonly Vector2 WindowMinSize = new Vector2(420f, 340f);
         private static GUIStyle? _updateAvailableLabelStyle;
 
@@ -33,7 +35,10 @@ namespace UnityCliBridge.Bridge.Editor
         private bool _isFetchingLatestVersion;
         private bool _latestReleaseCheckFailed;
         private bool _isUpdateAvailable;
+        private bool _stateLoadFailed;
         private SkillTarget _skillTarget;
+        private double _nextAutoRefreshTime;
+        private double _nextStateLoadRetryTime;
 
         [MenuItem(OpenWindowMenuItemPath)]
         private static void OpenWindow()
@@ -100,6 +105,7 @@ namespace UnityCliBridge.Bridge.Editor
                     {
                         if (GUILayout.Button("Refresh", GUILayout.Width(72f)))
                         {
+                            RefreshState(true);
                             RefreshLatestReleaseVersion(true);
                         }
                     }
@@ -349,6 +355,50 @@ namespace UnityCliBridge.Bridge.Editor
             Repaint();
         }
 
+        private void OnInspectorUpdate()
+        {
+            if (_isDownloading)
+            {
+                return;
+            }
+
+            double currentTime = EditorApplication.timeSinceStartup;
+            if (currentTime < _nextAutoRefreshTime)
+            {
+                return;
+            }
+
+            _nextAutoRefreshTime = currentTime + AutoRefreshIntervalSeconds;
+
+            bool shouldRepaint = false;
+            if (_hasLoadedState
+                && currentTime >= _nextStateLoadRetryTime
+                && (_stateLoadFailed || HasInstallStateChanged()))
+            {
+                RefreshState(false);
+                shouldRepaint = true;
+            }
+
+            if (CliInstallerState.IsLatestReleaseCacheExpired())
+            {
+                string previousLatestReleaseVersion = _latestReleaseVersion;
+                bool wasFetchingLatestVersion = _isFetchingLatestVersion;
+                bool previousReleaseCheckFailed = _latestReleaseCheckFailed;
+
+                RefreshLatestReleaseVersion();
+
+                shouldRepaint = shouldRepaint
+                    || !string.Equals(previousLatestReleaseVersion, _latestReleaseVersion, StringComparison.Ordinal)
+                    || wasFetchingLatestVersion != _isFetchingLatestVersion
+                    || previousReleaseCheckFailed != _latestReleaseCheckFailed;
+            }
+
+            if (shouldRepaint)
+            {
+                Repaint();
+            }
+        }
+
         private void RefreshState(bool shouldClearError)
         {
             if (shouldClearError)
@@ -365,10 +415,14 @@ namespace UnityCliBridge.Bridge.Editor
                 _pathCommand = GetPathCommand();
                 RefreshLatestReleaseVersion();
                 _hasLoadedState = true;
+                _stateLoadFailed = false;
+                _nextStateLoadRetryTime = 0d;
             }
             catch (Exception exception)
             {
                 _hasLoadedState = true;
+                _stateLoadFailed = true;
+                _nextStateLoadRetryTime = EditorApplication.timeSinceStartup + StateLoadFailureAutoRetryDelaySeconds;
                 _packageVersion = string.Empty;
                 _latestReleaseVersion = string.Empty;
                 _installedVersion = string.Empty;
@@ -405,11 +459,30 @@ namespace UnityCliBridge.Bridge.Editor
 
         private void HandleLatestReleaseVersionFetched(CliInstallerState.LatestReleaseFetchResult result)
         {
-            _latestReleaseVersion = result.LatestReleaseVersion ?? string.Empty;
-            _latestReleaseCheckFailed = !result.Succeeded;
-            _isFetchingLatestVersion = false;
-            RefreshReleaseDerivedState();
-            Repaint();
+            if (this == null)
+            {
+                return;
+            }
+
+            try
+            {
+                _latestReleaseVersion = result.LatestReleaseVersion ?? string.Empty;
+                _latestReleaseCheckFailed = !result.Succeeded;
+                _isFetchingLatestVersion = false;
+                RefreshReleaseDerivedState();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+                _errorMessage = exception.Message;
+            }
+            finally
+            {
+                if (this != null)
+                {
+                    Repaint();
+                }
+            }
         }
 
         private void RefreshReleaseDerivedState()
@@ -524,6 +597,19 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             _isUpdateAvailable = CliInstallerState.CompareVersions(_packageVersion, _latestReleaseVersion) < 0;
+        }
+
+        private bool HasInstallStateChanged()
+        {
+            bool isInstalled = CliInstallerState.IsInstalled;
+            bool wasInstalled = _status != CliInstallStatus.NotInstalled || !string.IsNullOrWhiteSpace(_installedVersion);
+            if (isInstalled != wasInstalled)
+            {
+                return true;
+            }
+
+            string installedVersion = CliInstallerState.GetInstalledVersion() ?? string.Empty;
+            return !string.Equals(installedVersion, _installedVersion, StringComparison.Ordinal);
         }
 
         private static string GetPathCommand()

@@ -672,7 +672,7 @@ namespace UnityCliBridge.Bridge.Editor
                 SessionState.EraseBool(ProtocolConstants.TestSessionKeyActiveFailuresOnly);
                 SessionState.EraseInt(ProtocolConstants.TestSessionKeyProgressCompleted);
                 SessionState.EraseInt(ProtocolConstants.TestSessionKeyProgressTotal);
-                SessionState.EraseInt(ProtocolConstants.TestSessionKeyCallbacksInstanceId);
+                UnityObjectIdentity.EraseSessionObject(ProtocolConstants.TestSessionKeyCallbacksInstanceId);
                 StopRestoredEditModeWatchdog();
             }
         }

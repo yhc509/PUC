@@ -49,18 +49,12 @@ namespace UnityCliBridge.Bridge.Editor
 
         public static TestRunnerCallbacks? TryFindFromSession()
         {
-            int instanceId = SessionState.GetInt(ProtocolConstants.TestSessionKeyCallbacksInstanceId, 0);
-            if (instanceId == 0)
-            {
-                return null;
-            }
-
-            return EditorUtility.InstanceIDToObject(instanceId) as TestRunnerCallbacks;
+            return UnityObjectIdentity.FindSessionObject(ProtocolConstants.TestSessionKeyCallbacksInstanceId) as TestRunnerCallbacks;
         }
 
         public void StoreInstanceIdToSession()
         {
-            SessionState.SetInt(ProtocolConstants.TestSessionKeyCallbacksInstanceId, GetInstanceID());
+            UnityObjectIdentity.StoreSessionObject(ProtocolConstants.TestSessionKeyCallbacksInstanceId, this);
         }
 
         public void RunStarted(ITestAdaptor testsToRun)

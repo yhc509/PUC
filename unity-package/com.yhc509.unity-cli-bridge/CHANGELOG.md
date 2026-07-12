@@ -8,11 +8,12 @@
 - List-style responses now have opt-in trims: `read-console --no-stacktrace`, `test list --no-detail`, `test run/results --failures-only`, and `instances list --brief` (#131).
 
 ### Fixed
+- Fixed package compilation on Unity 6000.5 and later after Unity object instance ID APIs became compile-time errors. `execute` responses keep the `instanceID` field name and JSON number shape: older Unity versions continue returning the same signed instance ID values as before, while Unity 6000.4 and later may return a different numeric object identity from Unity's newer object identity system.
 - `qa ui-dump` text extraction now stays within each clickable element's owned label subtree, preventing nested clickable controls from borrowing each other's labels.
 
 ### Compatibility
-- This package now depends on `com.unity.recorder`; importing projects will pull it in.
-- Recording declares `com.unity.recorder` `2.5.2` as the dependency floor, but the resolved Recorder version varies by Unity version. The feature has been verified with Unity 6 and Recorder `5.1.x`; Unity 2021.3 with Recorder `2.5.x` is a known limitation and has not yet been live-verified.
+- Breaking: the minimum supported Unity version is now `2023.1`, and this package pins `com.unity.recorder` `5.1.6` for Play Mode recording.
+- Older Recorder releases can fail to compile on Unity `6000.4` and newer because Unity promotes the obsolete object identity API to a compile-time error.
 
 ## [0.1.13] - 2026-05-13
 

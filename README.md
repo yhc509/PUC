@@ -127,7 +127,7 @@ Assign a value to `__pucResult` when the caller needs a structured return value.
 
 `record start` captures the Play Mode Game View as mp4 via Unity Recorder. It returns `STARTED` plus a `recordingId` immediately; add `--duration N --wait` to auto-stop and poll until the mp4 is finalized. Without `--duration`, stop manually with `record stop`. Outputs default to `Library/com.yhc509.unity-cli-bridge/recordings/`; pass `--path` to move the finalized mp4.
 
-Recording depends on Unity Recorder. The package declares `com.unity.recorder` `2.5.2` as the minimum, while Unity may resolve a newer compatible version for the Editor version in use, such as Recorder `5.1.x` on Unity 6. Recording has been verified with Unity 6 and Recorder `5.1.x`; the Unity 2021.3 plus Recorder `2.5.x` path is a known limitation and has not yet been live-verified.
+Recording depends on Unity Recorder. The package requires Unity `2023.1` or newer and pins `com.unity.recorder` `5.1.6`, which includes the compatibility fixes older Recorder releases need for Unity `6000.4` and newer.
 
 ### Assets
 

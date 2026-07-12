@@ -13,7 +13,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `qa click`, `qa tap`, and `qa swipe` now accept `--button left|right` so Play Mode QA can drive right-click and right-drag input paths. The default remains `left`.
 
 ### Fixed
+- Fixed package compilation on Unity 6000.5 and later after Unity object instance ID APIs became compile-time errors. `execute` responses keep the `instanceID` field name and JSON number shape: older Unity versions continue returning the same signed instance ID values as before, while Unity 6000.4 and later may return a different numeric object identity from Unity's newer object identity system.
 - Auth tokens are now stored in a per-instance owner-only sidecar file instead of the shared instance registry, so an Editor running an older package version can no longer strip a newer Editor's token and cause intermittent `UNAUTHORIZED` failures in mixed-version setups (#115).
+- The Unity CLI Manager window now refreshes status while open and handles prerelease or custom CLI version suffixes without clearing the installer state (#143).
 - Fixed #78: queued IPC commands that have not started yet are now cancelled when the CLI disconnects or times out, preventing delayed writes after the caller has already failed. Commands that have started still use at-least-once semantics, so check state before retrying mutation commands after a timeout.
 - `scene set-transform` and `scene assign-material` now refuse to run when the active scene already has unsaved changes, instead of silently saving those unrelated edits along with the requested change. This matches the existing `scene patch` behavior; save or discard first.
 - `prefab patch` and `prefab create` (overwrite) now refuse to write when the target prefab is open in a Prefab Stage with unsaved changes — including a parent stage left dirty while you edit a nested Prefab — instead of silently overwriting your in-editor edits. Save or discard the Prefab Stage first (#119).
@@ -23,8 +25,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Scene and prefab component patching now refuses serialized fields that are hidden from `inspect`, so the patchable surface matches what `inspect` shows instead of letting hand-written property paths reach internal or non-editable fields. `SerializeReference` (`$type`) assignments are validated against the field's declared type and must be a constructible, assignable type.
 
 ### Compatibility
-- This package now depends on `com.unity.recorder`; importing projects will pull it in.
-- Recording declares `com.unity.recorder` `2.5.2` as the dependency floor, but the resolved Recorder version varies by Unity version. The feature has been verified with Unity 6 and Recorder `5.1.x`; Unity 2021.3 with Recorder `2.5.x` is a known limitation and has not yet been live-verified.
+- Breaking: the minimum supported Unity version is now `2023.1`, and this package pins `com.unity.recorder` `5.1.6` for Play Mode recording.
+- Older Recorder releases can fail to compile on Unity `6000.4` and newer because Unity promotes the obsolete object identity API to a compile-time error.
 
 ## [0.3.1] - 2026-06-12
 
