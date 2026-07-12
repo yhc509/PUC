@@ -265,7 +265,22 @@ namespace UnityCliBridge.Bridge.Editor
                 DrawSelectableValue("Path", _skillDestinationPath);
                 EditorGUILayout.LabelField("Skill", GetSkillStatusLabel());
 
-                if (GUILayout.Button(GetSkillButtonLabel(), GUILayout.Height(24f)))
+                if (_isSkillInstalled)
+                {
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        if (GUILayout.Button(GetSkillButtonLabel(), GUILayout.Height(24f)))
+                        {
+                            InstallSkill();
+                        }
+
+                        if (GUILayout.Button("Remove Skill", GUILayout.Height(24f)))
+                        {
+                            RemoveSkill();
+                        }
+                    }
+                }
+                else if (GUILayout.Button(GetSkillButtonLabel(), GUILayout.Height(24f)))
                 {
                     InstallSkill();
                 }
@@ -273,7 +288,7 @@ namespace UnityCliBridge.Bridge.Editor
                 if (_skillScope == SkillScope.Project && _isGlobalSkillInstalled)
                 {
                     EditorGUILayout.HelpBox(
-                        "A global copy of this skill is also installed at `" + _globalSkillPath + "`. It may take precedence over the project copy. Switch Scope to Global and reinstall to update it, or delete it manually.",
+                        "A global copy of this skill is also installed at `" + _globalSkillPath + "`. It may take precedence over the project copy. Switch Scope to Global to update or remove that copy.",
                         MessageType.Warning);
                 }
 
@@ -330,6 +345,43 @@ namespace UnityCliBridge.Bridge.Editor
                 RefreshSkillState();
                 _skillFeedbackType = MessageType.Info;
                 _skillFeedbackMessage = "Installed to: " + _skillDestinationPath;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+                _skillFeedbackType = MessageType.Error;
+                _skillFeedbackMessage = exception.Message;
+            }
+        }
+
+        private void RemoveSkill()
+        {
+            string removedPath = _skillDestinationPath;
+            bool shouldRemove = EditorUtility.DisplayDialog(
+                "Remove Skill?",
+                "This will remove the installed skill at:\n" + removedPath,
+                "Remove",
+                "Cancel");
+            if (!shouldRemove)
+            {
+                return;
+            }
+
+            try
+            {
+                bool removed = SkillInstaller.Remove(_skillTarget, _skillScope);
+                RefreshSkillState();
+
+                if (removed)
+                {
+                    _skillFeedbackType = MessageType.Info;
+                    _skillFeedbackMessage = "Removed from: " + removedPath;
+                }
+                else
+                {
+                    _skillFeedbackType = MessageType.Warning;
+                    _skillFeedbackMessage = "Nothing to remove at: " + removedPath;
+                }
             }
             catch (Exception exception)
             {

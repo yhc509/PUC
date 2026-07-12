@@ -74,6 +74,8 @@ Extract and add the binary to your PATH.
 
 In the Unity Editor, open `Window > Unity CLI Manager`. Select your AI tool (Claude Code or Codex), keep **Scope** set to **Project** unless you need a global install, and click **Install Skill**.
 
+Once installed, the same section offers **Remove Skill** for the selected tool and scope.
+
 Project-scoped installs go under `<project-root>/.claude/skills/` or `<project-root>/.codex/skills/`. Commit that folder if you want the team to share the same skill version as the Unity package.
 
 The skill teaches AI agents how to pick the right commands, run them safely, and verify results with `read-console`. The installed `SKILL.md` records the package version it came from, so the CLI Manager can tell you when the skill needs an update.
@@ -344,7 +346,7 @@ docs/                          Generated CLI reference, specs
 
 The `unity-cli-bridge` skill teaches AI agents how to use the CLI safely: pick the right command, verify with `read-console`, follow inspect-before-patch patterns.
 
-Install from **Window > Unity CLI Manager** in the Unity Editor — select your AI tool and scope, then click **Install Skill**. Project scope is the default and writes to `<project-root>/.claude/skills/` or `<project-root>/.codex/skills/`; global scope writes to the user's agent skills directory. Supports Claude Code and Codex.
+Install from **Window > Unity CLI Manager** in the Unity Editor — select your AI tool and scope, then click **Install Skill**. Once installed, use **Remove Skill** from the same section to remove that scoped copy. Project scope is the default and writes to `<project-root>/.claude/skills/` or `<project-root>/.codex/skills/`; global scope writes to the user's agent skills directory. Supports Claude Code and Codex.
 
 ## Development
 

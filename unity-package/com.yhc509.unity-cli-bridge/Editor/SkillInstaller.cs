@@ -50,6 +50,20 @@ namespace UnityCliBridge.Bridge.Editor
             Debug.Log($"[SkillInstaller] Installed {target} skill ({scope}) to: {destination}");
         }
 
+        internal static bool Remove(SkillTarget target, SkillScope scope)
+        {
+            string destination = GetDestination(target, scope);
+            if (!Directory.Exists(destination))
+            {
+                return false;
+            }
+
+            Directory.Delete(destination, true);
+
+            Debug.Log($"[SkillInstaller] Removed {target} skill ({scope}) from: {destination}");
+            return true;
+        }
+
         internal static string GetDestination(SkillTarget target, SkillScope scope)
         {
             switch (scope)
