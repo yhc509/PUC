@@ -75,6 +75,12 @@ namespace UnityCliBridge.Bridge.Editor
 
         public static string GetPackageVersion()
         {
+            PackageManagerInfo? packageInfo = PackageManagerInfo.FindForAssembly(typeof(CliInstallerState).Assembly);
+            if (packageInfo != null && !string.IsNullOrWhiteSpace(packageInfo.version))
+            {
+                return packageInfo.version.Trim();
+            }
+
             string packageJsonPath = Path.Combine(GetPackageDirectory(), PackageJsonFileName);
             if (!File.Exists(packageJsonPath))
             {

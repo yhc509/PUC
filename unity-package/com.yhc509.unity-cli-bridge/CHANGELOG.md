@@ -6,6 +6,10 @@
 - Play Mode mp4 recording via `record start`, `record stop`, `record status`, and `qa run-sequence --record`.
 - `qa ui-dump` and `qa world-dump` now accept token-trimming filters (`--limit`, `--text`, plus UI-only `--interactable-only` and `--omit-rect`) while preserving default output when omitted (#130).
 - List-style responses now have opt-in trims: `read-console --no-stacktrace`, `test list --no-detail`, `test run/results --failures-only`, and `instances list --brief` (#131).
+- The Unity CLI Manager can now install or remove the AI Agent Skill for the selected scope, so each project can keep the skill version that matches its package version.
+
+### Changed
+- AI Agent Skill installation now defaults to the project scope. Installed `SKILL.md` files include the package version they came from, and the Unity CLI Manager reports when an installed skill is older than the current package or shadowed by a global copy that can be updated or removed.
 
 ### Fixed
 - Fixed package compilation on Unity 6000.5 and later after Unity object instance ID APIs became compile-time errors. `execute` responses keep the `instanceID` field name and JSON number shape: older Unity versions continue returning the same signed instance ID values as before, while Unity 6000.4 and later may return a different numeric object identity from Unity's newer object identity system.

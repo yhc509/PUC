@@ -3,9 +3,13 @@ name: unity-cli-bridge
 description: "Use when the user wants to operate Unity through Unity CLI Bridge (`unity-cli`/`ucli`), including live command selection, asset commands, scene/prefab inspect/patch flows, QA test automation (Play Mode input simulation), console-log verification, or Unity CLI Bridge troubleshooting."
 ---
 
+<!-- unity-cli-bridge-package-version: {{PACKAGE_VERSION}} -->
+
 # Unity CLI Bridge
 
 `unity-cli`를 실제 작업에 안전하게 쓰기 위한 운용 스킬이다. 목적은 명령어 목록을 길게 나열하는 것이 아니라, 현재 프로젝트를 올바르게 잡고, 맞는 명령을 고르고, 작업 뒤 로그까지 확인하는 흐름을 고정하는 것이다.
+
+이 스킬은 Unity 패키지 `com.yhc509.unity-cli-bridge` v{{PACKAGE_VERSION}}에 포함되어 설치되었다. 패키지를 업데이트했다면 Unity의 `Window > Unity CLI Manager`에서 스킬도 다시 설치한다.
 
 ## Quick Workflow
 
