@@ -13,6 +13,7 @@
 
 ### Fixed
 - Fixed package compilation on Unity 6000.5 and later after Unity object instance ID APIs became compile-time errors. `execute` and `custom` results still use the `instanceID` field name for Unity objects, but the value is now emitted as a JSON string so Unity 6000.4 and newer 64-bit object identifiers remain exact for JavaScript consumers.
+- Commands issued immediately after a domain reload (script recompilation) no longer fail intermittently with `UNAUTHORIZED` while the Editor bridge is coming back online.
 - `qa ui-dump` text extraction now stays within each clickable element's owned label subtree, preventing nested clickable controls from borrowing each other's labels.
 
 ### Compatibility

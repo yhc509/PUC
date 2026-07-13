@@ -113,6 +113,7 @@ namespace UnityCliBridge.Bridge.Editor
             _isStarted = true;
             ConsoleLogBuffer.Start();
             _lastHeartbeatTime = EditorApplication.timeSinceStartup;
+            WriteTokenSidecarSafely();
             StartListener();
 
             EditorApplication.update += OnEditorUpdate;
@@ -121,6 +122,11 @@ namespace UnityCliBridge.Bridge.Editor
         }
 
         public void Dispose()
+        {
+            Dispose(deleteTokenSidecar: true);
+        }
+
+        private void Dispose(bool deleteTokenSidecar)
         {
             if (_isDisposed)
             {
@@ -144,7 +150,7 @@ namespace UnityCliBridge.Bridge.Editor
             DisposeUnixListener();
 #endif
             ConsoleLogBuffer.Stop();
-            RemoveInstance();
+            RemoveInstance(deleteTokenSidecar);
             CleanupSocketFile();
             DisposeNamedPipeOwnershipLock();
             _cancellationTokenSource.Dispose();
@@ -647,7 +653,7 @@ namespace UnityCliBridge.Bridge.Editor
                         _projectHash,
                         ProtocolConstants.ErrorUnauthorized,
                         "IPC authentication failed.",
-                        false,
+                        true,
                         0,
                         ProtocolConstants.TransportLive,
                         ProtocolErrorDetails.FromString("Missing or invalid IPC authentication token."));
@@ -938,7 +944,7 @@ namespace UnityCliBridge.Bridge.Editor
 
         private void OnBeforeAssemblyReload()
         {
-            Dispose();
+            Dispose(deleteTokenSidecar: false);
         }
 
         private ResponseEnvelope HandleCommand(CommandEnvelope command)
@@ -1270,7 +1276,7 @@ namespace UnityCliBridge.Bridge.Editor
             });
         }
 
-        private void RemoveInstance()
+        private void RemoveInstance(bool deleteTokenSidecar)
         {
             UpdateRegistrySafely(delegate(InstanceRegistry registry)
             {
@@ -1305,7 +1311,10 @@ namespace UnityCliBridge.Bridge.Editor
                 registry.activeProjectHash = null;
                 return registry;
             });
-            InstanceRegistryFile.DeleteTokenSidecar(_registryFilePath, _projectHash);
+            if (deleteTokenSidecar)
+            {
+                InstanceRegistryFile.DeleteTokenSidecar(_registryFilePath, _projectHash);
+            }
         }
 
         private InstanceRecord BuildInstanceRecord()
