@@ -123,10 +123,10 @@ namespace UnityCliBridge.Bridge.Editor
 
         public void Dispose()
         {
-            Dispose(deleteTokenSidecar: true);
+            Dispose(unregisterInstance: true);
         }
 
-        private void Dispose(bool deleteTokenSidecar)
+        private void Dispose(bool unregisterInstance)
         {
             if (_isDisposed)
             {
@@ -150,7 +150,11 @@ namespace UnityCliBridge.Bridge.Editor
             DisposeUnixListener();
 #endif
             ConsoleLogBuffer.Stop();
-            RemoveInstance(deleteTokenSidecar);
+            if (unregisterInstance)
+            {
+                UnregisterInstance();
+            }
+
             CleanupSocketFile();
             DisposeNamedPipeOwnershipLock();
             _cancellationTokenSource.Dispose();
@@ -944,7 +948,7 @@ namespace UnityCliBridge.Bridge.Editor
 
         private void OnBeforeAssemblyReload()
         {
-            Dispose(deleteTokenSidecar: false);
+            Dispose(unregisterInstance: false);
         }
 
         private ResponseEnvelope HandleCommand(CommandEnvelope command)
@@ -1276,7 +1280,7 @@ namespace UnityCliBridge.Bridge.Editor
             });
         }
 
-        private void RemoveInstance(bool deleteTokenSidecar)
+        private void UnregisterInstance()
         {
             UpdateRegistrySafely(delegate(InstanceRegistry registry)
             {
@@ -1311,10 +1315,8 @@ namespace UnityCliBridge.Bridge.Editor
                 registry.activeProjectHash = null;
                 return registry;
             });
-            if (deleteTokenSidecar)
-            {
-                InstanceRegistryFile.DeleteTokenSidecar(_registryFilePath, _projectHash);
-            }
+
+            InstanceRegistryFile.DeleteTokenSidecar(_registryFilePath, _projectHash);
         }
 
         private InstanceRecord BuildInstanceRecord()

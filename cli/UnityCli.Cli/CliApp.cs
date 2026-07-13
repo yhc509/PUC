@@ -167,7 +167,7 @@ public static class CliApp
     {
         var registry = registryStore.Load();
         var target = ResolveTarget(registry, projectRoot);
-        if (target is not null)
+        if (target is not null && !IsMissingAuthTokenForSyntheticTarget(registry, projectRoot, target))
         {
             try
             {
@@ -221,7 +221,7 @@ public static class CliApp
         var liveReachable = false;
         string? liveErrorCode = null;
         string? liveErrorMessage = null;
-        if (target is not null)
+        if (target is not null && !IsMissingAuthTokenForSyntheticTarget(registry, projectRoot, target))
         {
             try
             {
@@ -284,6 +284,13 @@ public static class CliApp
 
         if (target is not null)
         {
+            if (IsMissingAuthTokenForSyntheticTarget(registry, projectRoot, target))
+            {
+                return CreateLiveUnavailableResponse(
+                    target.projectHash,
+                    "Bridge 인증 정보를 아직 읽을 수 없습니다. Unity Editor가 재시작 또는 스크립트 재컴파일 중일 수 있으니 잠시 후 다시 시도하세요.");
+            }
+
             try
             {
                 int liveTimeoutMs = ResolveLiveTimeoutMs(parsed);
@@ -429,6 +436,26 @@ public static class CliApp
             ? null
             : registry.instances.FirstOrDefault(item =>
                 string.Equals(item.pipeName, originalTarget.pipeName, StringComparison.Ordinal));
+    }
+
+    private static bool IsMissingAuthTokenForSyntheticTarget(
+        InstanceRegistry registry,
+        string? projectRoot,
+        InstanceRecord target)
+    {
+        if (!string.IsNullOrEmpty(target.token) || string.IsNullOrWhiteSpace(projectRoot))
+        {
+            return false;
+        }
+
+        registry.instances ??= Array.Empty<InstanceRecord>();
+        string canonicalProjectRoot = ProtocolConstants.GetCanonicalPath(projectRoot);
+        return !registry.instances.Any(item =>
+            !string.IsNullOrWhiteSpace(item.projectRoot) &&
+            string.Equals(
+                ProtocolConstants.GetCanonicalPath(item.projectRoot),
+                canonicalProjectRoot,
+                StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsUnauthorizedResponse(ResponseEnvelope response)
