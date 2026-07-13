@@ -2,6 +2,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
@@ -49,6 +50,33 @@ namespace UnityCliBridge.Bridge.Editor.Tests
 
         [Test] public void String_Is_Escaped()
             => Assert.AreEqual("\"a\\\"b\\nc\"", ExecuteValueSerializer.Serialize("a\"b\nc"));
+
+        [Test]
+        public void UnityObject_Serializes_InstanceId_AsJsonString()
+        {
+            var gameObject = new GameObject("ExecuteSerializerObject");
+            try
+            {
+                var json = ExecuteValueSerializer.Serialize(gameObject);
+                var parsed = JObject.Parse(json);
+                string? instanceId = (string?)parsed["instanceID"];
+
+                StringAssert.Contains("\"instanceID\":\"", json);
+                Assert.AreEqual(JTokenType.String, parsed["instanceID"]?.Type);
+                Assert.IsNotNull(instanceId);
+                Assert.IsTrue(decimal.TryParse(
+                    instanceId!,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out _));
+                Assert.AreEqual("ExecuteSerializerObject", (string?)parsed["name"]);
+                Assert.AreEqual("GameObject", (string?)parsed["type"]);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(gameObject);
+            }
+        }
 
         [Test] public void Array_Serializes_AsJsonArray()
             => Assert.AreEqual("[1,2,3]", ExecuteValueSerializer.Serialize(new[] { 1, 2, 3 }));
