@@ -17,12 +17,12 @@ namespace UnityCliBridge.Bridge.Editor
 #endif
         }
 
-        public static long GetWireId(UnityEngine.Object obj)
+        public static string GetWireIdString(UnityEngine.Object obj)
         {
 #if UNITY_6000_4_OR_NEWER
-            return unchecked((long)EntityId.ToULong(obj.GetEntityId()));
+            return EntityId.ToULong(obj.GetEntityId()).ToString(CultureInfo.InvariantCulture);
 #else
-            return (long)obj.GetInstanceID();
+            return obj.GetInstanceID().ToString(CultureInfo.InvariantCulture);
 #endif
         }
 

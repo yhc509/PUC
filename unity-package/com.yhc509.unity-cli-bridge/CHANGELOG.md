@@ -12,11 +12,12 @@
 - AI Agent Skill installation now defaults to the project scope. Installed `SKILL.md` files include the package version they came from, and the Unity CLI Manager reports when an installed skill is older than the current package or shadowed by a global copy that can be updated or removed.
 
 ### Fixed
-- Fixed package compilation on Unity 6000.5 and later after Unity object instance ID APIs became compile-time errors. `execute` responses keep the `instanceID` field name and JSON number shape: older Unity versions continue returning the same signed instance ID values as before, while Unity 6000.4 and later may return a different numeric object identity from Unity's newer object identity system.
+- Fixed package compilation on Unity 6000.5 and later after Unity object instance ID APIs became compile-time errors. `execute` and `custom` results still use the `instanceID` field name for Unity objects, but the value is now emitted as a JSON string so Unity 6000.4 and newer 64-bit object identifiers remain exact for JavaScript consumers.
 - `qa ui-dump` text extraction now stays within each clickable element's owned label subtree, preventing nested clickable controls from borrowing each other's labels.
 
 ### Compatibility
 - Breaking: the minimum supported Unity version is now `2023.1`, and this package pins `com.unity.recorder` `5.1.6` for Play Mode recording.
+- Breaking: Unity objects returned from `execute` results, and from `custom` commands that use `ExecuteValueSerializer`, now report `instanceID` as a JSON string instead of a JSON number. For example, `{"instanceID":568105589213746584}` is now `{"instanceID":"568105589213746584"}`. The field name is unchanged; parse the value as a string to avoid precision loss in JavaScript.
 - Older Recorder releases can fail to compile on Unity `6000.4` and newer because Unity promotes the obsolete object identity API to a compile-time error.
 
 ## [0.1.13] - 2026-05-13
