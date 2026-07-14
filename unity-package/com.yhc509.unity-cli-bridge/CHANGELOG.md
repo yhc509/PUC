@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-14
+
 ### Added
 - The Unity CLI Manager can now install or remove the AI Agent Skill for the selected scope, so each project can keep the skill version that matches its package version.
 
@@ -18,7 +20,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Auth tokens are stored in a per-instance owner-only sidecar file instead of the shared instance registry, so an Editor running an older package version can no longer strip a newer Editor's token (#115).
 - `asset find` no longer fails outright when a search term matches assets under `Packages/`. Package paths resolve through symlinks into the package cache (or, for local packages, outside the project), which the asset-root containment check rejected — so common search terms could break the whole command.
 - The Unity CLI Manager window now refreshes status while open and handles prerelease or custom CLI version suffixes without clearing the installer state (#143).
-- `qa ui-dump` text extraction now stays within each clickable element's owned label subtree, preventing nested clickable controls from borrowing each other's labels.
 
 ### Security
 - Live IPC now requires a per-Editor authentication token. The wire protocol is bumped to `5`, so the CLI binary and Unity package must be upgraded together; mixed versions are rejected before commands run.
