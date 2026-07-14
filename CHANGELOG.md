@@ -7,10 +7,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
-- Play Mode mp4 recording via `record start`, `record stop`, `record status`, and `qa run-sequence --record`.
-- `qa ui-dump` and `qa world-dump` now accept token-trimming filters (`--limit`, `--text`, plus UI-only `--interactable-only` and `--omit-rect`) while preserving default output when omitted (#130).
-- List-style responses now have opt-in trims: `read-console --no-stacktrace`, `test list --no-detail`, `test run/results --failures-only`, and `instances list --brief` (#131).
-- `qa click`, `qa tap`, and `qa swipe` now accept `--button left|right` so Play Mode QA can drive right-click and right-drag input paths. The default remains `left`.
 - The Unity CLI Manager can now install or remove the AI Agent Skill for the selected scope, so each project can keep the skill version that matches its package version.
 
 ### Changed
@@ -18,22 +14,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 - Fixed package compilation on Unity 6000.5 and later after Unity object instance ID APIs became compile-time errors. `execute` and `custom` results still use the `instanceID` field name for Unity objects, but the value is now emitted as a JSON string so Unity 6000.4 and newer 64-bit object identifiers remain exact for JavaScript consumers.
-- Auth tokens are now stored in a per-instance owner-only sidecar file instead of the shared instance registry, so an Editor running an older package version can no longer strip a newer Editor's token and cause intermittent `UNAUTHORIZED` failures in mixed-version setups (#115).
-- Commands issued during a domain reload (script recompilation) now keep the Editor registration and auth token intact; while the bridge listener is restarting, callers get a retryable unavailable response instead of intermittent `UNAUTHORIZED` failures.
+- Commands issued during a domain reload (script recompilation) no longer fail intermittently with `UNAUTHORIZED`. The Editor keeps its registry entry and auth token across the reload; while the bridge listener is restarting, callers get a retryable unavailable response instead.
+- Auth tokens are stored in a per-instance owner-only sidecar file instead of the shared instance registry, so an Editor running an older package version can no longer strip a newer Editor's token (#115).
 - `asset find` no longer fails outright when a search term matches assets under `Packages/`. Package paths resolve through symlinks into the package cache (or, for local packages, outside the project), which the asset-root containment check rejected — so common search terms could break the whole command.
 - The Unity CLI Manager window now refreshes status while open and handles prerelease or custom CLI version suffixes without clearing the installer state (#143).
+
+### Security
+- Live IPC now requires a per-Editor authentication token. The wire protocol is bumped to `5`, so the CLI binary and Unity package must be upgraded together; mixed versions are rejected before commands run.
+
+### Compatibility
+- Breaking: the minimum supported Unity version is now `2023.1`, and this package pins `com.unity.recorder` `5.1.6` for Play Mode recording. Older Recorder releases fail to compile on Unity `6000.4` and newer, because Unity promotes the obsolete object identity API to a compile-time error.
+- Breaking: live IPC requires the CLI and the Unity package to be on the same wire protocol (`5`). Upgrade both together.
+- Breaking: Unity objects returned from `execute` results, and from `custom` commands that use `ExecuteValueSerializer`, now report `instanceID` as a JSON string instead of a JSON number. For example, `{"instanceID":568105589213746584}` is now `{"instanceID":"568105589213746584"}`. The field name is unchanged; parse the value as a string to avoid precision loss in JavaScript.
+
+## [0.3.5] - 2026-06-26
+
+### Added
+- The **Unity CLI Manager** window (`Window > Unity CLI Manager`) now has a **Refresh** button beside the latest-release version in the Package Info section. It re-checks GitHub for the newest published CLI release right away, bypassing the cached value (which otherwise lingers for up to an hour), so a just-published release shows up without waiting for the cache to expire.
+
+## [0.3.4] - 2026-06-26
+
+### Added
+- Play Mode mp4 recording via `record start`, `record stop`, `record status`, and `qa run-sequence --record`.
+- `qa ui-dump` and `qa world-dump` now accept token-trimming filters (`--limit`, `--text`, plus UI-only `--interactable-only` and `--omit-rect`) while preserving default output when omitted (#130).
+- List-style responses now have opt-in trims: `read-console --no-stacktrace`, `test list --no-detail`, `test run/results --failures-only`, and `instances list --brief` (#131).
+
+### Compatibility
+- This package now depends on `com.unity.recorder`; importing projects will pull it in.
+- Recording declares `com.unity.recorder` `2.5.2` as the dependency floor, but the resolved Recorder version varies by Unity version. The feature has been verified with Unity 6 and Recorder `5.1.x`; Unity 2021.3 with Recorder `2.5.x` is a known limitation and has not yet been live-verified.
+
+## [0.3.3] - 2026-06-21
+
+### Added
+- `scene inspect` and `prefab inspect` accept `--node <path>` to return a single node and its subtree instead of the entire hierarchy. For an agent that only needs one object, this cuts the response — and the tokens spent reading it — by roughly 70–90% on a targeted lookup, and removes the need to dump a full `--with-values` hierarchy before every patch. Omitting `--node` is unchanged. A bare `--node /` means the whole hierarchy, matching how scene paths already treat `/` as the virtual root (#126).
+- `package list` accepts `--filter <substring>` (matches a package `name` or display name, case-insensitively) and `--limit <N>`. Checking whether a single package is installed no longer returns the entire dependency set — a targeted lookup drops the response by ~95%. Without these options the output, including sort order, is unchanged (#128).
+
+### Changed
+- The bundled AI-agent operator skill now defaults to lower-token command patterns — compact console reads, default-omitting inspects, and smaller agent-facing screenshots — so agent sessions spend fewer tokens out of the box (#125).
+
+## [0.3.2] - 2026-06-21
+
+### Added
+- Play Mode mp4 recording via `record start`, `record stop`, `record status`, and `qa run-sequence --record`.
+- `qa click`, `qa tap`, and `qa swipe` now accept `--button left|right` so Play Mode QA can drive right-click and right-drag input paths. The default remains `left`.
+
+### Fixed
 - Fixed #78: queued IPC commands that have not started yet are now cancelled when the CLI disconnects or times out, preventing delayed writes after the caller has already failed. Commands that have started still use at-least-once semantics, so check state before retrying mutation commands after a timeout.
 - `scene set-transform` and `scene assign-material` now refuse to run when the active scene already has unsaved changes, instead of silently saving those unrelated edits along with the requested change. This matches the existing `scene patch` behavior; save or discard first.
 - `prefab patch` and `prefab create` (overwrite) now refuse to write when the target prefab is open in a Prefab Stage with unsaved changes — including a parent stage left dirty while you edit a nested Prefab — instead of silently overwriting your in-editor edits. Save or discard the Prefab Stage first (#119).
+- `qa ui-dump` label search is now scoped to each element's own subtree, so a label no longer matches text from an unrelated same-named sibling (#113).
 
 ### Security
-- Live IPC now requires a per-Editor authentication token from the instance registry. The wire protocol is bumped to `5`, so the CLI binary and Unity package must be upgraded together; mixed versions are rejected before commands run.
+- Asset path normalization now rejects path-traversal inputs (absolute or drive-qualified paths and `.`/`..` segments) and adds a canonical Assets/Packages containment check, so inputs like `Assets/../ProjectSettings/foo` can no longer escape the intended root (#69).
 - Scene and prefab component patching now refuses serialized fields that are hidden from `inspect`, so the patchable surface matches what `inspect` shows instead of letting hand-written property paths reach internal or non-editable fields. `SerializeReference` (`$type`) assignments are validated against the field's declared type and must be a constructible, assignable type.
 
 ### Compatibility
-- Breaking: the minimum supported Unity version is now `2023.1`, and this package pins `com.unity.recorder` `5.1.6` for Play Mode recording.
-- Breaking: Unity objects returned from `execute` results, and from `custom` commands that use `ExecuteValueSerializer`, now report `instanceID` as a JSON string instead of a JSON number. For example, `{"instanceID":568105589213746584}` is now `{"instanceID":"568105589213746584"}`. The field name is unchanged; parse the value as a string to avoid precision loss in JavaScript.
-- Older Recorder releases can fail to compile on Unity `6000.4` and newer because Unity promotes the obsolete object identity API to a compile-time error.
+- This package now depends on `com.unity.recorder`; importing projects will pull it in.
+- Recording declares `com.unity.recorder` `2.5.2` as the dependency floor, but the resolved Recorder version varies by Unity version. The feature has been verified with Unity 6 and Recorder `5.1.x`; Unity 2021.3 with Recorder `2.5.x` is a known limitation and has not yet been live-verified.
 
 ## [0.3.1] - 2026-06-12
 
