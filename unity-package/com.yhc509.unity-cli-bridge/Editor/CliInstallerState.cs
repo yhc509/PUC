@@ -1,8 +1,10 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using Newtonsoft.Json.Linq;
+using UnityCli.Protocol;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -29,10 +31,7 @@ namespace UnityCliBridge.Bridge.Editor
         private const string GitHubApiUserAgent = "unity-cli-bridge";
         private const string ReleaseDownloadUrlPattern = RepositoryUrl + "/releases/download/v{0}/unity-cli-{1}.{2}";
         private const string ReleasePageUrlPattern = RepositoryUrl + "/releases/tag/v{0}";
-        private const string InstallRootDirectoryName = ".unity-cli-bridge";
-        private const string InstallDirectoryName = "unity-cli";
-        private const string MacExecutableName = "unity-cli";
-        private const string WindowsExecutableName = "unity-cli.exe";
+        private const string SymlinkExecutablePath = "/bin/ln";
         private const string MacPlatformAssetName = "osx-arm64";
         private const string WindowsPlatformAssetName = "win-x64";
         private const string MacArchiveExtension = "tar.gz";
@@ -44,31 +43,84 @@ namespace UnityCliBridge.Bridge.Editor
         private const int LatestReleaseRequestTimeoutSeconds = 15;
         private static LatestReleaseFetchOperation? _activeLatestReleaseFetch;
 
-        public static bool IsInstalled => File.Exists(GetExecutablePath());
-
+        /// <summary>The stable directory users put on PATH. Holds a symlink (macOS) or a copy (Windows).</summary>
         public static string GetInstallDirectory()
         {
-            string userProfileDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            if (string.IsNullOrWhiteSpace(userProfileDirectory))
-            {
-                throw new InvalidOperationException("Failed to resolve user home directory.");
-            }
-
-            return Path.Combine(userProfileDirectory, InstallRootDirectoryName, InstallDirectoryName);
+            return CliInstallLayout.GetPathTargetDirectory();
         }
 
         public static string GetExecutablePath()
         {
-            return Path.Combine(GetInstallDirectory(), GetExecutableFileName());
+            return CliInstallLayout.GetPathTargetExecutablePath();
         }
 
-        public static string? GetInstalledVersion()
+        public static string GetVersionInstallDirectory(string version)
         {
-            if (!IsInstalled)
+            return CliInstallLayout.GetVersionDirectory(version);
+        }
+
+        public static string GetProtocolVersion()
+        {
+            return ProtocolConstants.ProtocolVersion;
+        }
+
+        public static bool IsVersionInstalled(string version)
+        {
+            return !string.IsNullOrWhiteSpace(version)
+                && File.Exists(CliInstallLayout.GetVersionExecutablePath(version));
+        }
+
+        public static IReadOnlyList<InstalledCliVersion> ListInstalledVersions()
+        {
+            List<InstalledCliVersion> installedVersions = CliInstallLayout.ListInstalled();
+            installedVersions.Sort((left, right) => CliInstallLayout.CompareVersions(right.Version, left.Version));
+            return installedVersions;
+        }
+
+        /// <summary>Version the PATH target currently resolves to, read from its meta.json marker.</summary>
+        public static string? GetPathTargetVersion()
+        {
+            if (!File.Exists(CliInstallLayout.GetPathTargetExecutablePath()))
             {
                 return null;
             }
 
+            CliVersionMeta? meta = CliInstallLayout.TryReadMeta(CliInstallLayout.GetPathTargetMetaPath());
+            return meta == null || string.IsNullOrWhiteSpace(meta.cliVersion)
+                ? null
+                : meta.cliVersion.Trim();
+        }
+
+        /// <summary>
+        /// True when the PATH target is a real binary this Manager did not place there: either a
+        /// pre-0.4.1 flat install, or the result of an older Manager overwriting the dispatcher.
+        /// The meta.json marker is the discriminator, so this works on Windows (copy) as well as
+        /// macOS/Linux (symlink).
+        /// </summary>
+        public static bool IsLegacyFlatInstallPresent()
+        {
+            return File.Exists(CliInstallLayout.GetPathTargetExecutablePath())
+                && !File.Exists(CliInstallLayout.GetPathTargetMetaPath());
+        }
+
+        public static bool IsPathTargetCurrent()
+        {
+            string? pathTargetVersion = GetPathTargetVersion();
+            if (string.IsNullOrWhiteSpace(pathTargetVersion))
+            {
+                return false;
+            }
+
+            InstalledCliVersion? newest = CliInstallLayout.FindNewest(CliInstallLayout.ListInstalled());
+
+            // Ordinal, not CompareVersions: both sides were normalized when we wrote them, and
+            // CompareVersions also returns 0 for versions it cannot parse.
+            return newest != null
+                && string.Equals(pathTargetVersion, newest.Version, StringComparison.Ordinal);
+        }
+
+        public static string? GetInstalledVersion()
+        {
             string installedVersion = EditorPrefs.GetString(InstalledVersionEditorPrefsKey, string.Empty).Trim();
             return installedVersion.Length == 0 ? null : installedVersion;
         }
@@ -201,25 +253,19 @@ namespace UnityCliBridge.Bridge.Editor
             return GetStatus(GetPackageVersion());
         }
 
-        public static CliInstallStatus GetStatus(string? targetReleaseVersion)
+        /// <summary>
+        /// Status is keyed on this package's own version, not on the newest release: a project on
+        /// package v0.3.5 needs CLI v0.3.5 (protocol 4), and installing anything else would leave it
+        /// unable to talk to its own bridge.
+        /// </summary>
+        public static CliInstallStatus GetStatus(string? packageVersion)
         {
-            if (!IsInstalled)
+            if (string.IsNullOrWhiteSpace(packageVersion) || !IsVersionInstalled(packageVersion!))
             {
                 return CliInstallStatus.NotInstalled;
             }
 
-            string? installedVersion = GetInstalledVersion();
-            if (string.IsNullOrWhiteSpace(installedVersion))
-            {
-                return CliInstallStatus.UpdateRequired;
-            }
-
-            if (string.IsNullOrWhiteSpace(targetReleaseVersion))
-            {
-                return CliInstallStatus.UpToDate;
-            }
-
-            return CompareVersions(installedVersion, targetReleaseVersion) >= 0
+            return IsPathTargetCurrent()
                 ? CliInstallStatus.UpToDate
                 : CliInstallStatus.UpdateRequired;
         }
@@ -232,6 +278,247 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             EditorPrefs.SetString(InstalledVersionEditorPrefsKey, version.Trim());
+        }
+
+        /// <summary>
+        /// Runs after a versioned install lands on disk: records its protocol, archives any legacy
+        /// flat install that would otherwise be destroyed, and points the PATH target at the newest
+        /// installed version.
+        /// </summary>
+        public static void FinalizeInstall(string version)
+        {
+            if (string.IsNullOrWhiteSpace(version))
+            {
+                throw new ArgumentException("Installed version value is required.", nameof(version));
+            }
+
+            string normalizedVersion = CliInstallLayout.NormalizeVersion(version);
+            if (!IsVersionInstalled(normalizedVersion))
+            {
+                throw new FileNotFoundException(
+                    "CLI executable not found for version " + normalizedVersion + ".",
+                    CliInstallLayout.GetVersionExecutablePath(normalizedVersion));
+            }
+
+            CliInstallLayout.WriteMeta(
+                CliInstallLayout.GetVersionMetaPath(normalizedVersion),
+                normalizedVersion,
+                ProtocolConstants.ProtocolVersion);
+
+            MigrateLegacyFlatInstall();
+            SetInstalledVersion(normalizedVersion);
+            SetPathTargetToNewestInstalledVersion();
+        }
+
+        /// <summary>
+        /// Clears the PATH target of any version-less binary before it gets replaced, so that
+        /// repointing never destroys a CLI the user may still need.
+        ///
+        /// The version comes from the EditorPrefs record the Manager wrote when it installed that
+        /// binary; shipped CLIs cannot report their own version. When we can identify it, it is
+        /// archived into versions/&lt;version&gt;/ and becomes a hand-off candidate. When we cannot —
+        /// a manual download (README "Option B") leaves no record, and a CLI newer than this package
+        /// could have bumped the protocol — we refuse to guess a protocol for it, but we still must
+        /// not delete it: it may be the only binary the user has for an older project. Those go to
+        /// orphaned/ instead, and the Manager surfaces them.
+        /// </summary>
+        /// <returns>The archived version, or null when nothing was archived.</returns>
+        public static string? MigrateLegacyFlatInstall()
+        {
+            if (!IsLegacyFlatInstallPresent())
+            {
+                return null;
+            }
+
+            string legacyExecutablePath = CliInstallLayout.GetPathTargetExecutablePath();
+            if (IsSymbolicLink(legacyExecutablePath))
+            {
+                // A managed symlink whose marker went missing. Deleting a link destroys nothing.
+                return null;
+            }
+
+            string? legacyVersion = GetInstalledVersion();
+            string? legacyProtocolVersion = null;
+            string normalizedLegacyVersion = string.Empty;
+            if (!string.IsNullOrWhiteSpace(legacyVersion))
+            {
+                normalizedLegacyVersion = CliInstallLayout.NormalizeVersion(legacyVersion!);
+                legacyProtocolVersion = CliInstallLayout.InferProtocolVersionForCliVersion(
+                    normalizedLegacyVersion,
+                    GetPackageVersion());
+            }
+
+            if (string.IsNullOrWhiteSpace(legacyProtocolVersion))
+            {
+                QuarantineLegacyFlatInstall(legacyExecutablePath);
+                return null;
+            }
+
+            if (IsVersionInstalled(normalizedLegacyVersion))
+            {
+                // Already archived under this version, so the flat copy is redundant, not precious.
+                return null;
+            }
+
+            string destinationDirectory = CliInstallLayout.GetVersionDirectory(normalizedLegacyVersion);
+            Directory.CreateDirectory(destinationDirectory);
+            File.Move(legacyExecutablePath, CliInstallLayout.GetVersionExecutablePath(normalizedLegacyVersion));
+            CliInstallLayout.WriteMeta(
+                CliInstallLayout.GetVersionMetaPath(normalizedLegacyVersion),
+                normalizedLegacyVersion,
+                legacyProtocolVersion!);
+
+            return normalizedLegacyVersion;
+        }
+
+        /// <summary>Directories under orphaned/, newest first. Each holds one unidentifiable CLI binary.</summary>
+        public static IReadOnlyList<string> ListOrphanedInstalls()
+        {
+            string orphanedDirectory = CliInstallLayout.GetOrphanedDirectory();
+            if (!Directory.Exists(orphanedDirectory))
+            {
+                return Array.Empty<string>();
+            }
+
+            List<string> orphanedInstalls = new List<string>(Directory.GetDirectories(orphanedDirectory));
+            orphanedInstalls.Sort(StringComparer.Ordinal);
+            orphanedInstalls.Reverse();
+            return orphanedInstalls;
+        }
+
+        /// <returns>True when the directory existed and was removed.</returns>
+        public static bool RemoveOrphanedInstall(string orphanedDirectory)
+        {
+            if (string.IsNullOrWhiteSpace(orphanedDirectory))
+            {
+                throw new ArgumentException("Orphaned install directory is required.", nameof(orphanedDirectory));
+            }
+
+            string orphanedRoot = Path.GetFullPath(CliInstallLayout.GetOrphanedDirectory());
+            string fullPath = Path.GetFullPath(orphanedDirectory);
+            if (!fullPath.StartsWith(orphanedRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Refusing to remove a path outside the orphaned directory: " + orphanedDirectory,
+                    nameof(orphanedDirectory));
+            }
+
+            if (!Directory.Exists(fullPath))
+            {
+                return false;
+            }
+
+            Directory.Delete(fullPath, true);
+            return true;
+        }
+
+        private static void QuarantineLegacyFlatInstall(string legacyExecutablePath)
+        {
+            string quarantineDirectory = Path.Combine(
+                CliInstallLayout.GetOrphanedDirectory(),
+                DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)
+                    + "-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            Directory.CreateDirectory(quarantineDirectory);
+
+            string destinationPath = Path.Combine(quarantineDirectory, Path.GetFileName(legacyExecutablePath));
+            File.Move(legacyExecutablePath, destinationPath);
+
+            Debug.LogWarning(
+                "Unity CLI Bridge: the CLI binary at " + legacyExecutablePath
+                + " could not be identified (no recorded version), so it is not a hand-off candidate. "
+                + "It was moved to " + destinationPath + " rather than deleted, because it may be the only "
+                + "CLI you have for a project on an older package version. "
+                + "Window > Unity CLI Manager lists it under Unidentified Binaries.");
+        }
+
+        /// <summary>Points ~/.unity-cli-bridge/unity-cli/ at the newest installed version.</summary>
+        public static void SetPathTargetToNewestInstalledVersion()
+        {
+            InstalledCliVersion? newest = CliInstallLayout.FindNewest(CliInstallLayout.ListInstalled());
+            if (newest == null)
+            {
+                ClearPathTarget();
+                return;
+            }
+
+            string pathTargetDirectory = CliInstallLayout.GetPathTargetDirectory();
+            Directory.CreateDirectory(pathTargetDirectory);
+
+            string pathTargetExecutablePath = CliInstallLayout.GetPathTargetExecutablePath();
+            DeleteFileIfExists(pathTargetExecutablePath);
+
+            switch (Application.platform)
+            {
+                case RuntimePlatform.OSXEditor:
+                    // File.CreateSymbolicLink is .NET 6+; the Editor's runtime does not have it.
+                    CliDownloader.RunProcess(
+                        SymlinkExecutablePath,
+                        "-sfn " + QuoteArgument(newest.ExecutablePath) + " " + QuoteArgument(pathTargetExecutablePath),
+                        "symlink PATH target");
+                    break;
+                case RuntimePlatform.WindowsEditor:
+                    // Symlinks on Windows need developer mode or elevation, so copy instead.
+                    File.Copy(newest.ExecutablePath, pathTargetExecutablePath, true);
+                    break;
+                default:
+                    throw new PlatformNotSupportedException("CLI Installer only supports macOS arm64 and Windows x64 editors.");
+            }
+
+            CliInstallLayout.WriteMeta(
+                CliInstallLayout.GetPathTargetMetaPath(),
+                newest.Version,
+                newest.ProtocolVersion);
+        }
+
+        /// <returns>True when the version existed and was removed.</returns>
+        public static bool RemoveVersion(string version)
+        {
+            if (string.IsNullOrWhiteSpace(version))
+            {
+                throw new ArgumentException("Version is required.", nameof(version));
+            }
+
+            string versionDirectory = CliInstallLayout.GetVersionDirectory(version);
+            if (!Directory.Exists(versionDirectory))
+            {
+                return false;
+            }
+
+            Directory.Delete(versionDirectory, true);
+            SetPathTargetToNewestInstalledVersion();
+            return true;
+        }
+
+        private static void ClearPathTarget()
+        {
+            DeleteFileIfExists(CliInstallLayout.GetPathTargetExecutablePath());
+            DeleteFileIfExists(CliInstallLayout.GetPathTargetMetaPath());
+        }
+
+        private static void DeleteFileIfExists(string filePath)
+        {
+            // File.Delete removes a symlink itself, not what it points at.
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+
+        private static bool IsSymbolicLink(string filePath)
+        {
+            try
+            {
+                return (File.GetAttributes(filePath) & FileAttributes.ReparsePoint) != 0;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static string QuoteArgument(string value)
+        {
+            return "\"" + value.Replace("\"", "\\\"") + "\"";
         }
 
         private static void PollLatestReleaseFetch()
@@ -309,45 +596,9 @@ namespace UnityCliBridge.Bridge.Editor
             return packageInfo.resolvedPath;
         }
 
-        private static string GetExecutableFileName()
-        {
-            switch (Application.platform)
-            {
-                case RuntimePlatform.OSXEditor:
-                    return MacExecutableName;
-                case RuntimePlatform.WindowsEditor:
-                    return WindowsExecutableName;
-                default:
-                    throw new PlatformNotSupportedException("CLI Installer only supports macOS arm64 and Windows x64 editors.");
-            }
-        }
-
         internal static int CompareVersions(string leftVersion, string rightVersion)
         {
-            ComparableVersion left;
-            ComparableVersion right;
-            if (!TryParseComparableVersion(leftVersion, out left)
-                || !TryParseComparableVersion(rightVersion, out right))
-            {
-                return 0;
-            }
-
-            int coreComparison = left.Core.CompareTo(right.Core);
-            if (coreComparison != 0)
-            {
-                return coreComparison;
-            }
-
-            bool leftIsPrerelease = !string.IsNullOrEmpty(left.Prerelease);
-            bool rightIsPrerelease = !string.IsNullOrEmpty(right.Prerelease);
-            if (leftIsPrerelease != rightIsPrerelease)
-            {
-                return leftIsPrerelease ? -1 : 1;
-            }
-
-            return leftIsPrerelease
-                ? string.CompareOrdinal(left.Prerelease, right.Prerelease)
-                : 0;
+            return CliInstallLayout.CompareVersions(leftVersion, rightVersion);
         }
 
         private static string? ParseLatestReleaseVersion(string responseText)
@@ -369,39 +620,6 @@ namespace UnityCliBridge.Bridge.Editor
             return string.IsNullOrWhiteSpace(tagName)
                 ? null
                 : NormalizeVersion(tagName);
-        }
-
-        private static bool TryParseComparableVersion(string version, out ComparableVersion comparableVersion)
-        {
-            comparableVersion = default;
-            if (string.IsNullOrWhiteSpace(version))
-            {
-                return false;
-            }
-
-            string normalizedVersion = NormalizeVersion(version);
-            int buildMetadataIndex = normalizedVersion.IndexOf('+');
-            string versionWithoutBuildMetadata = buildMetadataIndex >= 0
-                ? normalizedVersion.Substring(0, buildMetadataIndex)
-                : normalizedVersion;
-
-            string coreVersion = versionWithoutBuildMetadata;
-            string prerelease = string.Empty;
-            int prereleaseIndex = versionWithoutBuildMetadata.IndexOf('-');
-            if (prereleaseIndex >= 0)
-            {
-                coreVersion = versionWithoutBuildMetadata.Substring(0, prereleaseIndex);
-                prerelease = versionWithoutBuildMetadata.Substring(prereleaseIndex + 1);
-            }
-
-            Version core;
-            if (!Version.TryParse(coreVersion, out core))
-            {
-                return false;
-            }
-
-            comparableVersion = new ComparableVersion(core, prerelease);
-            return true;
         }
 
         private static string NormalizeVersion(string version)
@@ -510,19 +728,6 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 Request.Dispose();
             }
-        }
-
-        private readonly struct ComparableVersion
-        {
-            public ComparableVersion(Version core, string prerelease)
-            {
-                Core = core;
-                Prerelease = prerelease;
-            }
-
-            public Version Core { get; }
-
-            public string Prerelease { get; }
         }
 
         public readonly struct LatestReleaseFetchResult

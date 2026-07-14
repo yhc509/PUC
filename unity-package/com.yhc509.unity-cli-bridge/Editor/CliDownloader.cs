@@ -3,6 +3,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using UnityCli.Protocol;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -100,7 +101,8 @@ namespace UnityCliBridge.Bridge.Editor
 
                 operation.OnProgress(0.95f);
                 InstallArchive(operation.ArchivePath, operation.InstallDirectory);
-                CliInstallerState.SetInstalledVersion(operation.ReleaseVersion);
+                // Records the protocol, archives any legacy flat install, and repoints the PATH target.
+                CliInstallerState.FinalizeInstall(operation.ReleaseVersion);
                 operation.OnProgress(1f);
                 operation.OnComplete();
             }
@@ -126,7 +128,7 @@ namespace UnityCliBridge.Bridge.Editor
 
                 if (Application.platform == RuntimePlatform.OSXEditor)
                 {
-                    SetExecutablePermission(CliInstallerState.GetExecutablePath());
+                    SetExecutablePermission(Path.Combine(installDir, CliInstallLayout.GetExecutableFileName()));
                 }
 
                 EnsureExecutableExists(installDir);
@@ -231,7 +233,7 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static void EnsureExecutableExists(string installDirectory)
         {
-            string executablePath = Path.Combine(installDirectory, Path.GetFileName(CliInstallerState.GetExecutablePath()));
+            string executablePath = Path.Combine(installDirectory, CliInstallLayout.GetExecutableFileName());
             if (!File.Exists(executablePath))
             {
                 throw new FileNotFoundException("CLI executable not found after extraction.", executablePath);
@@ -246,7 +248,7 @@ namespace UnityCliBridge.Bridge.Editor
                 "set executable permission");
         }
 
-        private static void RunProcess(string fileName, string arguments, string stepName)
+        internal static void RunProcess(string fileName, string arguments, string stepName)
         {
             using (var process = new Process())
             {
