@@ -189,7 +189,9 @@ public sealed class EditorReadyWaitTests
         using var temp = new TempDirectory();
         string projectRoot = CreateUnityProject(temp.Path, "SampleProject");
         string expectedProjectHash = ProtocolConstants.ComputeProjectHash(projectRoot);
-        var registryStore = new InstanceRegistryStore(Path.Combine(temp.Path, "instances.json"));
+        string registryPath = Path.Combine(temp.Path, "instances.json");
+        var registryStore = new InstanceRegistryStore(registryPath);
+        SaveRegistry(registryStore, registryPath, projectRoot, "token");
         var parsed = new ParsedCommand(CommandKind.Compile);
 
         var result = await UnityCli.Cli.CliApp.ExecuteUnityCommandAsync(
@@ -203,6 +205,34 @@ public sealed class EditorReadyWaitTests
         Assert.True(result.retryable);
         Assert.Equal(expectedProjectHash, result.target);
         Assert.Contains("simulated IPC timeout", result.error?.details?.GetString());
+    }
+
+    [Fact]
+    public async Task ExecuteUnityCommandAsync_WhenSyntheticTargetHasNoAuthToken_DoesNotSendLiveRequest()
+    {
+        using var temp = new TempDirectory();
+        string projectRoot = CreateUnityProject(temp.Path, "SampleProject");
+        string expectedProjectHash = ProtocolConstants.ComputeProjectHash(projectRoot);
+        var registryStore = new InstanceRegistryStore(Path.Combine(temp.Path, "instances.json"));
+        var parsed = new ParsedCommand(CommandKind.Refresh);
+        int calls = 0;
+
+        var result = await UnityCli.Cli.CliApp.ExecuteUnityCommandAsync(
+            parsed,
+            registryStore,
+            projectRoot,
+            (_, _, _, _) =>
+            {
+                calls++;
+                return Task.FromResult(Success(new { sent = true }));
+            });
+
+        Assert.Equal(0, calls);
+        Assert.Equal(ProtocolConstants.StatusError, result.status);
+        Assert.Equal("LIVE_UNAVAILABLE", result.error?.code);
+        Assert.True(result.retryable);
+        Assert.Equal(expectedProjectHash, result.target);
+        Assert.Contains("Bridge 인증 정보를 읽지 못했습니다", result.error?.details?.GetString());
     }
 
     [Fact]

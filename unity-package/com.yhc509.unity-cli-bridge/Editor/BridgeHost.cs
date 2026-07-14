@@ -122,6 +122,11 @@ namespace UnityCliBridge.Bridge.Editor
 
         public void Dispose()
         {
+            Dispose(unregisterInstance: true);
+        }
+
+        private void Dispose(bool unregisterInstance)
+        {
             if (_isDisposed)
             {
                 return;
@@ -144,7 +149,11 @@ namespace UnityCliBridge.Bridge.Editor
             DisposeUnixListener();
 #endif
             ConsoleLogBuffer.Stop();
-            RemoveInstance();
+            if (unregisterInstance)
+            {
+                UnregisterInstance();
+            }
+
             CleanupSocketFile();
             DisposeNamedPipeOwnershipLock();
             _cancellationTokenSource.Dispose();
@@ -339,6 +348,10 @@ namespace UnityCliBridge.Bridge.Editor
                                 _pipeName = candidatePipeName;
                                 _namedPipeOwnershipLock = ownershipLock;
                                 ownershipLock = null;
+
+                                // The hash is only settled here, and a client can connect as soon as
+                                // the listener exists. Publish the token before that can happen.
+                                WriteTokenSidecarSafely();
                                 return server;
                             }
                             catch (IOException)
@@ -473,6 +486,10 @@ namespace UnityCliBridge.Bridge.Editor
                                 socket.Listen(8);
                                 _projectHash = hash;
                                 _pipeName = candidatePipeName;
+
+                                // The hash is only settled here, and a client can connect as soon as
+                                // the listener exists. Publish the token before that can happen.
+                                WriteTokenSidecarSafely();
                                 return socket;
                             }
                             catch (SocketException)
@@ -647,7 +664,7 @@ namespace UnityCliBridge.Bridge.Editor
                         _projectHash,
                         ProtocolConstants.ErrorUnauthorized,
                         "IPC authentication failed.",
-                        false,
+                        true,
                         0,
                         ProtocolConstants.TransportLive,
                         ProtocolErrorDetails.FromString("Missing or invalid IPC authentication token."));
@@ -938,7 +955,7 @@ namespace UnityCliBridge.Bridge.Editor
 
         private void OnBeforeAssemblyReload()
         {
-            Dispose();
+            Dispose(unregisterInstance: false);
         }
 
         private ResponseEnvelope HandleCommand(CommandEnvelope command)
@@ -1270,7 +1287,7 @@ namespace UnityCliBridge.Bridge.Editor
             });
         }
 
-        private void RemoveInstance()
+        private void UnregisterInstance()
         {
             UpdateRegistrySafely(delegate(InstanceRegistry registry)
             {
@@ -1305,6 +1322,7 @@ namespace UnityCliBridge.Bridge.Editor
                 registry.activeProjectHash = null;
                 return registry;
             });
+
             InstanceRegistryFile.DeleteTokenSidecar(_registryFilePath, _projectHash);
         }
 

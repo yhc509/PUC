@@ -146,8 +146,17 @@ namespace UnityCliBridge.Bridge.Editor
             string canonicalProjectRoot = Path.GetFullPath(projectRoot);
             string relativePath = normalizedPath.Replace('/', Path.DirectorySeparatorChar);
             string physicalPath = Path.GetFullPath(Path.Combine(canonicalProjectRoot, relativePath));
-            string expectedRoot = AssetPathUtility.IsPackagesPath(normalizedPath) ? "Packages" : "Assets";
-            string allowedRoot = Path.GetFullPath(Path.Combine(canonicalProjectRoot, expectedRoot));
+
+            // `Packages/...` resolves through UPM: registry packages are symlinks into
+            // `Library/PackageCache`, and `file:` packages point outside the project entirely.
+            // Path.GetFullPath follows those links, so a physical containment check would reject
+            // every valid package path. Normalize() already rejects `..` and absolute inputs.
+            if (AssetPathUtility.IsPackagesPath(normalizedPath))
+            {
+                return physicalPath;
+            }
+
+            string allowedRoot = Path.GetFullPath(Path.Combine(canonicalProjectRoot, "Assets"));
             if (!AssetPathUtility.IsPhysicalPathWithinRoot(physicalPath, allowedRoot))
             {
                 throw new InvalidOperationException("asset 경로가 Unity 프로젝트 asset 루트 밖을 가리킵니다: " + normalizedPath);
