@@ -47,6 +47,24 @@ internal sealed class InstallRootScope : IDisposable
             "{\"cliVersion\":\"" + metaCliVersion + "\",\"protocolVersion\":\"" + metaProtocolVersion + "\"}");
     }
 
+    /// <summary>Mimics the Windows PATH target: a byte-identical copy of the version, plus the marker.</summary>
+    public void SetPathTargetCopy(string version, string protocolVersion)
+    {
+        Directory.CreateDirectory(CliInstallLayout.GetPathTargetDirectory());
+        File.Copy(
+            CliInstallLayout.GetVersionExecutablePath(version),
+            CliInstallLayout.GetPathTargetExecutablePath(),
+            true);
+        CliInstallLayout.WriteMeta(CliInstallLayout.GetPathTargetMetaPath(), version, protocolVersion);
+    }
+
+    /// <summary>Drops a foreign binary onto the PATH target, leaving any existing marker in place.</summary>
+    public void OverwritePathTargetExecutable(string contents)
+    {
+        Directory.CreateDirectory(CliInstallLayout.GetPathTargetDirectory());
+        File.WriteAllText(CliInstallLayout.GetPathTargetExecutablePath(), contents);
+    }
+
     public string AddExecutableOnly(string version)
     {
         string versionDirectory = CliInstallLayout.GetVersionDirectory(version);

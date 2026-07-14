@@ -20,6 +20,8 @@ namespace UnityCliBridge.Bridge.Editor
         private CliInstallStatus _status;
         private IReadOnlyList<InstalledCliVersion> _installedVersions = Array.Empty<InstalledCliVersion>();
         private IReadOnlyList<string> _orphanedInstalls = Array.Empty<string>();
+        private InstalledCliVersion? _pendingVersionRemoval;
+        private string? _pendingOrphanRemoval;
         private string _packageVersion = string.Empty;
         private string _protocolVersion = string.Empty;
         private string _latestReleaseVersion = string.Empty;
@@ -98,6 +100,38 @@ namespace UnityCliBridge.Bridge.Editor
             DrawSkillSection();
 
             EditorGUILayout.EndScrollView();
+
+            ProcessPendingRemovals();
+        }
+
+        /// <summary>
+        /// Removals run after every control for this event has been emitted. Doing the work inline
+        /// from the button would reassign the lists mid-loop and draw the remaining rows shifted, and
+        /// a quarantine during removal can change the control count too. ExitGUI aborts the rest of
+        /// the event so the next pass lays out from the refreshed state.
+        /// </summary>
+        private void ProcessPendingRemovals()
+        {
+            InstalledCliVersion? versionToRemove = _pendingVersionRemoval;
+            string? orphanToRemove = _pendingOrphanRemoval;
+            if (versionToRemove == null && string.IsNullOrWhiteSpace(orphanToRemove))
+            {
+                return;
+            }
+
+            _pendingVersionRemoval = null;
+            _pendingOrphanRemoval = null;
+
+            if (versionToRemove != null)
+            {
+                RemoveVersion(versionToRemove);
+            }
+            else
+            {
+                RemoveOrphanedInstall(orphanToRemove!);
+            }
+
+            GUIUtility.ExitGUI();
         }
 
         private void DrawPackageInfoSection()
@@ -266,7 +300,7 @@ namespace UnityCliBridge.Bridge.Editor
 
                         if (GUILayout.Button("Remove", GUILayout.Width(72f)))
                         {
-                            RemoveVersion(installedVersion);
+                            _pendingVersionRemoval = installedVersion;
                         }
                     }
                 }
@@ -305,7 +339,7 @@ namespace UnityCliBridge.Bridge.Editor
 
                     if (GUILayout.Button("Remove", GUILayout.Width(72f)))
                     {
-                        RemoveOrphanedInstall(orphanedInstall);
+                        _pendingOrphanRemoval = orphanedInstall;
                     }
                 }
             }
@@ -775,7 +809,7 @@ namespace UnityCliBridge.Bridge.Editor
                 return FormatVersion(_pathTargetVersion);
             }
 
-            return CliInstallerState.IsLegacyFlatInstallPresent()
+            return CliInstallerState.IsUnmanagedPathTargetBinaryPresent()
                 ? "Unmanaged binary (no version info)"
                 : "Not set";
         }

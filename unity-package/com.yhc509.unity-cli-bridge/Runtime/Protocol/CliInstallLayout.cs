@@ -69,6 +69,7 @@ namespace UnityCli.Protocol
         private const string Protocol5FirstCliVersion = "0.4.0";
         private const string Protocol4 = "4";
         private const string Protocol5 = "5";
+        private const int FileCompareBufferSize = 64 * 1024;
 
         public static string GetInstallRoot()
         {
@@ -136,6 +137,157 @@ namespace UnityCli.Protocol
         public static string GetExecutableFileName()
         {
             return Path.DirectorySeparatorChar == '\\' ? WindowsExecutableName : UnixExecutableName;
+        }
+
+        /// <summary>
+        /// True when the file at the PATH target is byte-identical to the versioned binary its
+        /// meta.json marker names — that is, removing the PATH-target entry (our symlink on
+        /// macOS/Linux, our copy on Windows) cannot destroy the last copy of those bytes.
+        ///
+        /// This is the ONLY proof accepted before deleting anything at the PATH target. Asking
+        /// whether the entry is a symlink would not do: on Windows our own PATH target is a copy,
+        /// not a link, so that test would quarantine our own binary on every install. Content
+        /// answers the question we actually care about — is this the last copy of these bytes? —
+        /// and it holds for the symlink, for the Windows copy, and for nothing else.
+        /// </summary>
+        public static bool IsPathTargetRedundant()
+        {
+            string pathTargetExecutablePath = GetPathTargetExecutablePath();
+            if (!File.Exists(pathTargetExecutablePath))
+            {
+                return false;
+            }
+
+            CliVersionMeta? marker = TryReadMeta(GetPathTargetMetaPath());
+            if (marker == null || string.IsNullOrWhiteSpace(marker.cliVersion))
+            {
+                return false;
+            }
+
+            string versionExecutablePath = GetVersionExecutablePath(marker.cliVersion.Trim());
+            return File.Exists(versionExecutablePath)
+                && FilesHaveSameContent(pathTargetExecutablePath, versionExecutablePath);
+        }
+
+        /// <summary>
+        /// A readable binary sits at the PATH target whose bytes exist nowhere else we manage. It may
+        /// be the only CLI the user has for an older project, so it must never be deleted for them.
+        /// </summary>
+        public static bool IsUnmanagedPathTargetBinaryPresent()
+        {
+            return File.Exists(GetPathTargetExecutablePath()) && !IsPathTargetRedundant();
+        }
+
+        public static bool FilesHaveSameContent(string leftFilePath, string rightFilePath)
+        {
+            if (string.IsNullOrWhiteSpace(leftFilePath) || string.IsNullOrWhiteSpace(rightFilePath))
+            {
+                return false;
+            }
+
+            try
+            {
+                if (!File.Exists(leftFilePath) || !File.Exists(rightFilePath))
+                {
+                    return false;
+                }
+
+                if (new FileInfo(leftFilePath).Length != new FileInfo(rightFilePath).Length)
+                {
+                    return false;
+                }
+
+                byte[] leftBuffer = new byte[FileCompareBufferSize];
+                byte[] rightBuffer = new byte[FileCompareBufferSize];
+
+                using (FileStream leftStream = File.OpenRead(leftFilePath))
+                using (FileStream rightStream = File.OpenRead(rightFilePath))
+                {
+                    while (true)
+                    {
+                        int leftRead = ReadBlock(leftStream, leftBuffer);
+                        int rightRead = ReadBlock(rightStream, rightBuffer);
+                        if (leftRead != rightRead)
+                        {
+                            return false;
+                        }
+
+                        if (leftRead == 0)
+                        {
+                            return true;
+                        }
+
+                        for (int i = 0; i < leftRead; i++)
+                        {
+                            if (leftBuffer[i] != rightBuffer[i])
+                            {
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Strict containment: the path must be a *proper descendant* of orphaned/. Trailing and
+        /// redundant separators are normalized away first, because Path.GetFullPath preserves a
+        /// trailing separator — without this, "orphaned/", "orphaned//" and "orphaned/./" would all
+        /// pass as descendants of themselves, and a recursive delete would wipe every binary this
+        /// directory exists to preserve.
+        /// </summary>
+        public static bool IsInsideOrphanedDirectory(string candidatePath)
+        {
+            if (string.IsNullOrWhiteSpace(candidatePath))
+            {
+                return false;
+            }
+
+            string orphanedRoot;
+            string fullPath;
+            try
+            {
+                orphanedRoot = TrimTrailingSeparators(Path.GetFullPath(GetOrphanedDirectory()));
+                fullPath = TrimTrailingSeparators(Path.GetFullPath(candidatePath));
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            return fullPath.Length > orphanedRoot.Length
+                && fullPath.StartsWith(orphanedRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+        }
+
+        private static string TrimTrailingSeparators(string path)
+        {
+            return path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+
+        private static int ReadBlock(FileStream stream, byte[] buffer)
+        {
+            // Stream.ReadExactly is .NET 7+; the Editor's runtime does not have it.
+            int total = 0;
+            while (total < buffer.Length)
+            {
+                int read = stream.Read(buffer, total, buffer.Length - total);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                total += read;
+            }
+
+            return total;
         }
 
         public static bool IsDispatchGuardSet()

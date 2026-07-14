@@ -268,6 +268,122 @@ public sealed class CliInstallLayoutTests
     }
 
     [Fact]
+    public void IsPathTargetRedundant_WhenPathTargetMatchesTheVersionItsMarkerNames_IsTrue()
+    {
+        using var root = new InstallRootScope();
+        root.AddVersion("0.4.1", "5");
+        root.SetPathTargetCopy("0.4.1", "5");
+
+        Assert.True(CliInstallLayout.IsPathTargetRedundant());
+        Assert.False(CliInstallLayout.IsUnmanagedPathTargetBinaryPresent());
+    }
+
+    [Fact]
+    public void IsPathTargetRedundant_WhenAStaleMarkerSitsBesideADifferentBinary_IsFalse()
+    {
+        using var root = new InstallRootScope();
+        root.AddVersion("0.4.1", "5");
+        root.SetPathTargetCopy("0.4.1", "5");
+
+        // The documented manual-download path extracts straight into the PATH directory, replacing the
+        // binary but leaving our marker behind. The marker must not be able to vouch for it.
+        root.OverwritePathTargetExecutable("a completely different binary");
+
+        Assert.False(CliInstallLayout.IsPathTargetRedundant());
+        Assert.True(CliInstallLayout.IsUnmanagedPathTargetBinaryPresent());
+    }
+
+    [Fact]
+    public void IsPathTargetRedundant_WhenThereIsNoMarker_IsFalse()
+    {
+        using var root = new InstallRootScope();
+        root.AddVersion("0.4.1", "5");
+        root.OverwritePathTargetExecutable("legacy flat install");
+
+        Assert.False(CliInstallLayout.IsPathTargetRedundant());
+        Assert.True(CliInstallLayout.IsUnmanagedPathTargetBinaryPresent());
+    }
+
+    [Fact]
+    public void IsPathTargetRedundant_WhenTheVersionItsMarkerNamesIsGone_IsFalse()
+    {
+        using var root = new InstallRootScope();
+        root.AddVersion("0.4.1", "5");
+        root.SetPathTargetCopy("0.4.1", "5");
+        Directory.Delete(CliInstallLayout.GetVersionDirectory("0.4.1"), recursive: true);
+
+        Assert.False(CliInstallLayout.IsPathTargetRedundant());
+    }
+
+    [Fact]
+    public void IsUnmanagedPathTargetBinaryPresent_WhenNothingIsThere_IsFalse()
+    {
+        using var root = new InstallRootScope();
+
+        Assert.False(CliInstallLayout.IsUnmanagedPathTargetBinaryPresent());
+    }
+
+    [Fact]
+    public void FilesHaveSameContent_ComparesLengthAndBytes()
+    {
+        using var root = new InstallRootScope();
+        string a = Path.Combine(root.Path, "a");
+        string b = Path.Combine(root.Path, "b");
+        string c = Path.Combine(root.Path, "c");
+        string d = Path.Combine(root.Path, "d");
+        File.WriteAllText(a, "identical");
+        File.WriteAllText(b, "identical");
+        File.WriteAllText(c, "different");
+        File.WriteAllText(d, "identical but longer");
+
+        Assert.True(CliInstallLayout.FilesHaveSameContent(a, b));
+        Assert.False(CliInstallLayout.FilesHaveSameContent(a, c));
+        Assert.False(CliInstallLayout.FilesHaveSameContent(a, d));
+        Assert.False(CliInstallLayout.FilesHaveSameContent(a, Path.Combine(root.Path, "missing")));
+    }
+
+    [Fact]
+    public void IsInsideOrphanedDirectory_RejectsTheOrphanedRootItselfInEveryForm()
+    {
+        using var root = new InstallRootScope();
+        string orphanedRoot = CliInstallLayout.GetOrphanedDirectory();
+
+        // Path.GetFullPath preserves a trailing separator, so each of these once passed a naive
+        // StartsWith containment check and would have recursively deleted every preserved binary.
+        Assert.False(CliInstallLayout.IsInsideOrphanedDirectory(orphanedRoot));
+        Assert.False(CliInstallLayout.IsInsideOrphanedDirectory(orphanedRoot + Path.DirectorySeparatorChar));
+        Assert.False(CliInstallLayout.IsInsideOrphanedDirectory(orphanedRoot + Path.DirectorySeparatorChar + Path.DirectorySeparatorChar));
+        Assert.False(CliInstallLayout.IsInsideOrphanedDirectory(
+            orphanedRoot + Path.DirectorySeparatorChar + "." + Path.DirectorySeparatorChar));
+    }
+
+    [Fact]
+    public void IsInsideOrphanedDirectory_RejectsEscapesAndSiblings()
+    {
+        using var root = new InstallRootScope();
+        string orphanedRoot = CliInstallLayout.GetOrphanedDirectory();
+
+        Assert.False(CliInstallLayout.IsInsideOrphanedDirectory(orphanedRoot + "-old"));
+        Assert.False(CliInstallLayout.IsInsideOrphanedDirectory(
+            Path.Combine(orphanedRoot, "..", "versions")));
+        Assert.False(CliInstallLayout.IsInsideOrphanedDirectory(CliInstallLayout.GetVersionsDirectory()));
+        Assert.False(CliInstallLayout.IsInsideOrphanedDirectory(string.Empty));
+    }
+
+    [Fact]
+    public void IsInsideOrphanedDirectory_AcceptsProperDescendants()
+    {
+        using var root = new InstallRootScope();
+        string orphanedRoot = CliInstallLayout.GetOrphanedDirectory();
+
+        Assert.True(CliInstallLayout.IsInsideOrphanedDirectory(Path.Combine(orphanedRoot, "20260714-120000-abcd1234")));
+        Assert.True(CliInstallLayout.IsInsideOrphanedDirectory(
+            Path.Combine(orphanedRoot, "20260714-120000-abcd1234") + Path.DirectorySeparatorChar));
+        Assert.True(CliInstallLayout.IsInsideOrphanedDirectory(
+            Path.Combine(orphanedRoot, "20260714-120000-abcd1234", "unity-cli")));
+    }
+
+    [Fact]
     public void GetPathTargetDirectory_StaysUnderTheStableUnityCliFolder()
     {
         using var root = new InstallRootScope();

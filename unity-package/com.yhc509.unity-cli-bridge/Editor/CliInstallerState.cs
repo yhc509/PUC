@@ -92,15 +92,15 @@ namespace UnityCliBridge.Bridge.Editor
         }
 
         /// <summary>
-        /// True when the PATH target is a real binary this Manager did not place there: either a
-        /// pre-0.4.1 flat install, or the result of an older Manager overwriting the dispatcher.
-        /// The meta.json marker is the discriminator, so this works on Windows (copy) as well as
-        /// macOS/Linux (symlink).
+        /// A readable binary sits at the PATH target whose bytes exist nowhere else we manage: a
+        /// pre-0.4.1 flat install, an older Manager overwriting the dispatcher, or a manual download
+        /// extracted straight into the PATH directory (which README documents as a supported path).
+        /// The marker file alone cannot answer this — it is not tied to the binary next to it, so a
+        /// hand-placed binary can inherit a stale marker.
         /// </summary>
-        public static bool IsLegacyFlatInstallPresent()
+        public static bool IsUnmanagedPathTargetBinaryPresent()
         {
-            return File.Exists(CliInstallLayout.GetPathTargetExecutablePath())
-                && !File.Exists(CliInstallLayout.GetPathTargetMetaPath());
+            return CliInstallLayout.IsUnmanagedPathTargetBinaryPresent();
         }
 
         public static bool IsPathTargetCurrent()
@@ -305,6 +305,10 @@ namespace UnityCliBridge.Bridge.Editor
                 normalizedVersion,
                 ProtocolConstants.ProtocolVersion);
 
+            // ORDER IS LOAD-BEARING: MigrateLegacyFlatInstall must read the EditorPrefs record before
+            // SetInstalledVersion overwrites it, or the legacy binary gets archived under the version
+            // we are installing right now instead of its own. Do not move this call, and do not fold
+            // it into SetPathTargetToNewestInstalledVersion.
             MigrateLegacyFlatInstall();
             SetInstalledVersion(normalizedVersion);
             SetPathTargetToNewestInstalledVersion();
@@ -325,15 +329,22 @@ namespace UnityCliBridge.Bridge.Editor
         /// <returns>The archived version, or null when nothing was archived.</returns>
         public static string? MigrateLegacyFlatInstall()
         {
-            if (!IsLegacyFlatInstallPresent())
+            if (!IsUnmanagedPathTargetBinaryPresent())
             {
                 return null;
             }
 
             string legacyExecutablePath = CliInstallLayout.GetPathTargetExecutablePath();
-            if (IsSymbolicLink(legacyExecutablePath))
+
+            // The EditorPrefs record describes the binary a Manager installed. It only describes the
+            // file sitting here if no marker was ever written next to it — that is the genuine
+            // pre-0.4.1 flat install. If a marker IS present but the binary is not the one we placed,
+            // somebody dropped a different CLI on top of ours by hand, and the record names our old
+            // binary, not this one. Guessing its protocol from a record about a different file is how
+            // you route commands to a CLI that cannot speak them.
+            if (File.Exists(CliInstallLayout.GetPathTargetMetaPath()))
             {
-                // A managed symlink whose marker went missing. Deleting a link destroys nothing.
+                QuarantinePathTargetBinary(legacyExecutablePath);
                 return null;
             }
 
@@ -350,23 +361,35 @@ namespace UnityCliBridge.Bridge.Editor
 
             if (string.IsNullOrWhiteSpace(legacyProtocolVersion))
             {
-                QuarantineLegacyFlatInstall(legacyExecutablePath);
+                QuarantinePathTargetBinary(legacyExecutablePath);
                 return null;
             }
 
             if (IsVersionInstalled(normalizedLegacyVersion))
             {
-                // Already archived under this version, so the flat copy is redundant, not precious.
+                // Something is already archived under that version and we cannot prove this file is
+                // the same binary. Never clobber a known-good archive with an unknown file, and never
+                // delete the unknown file either.
+                QuarantinePathTargetBinary(legacyExecutablePath);
                 return null;
             }
 
             string destinationDirectory = CliInstallLayout.GetVersionDirectory(normalizedLegacyVersion);
+            string destinationMetaPath = CliInstallLayout.GetVersionMetaPath(normalizedLegacyVersion);
             Directory.CreateDirectory(destinationDirectory);
-            File.Move(legacyExecutablePath, CliInstallLayout.GetVersionExecutablePath(normalizedLegacyVersion));
-            CliInstallLayout.WriteMeta(
-                CliInstallLayout.GetVersionMetaPath(normalizedLegacyVersion),
-                normalizedLegacyVersion,
-                legacyProtocolVersion!);
+
+            // Meta first: an executable with no meta beside it is invisible to ListInstalled and to
+            // the Manager, so a failure between the two steps must not be able to strand the binary.
+            CliInstallLayout.WriteMeta(destinationMetaPath, normalizedLegacyVersion, legacyProtocolVersion!);
+            try
+            {
+                File.Move(legacyExecutablePath, CliInstallLayout.GetVersionExecutablePath(normalizedLegacyVersion));
+            }
+            catch (Exception)
+            {
+                DeleteFileIfExists(destinationMetaPath);
+                throw;
+            }
 
             return normalizedLegacyVersion;
         }
@@ -394,15 +417,17 @@ namespace UnityCliBridge.Bridge.Editor
                 throw new ArgumentException("Orphaned install directory is required.", nameof(orphanedDirectory));
             }
 
-            string orphanedRoot = Path.GetFullPath(CliInstallLayout.GetOrphanedDirectory());
-            string fullPath = Path.GetFullPath(orphanedDirectory);
-            if (!fullPath.StartsWith(orphanedRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            // Strict containment. Path.GetFullPath preserves a trailing separator, so without
+            // normalizing both sides "orphaned/", "orphaned//" and "orphaned/./" would each pass as a
+            // descendant of themselves and recursively delete every preserved binary.
+            if (!CliInstallLayout.IsInsideOrphanedDirectory(orphanedDirectory))
             {
                 throw new ArgumentException(
                     "Refusing to remove a path outside the orphaned directory: " + orphanedDirectory,
                     nameof(orphanedDirectory));
             }
 
+            string fullPath = Path.GetFullPath(orphanedDirectory);
             if (!Directory.Exists(fullPath))
             {
                 return false;
@@ -412,7 +437,11 @@ namespace UnityCliBridge.Bridge.Editor
             return true;
         }
 
-        private static void QuarantineLegacyFlatInstall(string legacyExecutablePath)
+        /// <summary>
+        /// Moves an unidentifiable binary out of the PATH target instead of deleting it. It may be the
+        /// only CLI the user has for a project on an older package version.
+        /// </summary>
+        private static void QuarantinePathTargetBinary(string executablePath)
         {
             string quarantineDirectory = Path.Combine(
                 CliInstallLayout.GetOrphanedDirectory(),
@@ -420,18 +449,25 @@ namespace UnityCliBridge.Bridge.Editor
                     + "-" + Guid.NewGuid().ToString("N").Substring(0, 8));
             Directory.CreateDirectory(quarantineDirectory);
 
-            string destinationPath = Path.Combine(quarantineDirectory, Path.GetFileName(legacyExecutablePath));
-            File.Move(legacyExecutablePath, destinationPath);
+            string destinationPath = Path.Combine(quarantineDirectory, Path.GetFileName(executablePath));
+            File.Move(executablePath, destinationPath);
 
             Debug.LogWarning(
-                "Unity CLI Bridge: the CLI binary at " + legacyExecutablePath
-                + " could not be identified (no recorded version), so it is not a hand-off candidate. "
+                "Unity CLI Bridge: the CLI binary at " + executablePath
+                + " could not be identified, so it is not a hand-off candidate. "
                 + "It was moved to " + destinationPath + " rather than deleted, because it may be the only "
                 + "CLI you have for a project on an older package version. "
                 + "Window > Unity CLI Manager lists it under Unidentified Binaries.");
         }
 
-        /// <summary>Points ~/.unity-cli-bridge/unity-cli/ at the newest installed version.</summary>
+        /// <summary>
+        /// Points ~/.unity-cli-bridge/unity-cli/ at the newest installed version.
+        ///
+        /// This function does the deleting, so this function carries the guard. Callers must not be
+        /// trusted to have preserved whatever is sitting at the PATH target: RemoveVersion reaches
+        /// here too, and a user who removes a version while an unmanaged binary happens to occupy the
+        /// PATH target would otherwise lose it.
+        /// </summary>
         public static void SetPathTargetToNewestInstalledVersion()
         {
             InstalledCliVersion? newest = CliInstallLayout.FindNewest(CliInstallLayout.ListInstalled());
@@ -445,7 +481,7 @@ namespace UnityCliBridge.Bridge.Editor
             Directory.CreateDirectory(pathTargetDirectory);
 
             string pathTargetExecutablePath = CliInstallLayout.GetPathTargetExecutablePath();
-            DeleteFileIfExists(pathTargetExecutablePath);
+            ReleasePathTargetExecutable();
 
             switch (Application.platform)
             {
@@ -478,10 +514,22 @@ namespace UnityCliBridge.Bridge.Editor
                 throw new ArgumentException("Version is required.", nameof(version));
             }
 
-            string versionDirectory = CliInstallLayout.GetVersionDirectory(version);
+            string normalizedVersion = CliInstallLayout.NormalizeVersion(version);
+            string versionDirectory = CliInstallLayout.GetVersionDirectory(normalizedVersion);
             if (!Directory.Exists(versionDirectory))
             {
                 return false;
+            }
+
+            // Release the PATH target *before* the version it names disappears, while it can still be
+            // proven redundant against it. On Windows the PATH target is a copy of that binary; once
+            // the version directory is gone there is nothing to compare it against, and it would be
+            // quarantined as an unidentifiable binary instead of simply replaced.
+            string? pathTargetVersion = GetPathTargetVersion();
+            if (!string.IsNullOrWhiteSpace(pathTargetVersion)
+                && string.Equals(pathTargetVersion, normalizedVersion, StringComparison.Ordinal))
+            {
+                ReleasePathTargetExecutable();
             }
 
             Directory.Delete(versionDirectory, true);
@@ -491,28 +539,55 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static void ClearPathTarget()
         {
-            DeleteFileIfExists(CliInstallLayout.GetPathTargetExecutablePath());
+            ReleasePathTargetExecutable();
             DeleteFileIfExists(CliInstallLayout.GetPathTargetMetaPath());
+        }
+
+        /// <summary>
+        /// Frees the PATH target for replacement without ever destroying the last copy of a binary.
+        /// Every delete of the PATH-target executable goes through here.
+        /// </summary>
+        private static void ReleasePathTargetExecutable()
+        {
+            string pathTargetExecutablePath = CliInstallLayout.GetPathTargetExecutablePath();
+
+            if (!File.Exists(pathTargetExecutablePath))
+            {
+                // Empty, or a symlink whose target was deleted by hand. File.Delete unlinks a dangling
+                // link (File.Exists follows the link and reports false for one) and is a no-op on an
+                // empty path. Neither case can lose bytes, and this is what keeps a broken symlink
+                // from being left behind on the user's PATH.
+                TryUnlink(pathTargetExecutablePath);
+                return;
+            }
+
+            if (CliInstallLayout.IsPathTargetRedundant())
+            {
+                // Byte-identical to the versioned binary its marker names, so this entry — our symlink
+                // on macOS/Linux, our copy on Windows — is not the last copy of anything.
+                File.Delete(pathTargetExecutablePath);
+                return;
+            }
+
+            QuarantinePathTargetBinary(pathTargetExecutablePath);
+        }
+
+        private static void TryUnlink(string filePath)
+        {
+            try
+            {
+                File.Delete(filePath);
+            }
+            catch (DirectoryNotFoundException)
+            {
+            }
         }
 
         private static void DeleteFileIfExists(string filePath)
         {
-            // File.Delete removes a symlink itself, not what it points at.
             if (File.Exists(filePath))
             {
                 File.Delete(filePath);
-            }
-        }
-
-        private static bool IsSymbolicLink(string filePath)
-        {
-            try
-            {
-                return (File.GetAttributes(filePath) & FileAttributes.ReparsePoint) != 0;
-            }
-            catch (Exception)
-            {
-                return false;
             }
         }
 
