@@ -4,7 +4,7 @@
 
 ## Requirements
 
-- Unity `6000.0` or newer
+- Unity `2023.1` or newer
 - the companion CLI `unity-cli`
 
 ## What This Package Provides
@@ -44,15 +44,14 @@ For Git-based installation, use the package path inside the repository.
 
 If you are migrating from the old package, update the dependency key in `Packages/manifest.json` from `com.puc.bridge` to `com.yhc509.unity-cli-bridge`. If your Unity project references the bridge asmdefs directly, also rename `PUC.Editor` / `PUC.Runtime` references to `UnityCliBridge.Bridge.Editor` / `UnityCliBridge.Bridge.Runtime`.
 
-The CLI executable and Codex skill are not included in the UPM package payload. If you want the full `unity-cli-bridge` workflow, clone the mono-repo locally and use:
+The CLI executable is installed separately from **Window > Unity CLI Manager**. The package includes the AI Agent Skill template, and the same window can install or remove it for Claude Code or Codex.
 
-- `cli/` for the `unity-cli` executable
-- `tools/skills/unity-cli-operator/` for the Codex skill
+By default, the skill installs into the current Unity project under `<project-root>/.claude/skills/` or `<project-root>/.codex/skills/`. Commit that folder if you want teammates to use the same skill version as the package. Choose global scope only when you want one user-wide copy.
 
 ## Notes
 
 - This package includes `Newtonsoft.Json.dll` in `Editor/Plugins` for scene/prefab spec parsing.
-- Play Mode recording depends on Unity Recorder. This package declares `com.unity.recorder` `2.5.2` as the minimum, while Unity may resolve a newer compatible version for the Editor version in use, such as Recorder `5.1.x` on Unity 6. Recording has been verified with Unity 6 and Recorder `5.1.x`; the Unity 2021.3 plus Recorder `2.5.x` path is a known limitation and has not yet been live-verified.
+- Play Mode recording depends on Unity Recorder. This package requires Unity `2023.1` or newer and pins `com.unity.recorder` `5.1.6`, which includes the compatibility fixes older Recorder releases need for Unity `6000.4` and newer.
 - In Play Mode, `screenshot --view game` uses `ScreenCapture.CaptureScreenshotAsTexture()`. `--width` and `--height` can downscale the native Game View capture, but larger requests log a warning and save the native capture without upscaling.
 - `input-actions` assets are created as JSON files that Unity's Input System importer reads.
 - `scene inspect --with-values` is meant to be used as the source of truth when authoring `scene patch` specs.

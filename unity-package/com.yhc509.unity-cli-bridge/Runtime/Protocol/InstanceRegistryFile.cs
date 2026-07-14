@@ -76,6 +76,160 @@ namespace UnityCli.Protocol
             });
         }
 
+        public static string GetTokenSidecarPath(string registryFilePath, string projectHash)
+        {
+            if (string.IsNullOrWhiteSpace(projectHash))
+            {
+                return string.Empty;
+            }
+
+            if (!IsValidSidecarProjectHash(projectHash))
+            {
+                return string.Empty;
+            }
+
+            string registryDirectory = Path.GetDirectoryName(Path.GetFullPath(registryFilePath)) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(registryDirectory))
+            {
+                return string.Empty;
+            }
+
+            string tokenDirectory = Path.GetFullPath(Path.Combine(registryDirectory, "tokens"));
+            string fullPath = Path.GetFullPath(Path.Combine(tokenDirectory, projectHash + ".token"));
+            StringComparison comparison = Path.DirectorySeparatorChar == '\\'
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            string tokenDirectoryWithSeparator = tokenDirectory.EndsWith(Path.DirectorySeparatorChar.ToString(), comparison)
+                ? tokenDirectory
+                : tokenDirectory + Path.DirectorySeparatorChar;
+
+            if (!fullPath.StartsWith(tokenDirectoryWithSeparator, comparison))
+            {
+                return string.Empty;
+            }
+
+            return fullPath;
+        }
+
+        private static bool IsValidSidecarProjectHash(string projectHash)
+        {
+            if (string.IsNullOrEmpty(projectHash) || projectHash.Length < 12)
+            {
+                return false;
+            }
+
+            for (int index = 0; index < 12; index++)
+            {
+                if (!IsHexDigit(projectHash[index]))
+                {
+                    return false;
+                }
+            }
+
+            if (projectHash.Length == 12)
+            {
+                return true;
+            }
+
+            if (projectHash[12] != '-' || projectHash.Length == 13)
+            {
+                return false;
+            }
+
+            for (int index = 13; index < projectHash.Length; index++)
+            {
+                char character = projectHash[index];
+                if (character < '0' || character > '9')
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsHexDigit(char character)
+        {
+            return (character >= '0' && character <= '9')
+                || (character >= 'a' && character <= 'f')
+                || (character >= 'A' && character <= 'F');
+        }
+
+        public static void WriteTokenSidecar(string registryFilePath, string projectHash, string token)
+        {
+            string fullPath = GetTokenSidecarPath(registryFilePath, projectHash);
+            if (string.IsNullOrWhiteSpace(fullPath))
+            {
+                return;
+            }
+
+            string? directory = Path.GetDirectoryName(fullPath);
+            if (string.IsNullOrWhiteSpace(directory))
+            {
+                return;
+            }
+
+            Directory.CreateDirectory(directory);
+            TryApplyOwnerOnlyDirectoryMode(directory);
+
+            string tempPath = fullPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+
+            try
+            {
+                using (var stream = CreateOwnerOnlyTempFileForAtomicWrite(tempPath))
+                using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
+                {
+                    writer.Write(token ?? string.Empty);
+                }
+
+                if (File.Exists(fullPath))
+                {
+                    File.Replace(tempPath, fullPath, null);
+                }
+                else
+                {
+                    File.Move(tempPath, fullPath);
+                }
+
+                TryApplyOwnerOnlyFileMode(fullPath);
+            }
+            finally
+            {
+                TryDeleteFile(tempPath);
+            }
+        }
+
+        public static string ReadTokenSidecar(string registryFilePath, string projectHash)
+        {
+            string fullPath = GetTokenSidecarPath(registryFilePath, projectHash);
+            if (string.IsNullOrWhiteSpace(fullPath))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                using var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+                return reader.ReadToEnd().Trim();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        public static void DeleteTokenSidecar(string registryFilePath, string projectHash)
+        {
+            string fullPath = GetTokenSidecarPath(registryFilePath, projectHash);
+            if (string.IsNullOrWhiteSpace(fullPath))
+            {
+                return;
+            }
+
+            TryDeleteFile(fullPath);
+        }
+
         private static void WithExclusiveLock(string fullPath, Action action)
         {
             string lockPath = fullPath + ".lock";
@@ -308,7 +462,7 @@ namespace UnityCli.Protocol
 
             try
             {
-                using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (var stream = CreateOwnerOnlyTempFileForAtomicWrite(tempPath))
                 using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
                 {
                     writer.Write(ProtocolJson.Serialize(registry));
@@ -322,6 +476,8 @@ namespace UnityCli.Protocol
                 {
                     File.Move(tempPath, fullPath);
                 }
+
+                TryApplyOwnerOnlyFileMode(fullPath);
             }
             finally
             {
@@ -330,6 +486,13 @@ namespace UnityCli.Protocol
                     File.Delete(tempPath);
                 }
             }
+        }
+
+        internal static FileStream CreateOwnerOnlyTempFileForAtomicWrite(string tempPath)
+        {
+            var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None);
+            TryApplyOwnerOnlyFileMode(tempPath);
+            return stream;
         }
 
         private static InstanceRegistry LoadUnlocked(string fullPath)
@@ -379,6 +542,104 @@ namespace UnityCli.Protocol
 
             return registry;
         }
+
+        private static void TryApplyOwnerOnlyFileMode(string fullPath)
+        {
+#if UNITY_5_3_OR_NEWER
+            if (Path.DirectorySeparatorChar == '\\' || string.IsNullOrWhiteSpace(fullPath))
+            {
+                return;
+            }
+
+            TryApplyUnixModeWithChmod(fullPath, "600");
+#else
+            try
+            {
+                if (!OperatingSystem.IsWindows())
+                {
+                    File.SetUnixFileMode(fullPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                }
+            }
+            catch
+            {
+            }
+#endif
+        }
+
+        private static void TryApplyOwnerOnlyDirectoryMode(string fullPath)
+        {
+#if UNITY_5_3_OR_NEWER
+            if (Path.DirectorySeparatorChar == '\\' || string.IsNullOrWhiteSpace(fullPath))
+            {
+                return;
+            }
+
+            TryApplyUnixModeWithChmod(fullPath, "700");
+#else
+            try
+            {
+                if (!OperatingSystem.IsWindows())
+                {
+                    File.SetUnixFileMode(fullPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                }
+            }
+            catch
+            {
+            }
+#endif
+        }
+
+#if UNITY_5_3_OR_NEWER
+        private static void TryApplyUnixModeWithChmod(string fullPath, string mode)
+        {
+            try
+            {
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = "chmod",
+                    Arguments = mode + " " + QuoteProcessArgument(fullPath),
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+
+                Process? process = null;
+                try
+                {
+                    process = Process.Start(startInfo);
+                    if (process == null || !process.WaitForExit(1000))
+                    {
+                        UnityEngine.Debug.LogWarning("Unity CLI bridge registry 권한 보정 실패: chmod timed out.");
+                    }
+                    else if (process.ExitCode != 0)
+                    {
+                        UnityEngine.Debug.LogWarning(string.Format(
+                            "Unity CLI bridge registry 권한 보정 실패: chmod exited with {0}.",
+                            process.ExitCode));
+                    }
+                }
+                finally
+                {
+                    if (process != null)
+                    {
+                        process.Dispose();
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                UnityEngine.Debug.LogWarning(string.Format(
+                    "Unity CLI bridge registry 권한 보정 실패: {0}",
+                    exception.Message));
+            }
+        }
+#endif
+
+#if UNITY_5_3_OR_NEWER
+        private static string QuoteProcessArgument(string value)
+        {
+            return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+        }
+#endif
 
         private static string EnsureDirectory(string filePath)
         {

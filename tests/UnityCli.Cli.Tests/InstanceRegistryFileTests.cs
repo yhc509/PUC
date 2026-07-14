@@ -154,6 +154,30 @@ public sealed class InstanceRegistryFileTests
     }
 
     [Fact]
+    public void CreateOwnerOnlyTempFileForAtomicWrite_AppliesOwnerOnlyModeBeforeWrite()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        string tempPath = Path.Combine(temp.Path, "instances.json.tmp");
+
+        using (InstanceRegistryFile.CreateOwnerOnlyTempFileForAtomicWrite(tempPath))
+        {
+            UnixFileMode mode = File.GetUnixFileMode(tempPath);
+
+            Assert.True(mode.HasFlag(UnixFileMode.UserRead));
+            Assert.True(mode.HasFlag(UnixFileMode.UserWrite));
+            Assert.False(mode.HasFlag(UnixFileMode.GroupRead));
+            Assert.False(mode.HasFlag(UnixFileMode.GroupWrite));
+            Assert.False(mode.HasFlag(UnixFileMode.OtherRead));
+            Assert.False(mode.HasFlag(UnixFileMode.OtherWrite));
+        }
+    }
+
+    [Fact]
     public void Save_RecoversFromDeadOwnerPidLock()
     {
         using var temp = new TempDirectory();
@@ -300,6 +324,23 @@ public sealed class InstanceRegistryFileTests
         Assert.False(File.Exists(registryPath + ".lock"));
     }
 
+    [Fact]
+    public void Save_OnUnix_AppliesOwnerOnlyFileMode()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        string registryPath = Path.Combine(temp.Path, "instances.json");
+
+        InstanceRegistryFile.Save(registryPath, CreateRegistry("abc"));
+
+        UnixFileMode permissionBits = File.GetUnixFileMode(registryPath) & GetUnixPermissionBits();
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, permissionBits);
+    }
+
     private static InstanceRegistry CreateRegistry(string projectHash)
     {
         return new InstanceRegistry
@@ -318,6 +359,19 @@ public sealed class InstanceRegistryFileTests
                 },
             ],
         };
+    }
+
+    private static UnixFileMode GetUnixPermissionBits()
+    {
+        return UnixFileMode.UserRead
+            | UnixFileMode.UserWrite
+            | UnixFileMode.UserExecute
+            | UnixFileMode.GroupRead
+            | UnixFileMode.GroupWrite
+            | UnixFileMode.GroupExecute
+            | UnixFileMode.OtherRead
+            | UnixFileMode.OtherWrite
+            | UnixFileMode.OtherExecute;
     }
 
     private static string BuildRegistryJson(string projectHash)

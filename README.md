@@ -51,6 +51,8 @@ Add the following to your `Packages/manifest.json`:
 
 The bridge starts automatically when the Editor opens. No configuration needed.
 
+> **Upgrading from 0.3.x?** `0.4.0` bumps the wire protocol to `5`, so a `0.3.x` CLI cannot talk to a `0.4.0` package — every command fails with `PROTOCOL_MISMATCH` until both sides match. Update the CLI at the same time as the package, from **Window > Unity CLI Manager**.
+
 ### 2. Install the CLI
 
 **Option A: From Unity Editor** (recommended)
@@ -72,14 +74,13 @@ Extract and add the binary to your PATH.
 
 ### 3. Install AI Agent Skill
 
-In the Unity Editor, open `Window > Unity CLI Manager`. Select your AI tool (Claude Code or Codex) from the dropdown and click **Install Skill**.
+In the Unity Editor, open `Window > Unity CLI Manager`. Select your AI tool (Claude Code or Codex), keep **Scope** set to **Project** unless you need a global install, and click **Install Skill**.
 
-| Tool | Install Path |
-|------|-------------|
-| Claude Code | `~/.claude/skills/unity-cli-bridge/` |
-| Codex | `~/.codex/skills/unity-cli-bridge/` |
+Once installed, the same section offers **Remove Skill** for the selected tool and scope.
 
-The skill teaches AI agents how to pick the right commands, run them safely, and verify results with `read-console`.
+Project-scoped installs go under `<project-root>/.claude/skills/` or `<project-root>/.codex/skills/`. Commit that folder if you want the team to share the same skill version as the Unity package.
+
+The skill teaches AI agents how to pick the right commands, run them safely, and verify results with `read-console`. The installed `SKILL.md` records the package version it came from, so the CLI Manager can tell you when the skill needs an update.
 
 ### 4. Verify
 
@@ -127,7 +128,7 @@ Assign a value to `__pucResult` when the caller needs a structured return value.
 
 `record start` captures the Play Mode Game View as mp4 via Unity Recorder. It returns `STARTED` plus a `recordingId` immediately; add `--duration N --wait` to auto-stop and poll until the mp4 is finalized. Without `--duration`, stop manually with `record stop`. Outputs default to `Library/com.yhc509.unity-cli-bridge/recordings/`; pass `--path` to move the finalized mp4.
 
-Recording depends on Unity Recorder. The package declares `com.unity.recorder` `2.5.2` as the minimum, while Unity may resolve a newer compatible version for the Editor version in use, such as Recorder `5.1.x` on Unity 6. Recording has been verified with Unity 6 and Recorder `5.1.x`; the Unity 2021.3 plus Recorder `2.5.x` path is a known limitation and has not yet been live-verified.
+Recording depends on Unity Recorder. The package requires Unity `2023.1` or newer and pins `com.unity.recorder` `5.1.6`, which includes the compatibility fixes older Recorder releases need for Unity `6000.4` and newer.
 
 ### Assets
 
@@ -347,7 +348,7 @@ docs/                          Generated CLI reference, specs
 
 The `unity-cli-bridge` skill teaches AI agents how to use the CLI safely: pick the right command, verify with `read-console`, follow inspect-before-patch patterns.
 
-Install from **Window > Unity CLI Manager** in the Unity Editor — select your AI tool and click **Install Skill**. Supports Claude Code and Codex.
+Install from **Window > Unity CLI Manager** in the Unity Editor — select your AI tool and scope, then click **Install Skill**. Once installed, use **Remove Skill** from the same section to remove that scoped copy. Project scope is the default and writes to `<project-root>/.claude/skills/` or `<project-root>/.codex/skills/`; global scope writes to the user's agent skills directory. Supports Claude Code and Codex.
 
 ## Development
 

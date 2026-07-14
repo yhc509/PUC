@@ -3,9 +3,13 @@ name: unity-cli-bridge
 description: "Use when the user wants to operate Unity through Unity CLI Bridge (`unity-cli`/`ucli`), including live command selection, asset commands, scene/prefab inspect/patch flows, QA test automation (Play Mode input simulation), console-log verification, or Unity CLI Bridge troubleshooting."
 ---
 
+<!-- unity-cli-bridge-package-version: {{PACKAGE_VERSION}} -->
+
 # Unity CLI Bridge
 
 `unity-cli`를 실제 작업에 안전하게 쓰기 위한 운용 스킬이다. 목적은 명령어 목록을 길게 나열하는 것이 아니라, 현재 프로젝트를 올바르게 잡고, 맞는 명령을 고르고, 작업 뒤 로그까지 확인하는 흐름을 고정하는 것이다.
+
+이 스킬은 Unity 패키지 `com.yhc509.unity-cli-bridge` v{{PACKAGE_VERSION}}에 포함되어 설치되었다. 패키지를 업데이트했다면 Unity의 `Window > Unity CLI Manager`에서 스킬도 다시 설치한다.
 
 ## Quick Workflow
 
@@ -42,6 +46,7 @@ description: "Use when the user wants to operate Unity through Unity CLI Bridge 
 - `--omit-defaults` 결과는 read-only이다. patch input으로 그대로 쓰면 생략된 필드가 복원되지 않는다.
 - `SerializedProperty.propertyPath`는 추측하지 말고 inspect 결과를 기준으로 쓴다.
 - live 편집 명령이 compile/update 중이면 읽기 전용 명령만 남기고 나머지는 재시도 흐름으로 본다.
+- `PROTOCOL_MISMATCH`는 재시도로 풀리지 않는다. CLI 바이너리와 Unity 패키지의 wire protocol이 어긋난 상태이므로, 사용자에게 Unity Editor의 `Window > Unity CLI Manager`에서 패키지 버전에 맞는 CLI를 설치하도록 요청한다.
 - `package list/add/remove/search`는 bridge에서 비차단으로 처리된다. `PACKAGE_TIMEOUT`이 나오면 Package Manager가 300초 안에 응답하지 않은 상태이므로 Editor의 Package Manager 상태를 확인한 뒤 재시도한다.
 - scene path는 `/Root[0]/Child[0]` 형식으로 쓰고 `/`는 virtual scene root로 본다.
 - root prefab 이름은 Unity 저장 규칙 때문에 파일 이름으로 정규화된다고 가정한다.

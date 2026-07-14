@@ -167,7 +167,7 @@ public static class CliApp
     {
         var registry = registryStore.Load();
         var target = ResolveTarget(registry, projectRoot);
-        if (target is not null)
+        if (target is not null && !IsMissingAuthTokenForSyntheticTarget(registry, projectRoot, target))
         {
             try
             {
@@ -221,7 +221,7 @@ public static class CliApp
         var liveReachable = false;
         string? liveErrorCode = null;
         string? liveErrorMessage = null;
-        if (target is not null)
+        if (target is not null && !IsMissingAuthTokenForSyntheticTarget(registry, projectRoot, target))
         {
             try
             {
@@ -284,6 +284,13 @@ public static class CliApp
 
         if (target is not null)
         {
+            if (IsMissingAuthTokenForSyntheticTarget(registry, projectRoot, target))
+            {
+                return CreateLiveUnavailableResponse(
+                    target.projectHash,
+                    "Bridge 인증 정보를 읽지 못했습니다. Unity Editor가 실행 중이 아니거나, 시작·재시작·스크립트 재컴파일 중일 수 있습니다. Editor가 떠 있다면 잠시 후 다시 시도하세요.");
+            }
+
             try
             {
                 int liveTimeoutMs = ResolveLiveTimeoutMs(parsed);
@@ -291,6 +298,19 @@ public static class CliApp
                 var ipcClient = new LocalIpcClient();
                 var sendCommandAsync = sendAsync ?? ipcClient.SendAsync;
                 var response = await sendCommandAsync(target, command, liveTimeoutMs, cts.Token);
+                if (IsUnauthorizedResponse(response))
+                {
+                    (response, target) = await RetryUnauthorizedOnceAsync(
+                        registryStore,
+                        projectRoot,
+                        target,
+                        command,
+                        liveTimeoutMs,
+                        cts.Token,
+                        sendCommandAsync,
+                        response);
+                }
+
                 if (ShouldPollTestResults(parsed, response))
                 {
                     return await PollTestResultsAsync(parsed, target, ipcClient, response, cts.Token);
@@ -347,6 +367,118 @@ public static class CliApp
             retryable: false,
             transport: "cli",
             details: noTargetDetails);
+    }
+
+    private static async Task<(ResponseEnvelope Response, InstanceRecord Target)> RetryUnauthorizedOnceAsync(
+        InstanceRegistryStore registryStore,
+        string? projectRoot,
+        InstanceRecord originalTarget,
+        CommandEnvelope command,
+        int liveTimeoutMs,
+        CancellationToken cancellationToken,
+        Func<InstanceRecord, CommandEnvelope, int, CancellationToken, Task<ResponseEnvelope>> sendCommandAsync,
+        ResponseEnvelope unauthorizedResponse)
+    {
+        InstanceRecord? refreshedTarget = ResolveSameTargetForUnauthorizedRetry(
+            registryStore.Load(),
+            projectRoot,
+            originalTarget);
+        if (refreshedTarget is null
+            || string.Equals(refreshedTarget.token, originalTarget.token, StringComparison.Ordinal))
+        {
+            return (AddUnauthorizedRetryHint(unauthorizedResponse), originalTarget);
+        }
+
+        var retryResponse = await sendCommandAsync(refreshedTarget, command, liveTimeoutMs, cancellationToken);
+        retryResponse = IsUnauthorizedResponse(retryResponse)
+            ? AddUnauthorizedRetryHint(retryResponse)
+            : retryResponse;
+        return (retryResponse, refreshedTarget);
+    }
+
+    private static InstanceRecord? ResolveSameTargetForUnauthorizedRetry(
+        InstanceRegistry registry,
+        string? projectRoot,
+        InstanceRecord originalTarget)
+    {
+        registry.instances ??= Array.Empty<InstanceRecord>();
+
+        string? targetRoot = !string.IsNullOrWhiteSpace(originalTarget.projectRoot)
+            ? ProtocolConstants.GetCanonicalPath(originalTarget.projectRoot)
+            : !string.IsNullOrWhiteSpace(projectRoot)
+                ? ProtocolConstants.GetCanonicalPath(projectRoot)
+                : null;
+
+        if (!string.IsNullOrWhiteSpace(targetRoot))
+        {
+            var rootMatch = registry.instances.FirstOrDefault(item =>
+                string.Equals(
+                    ProtocolConstants.GetCanonicalPath(item.projectRoot),
+                    targetRoot,
+                    StringComparison.OrdinalIgnoreCase));
+            if (rootMatch is not null)
+            {
+                return rootMatch;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(originalTarget.projectHash))
+        {
+            var hashMatch = registry.instances.FirstOrDefault(item =>
+                string.Equals(item.projectHash, originalTarget.projectHash, StringComparison.OrdinalIgnoreCase));
+            if (hashMatch is not null)
+            {
+                return hashMatch;
+            }
+        }
+
+        return string.IsNullOrWhiteSpace(originalTarget.pipeName)
+            ? null
+            : registry.instances.FirstOrDefault(item =>
+                string.Equals(item.pipeName, originalTarget.pipeName, StringComparison.Ordinal));
+    }
+
+    private static bool IsMissingAuthTokenForSyntheticTarget(
+        InstanceRegistry registry,
+        string? projectRoot,
+        InstanceRecord target)
+    {
+        if (!string.IsNullOrEmpty(target.token) || string.IsNullOrWhiteSpace(projectRoot))
+        {
+            return false;
+        }
+
+        registry.instances ??= Array.Empty<InstanceRecord>();
+        string canonicalProjectRoot = ProtocolConstants.GetCanonicalPath(projectRoot);
+        return !registry.instances.Any(item =>
+            !string.IsNullOrWhiteSpace(item.projectRoot) &&
+            string.Equals(
+                ProtocolConstants.GetCanonicalPath(item.projectRoot),
+                canonicalProjectRoot,
+                StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsUnauthorizedResponse(ResponseEnvelope response)
+    {
+        return string.Equals(response.error?.code, ProtocolConstants.ErrorUnauthorized, StringComparison.Ordinal);
+    }
+
+    private static ResponseEnvelope AddUnauthorizedRetryHint(ResponseEnvelope response)
+    {
+        if (response.error is null)
+        {
+            return response;
+        }
+
+        string hint = " Editor may have restarted; retry after the registry heartbeat refreshes (~"
+            + ProtocolConstants.RegistryHeartbeatSeconds
+            + " seconds).";
+        if (!response.error.message.Contains("registry heartbeat", StringComparison.OrdinalIgnoreCase))
+        {
+            response.error.message = response.error.message.TrimEnd() + hint;
+        }
+
+        return response;
     }
 
     private static int ResolveLiveTimeoutMs(ParsedCommand parsed)

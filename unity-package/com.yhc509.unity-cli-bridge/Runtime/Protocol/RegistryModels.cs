@@ -19,6 +19,14 @@ namespace UnityCli.Protocol
         public string projectName = string.Empty;
         public string projectHash = string.Empty;
         public string pipeName = string.Empty;
+        // Auth tokens live in per-instance owner-only sidecars, not in the shared registry
+        // (see InstanceRegistryFile.WriteTokenSidecar/ReadTokenSidecar). Keeping this field
+        // in memory lets CLI send paths continue to consume target.token without persisting it.
+        [NonSerialized]
+#if !UNITY_5_3_OR_NEWER
+        [System.Text.Json.Serialization.JsonIgnore]
+#endif
+        public string token = string.Empty;
         public int editorProcessId;
         public string unityVersion = string.Empty;
         public string state = "offline";

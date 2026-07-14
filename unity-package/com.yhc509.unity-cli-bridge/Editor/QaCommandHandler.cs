@@ -17,7 +17,7 @@ namespace UnityCliBridge.Bridge.Editor
 {
     internal sealed partial class QaCommandHandler
     {
-        private static readonly Dictionary<int, ScreenPositionContext> _screenPositionContextCache = new();
+        private static readonly Dictionary<ulong, ScreenPositionContext> _screenPositionContextCache = new();
         private static bool _isScreenPositionCacheSubscribed;
 
         public QaCommandHandler()
@@ -459,7 +459,7 @@ namespace UnityCliBridge.Bridge.Editor
         private static List<QaUiElement> CollectClickableUiElements(int screenshotWidth, int screenshotHeight, Vector2Int screenSize)
         {
             var elements = new List<QaUiElement>();
-            var seenGameObjects = new HashSet<int>();
+            var seenGameObjects = new HashSet<ulong>();
 
 #if UNITY_2022_2_OR_NEWER
             MonoBehaviour[] behaviours = UnityEngine.Object.FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
@@ -474,7 +474,7 @@ namespace UnityCliBridge.Bridge.Editor
                 }
 
                 GameObject gameObject = behaviour.gameObject;
-                if (!seenGameObjects.Add(gameObject.GetInstanceID()))
+                if (!seenGameObjects.Add(UnityObjectIdentity.GetId(gameObject)))
                 {
                     continue;
                 }
@@ -793,7 +793,7 @@ namespace UnityCliBridge.Bridge.Editor
             Vector2Int screenSize)
         {
             var elements = new List<QaWorldElement>();
-            var seenGameObjects = new HashSet<int>();
+            var seenGameObjects = new HashSet<ulong>();
 
 #if UNITY_2022_2_OR_NEWER
             MonoBehaviour[] behaviours = UnityEngine.Object.FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
@@ -811,7 +811,7 @@ namespace UnityCliBridge.Bridge.Editor
                 }
 
                 GameObject gameObject = behaviour.gameObject;
-                if (!seenGameObjects.Add(gameObject.GetInstanceID()))
+                if (!seenGameObjects.Add(UnityObjectIdentity.GetId(gameObject)))
                 {
                     continue;
                 }
@@ -1431,7 +1431,7 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static ScreenPositionContext GetScreenPositionContext(GameObject gameObject)
         {
-            int instanceId = gameObject.GetInstanceID();
+            ulong instanceId = UnityObjectIdentity.GetId(gameObject);
             if (_screenPositionContextCache.TryGetValue(instanceId, out ScreenPositionContext? context))
             {
                 return context;

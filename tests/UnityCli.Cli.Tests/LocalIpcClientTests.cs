@@ -41,4 +41,24 @@ public sealed class LocalIpcClientTests
             result.error?.message);
         Assert.False(result.data.HasValue);
     }
+
+    [Fact]
+    public void PrepareCommandForSend_AddsProtocolVersionAndTargetToken()
+    {
+        var target = new InstanceRecord
+        {
+            token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        };
+        var command = new CommandEnvelope
+        {
+            requestId = "req-1",
+            command = ProtocolConstants.CommandStatus,
+            argumentsJson = "{}",
+        };
+
+        LocalIpcClient.PrepareCommandForSend(target, command);
+
+        Assert.Equal(ProtocolConstants.ProtocolVersion, command.protocolVersion);
+        Assert.Equal(target.token, command.token);
+    }
 }
