@@ -90,7 +90,7 @@ Tests live in `tests/UnityCli.Cli.Tests/` (xUnit, `.NET`-testable surface only).
   4. `tools/skills/unity-cli-operator/SKILL.md` — update command workflows and examples for AI agent usage
   5. `dotnet run --project cli/UnityCli.DocGen -- --check` — verify cli-reference is up to date
 - **Release checklist:** Cutting a new version:
-  1. `CHANGELOG.md` — move `[Unreleased]` entries to new version section with date
+  1. `CHANGELOG.md` — move `[Unreleased]` entries to new version section with date, then mirror the file to `unity-package/com.yhc509.unity-cli-bridge/CHANGELOG.md` (the UPM package ships its own copy; keep the two identical so Package Manager shows the current changelog)
   2. Update `package.json` version
   3. Open a release PR (`chore: release vX.Y.Z`), wait for CI green, then merge
   4. Push an annotated tag (`git tag -a vX.Y.Z -m "Release vX.Y.Z" <commit> && git push origin vX.Y.Z`). This triggers `.github/workflows/release.yml`, which builds artifacts and creates a **draft** GitHub Release.
@@ -104,11 +104,21 @@ Tests live in `tests/UnityCli.Cli.Tests/` (xUnit, `.NET`-testable surface only).
 
 ## Branch Policy
 
-- All changes go through PRs to `main`. Direct push to `main` is blocked by branch ruleset.
-- Admin bypass exists for emergencies only — do not use it for routine work.
+This repo uses a release-branch model:
+
+- **`main` is the release branch.** It always matches the latest published release and stays installable. The UPM git URL in `README.md` points at `#main`, so anything merged to `main` is immediately what new users install.
+- **`dev` is the integration branch.** Day-to-day feature work — and especially any change that bumps the wire protocol (`ProtocolConstants.ProtocolVersion`) — lands here first, never directly on `main`.
+- Feature branches (`feat/`, `fix/`, `refactor/`, `docs/`, `chore/`) branch off `dev` and merge back via PR. `release/x.y.z` branches cut from `dev` carry version/changelog prep.
+- **`main` only advances at release time**, by merging the prepared `dev`/`release` work once the Unity package and CLI binary are ready to ship together.
+
+Hard rules:
+
+- All changes go through PRs. Direct push to `main` is blocked by branch ruleset; admin bypass exists for emergencies only — do not use it for routine work.
 - CI (`test` job) must pass before merge.
 - GitHub Codex bot (`@codex`) is enabled as a PR reviewer on this repo.
-- Versioning: patch-level increments (`v0.1.0` → `v0.1.1`). Major/minor bumps only when explicitly requested.
+- **Never merge a breaking wire-protocol bump straight to `main`.** A protocol bump makes already-released CLIs incompatible with `main`'s package (and vice versa), so a user installing from `#main` hits `PROTOCOL_MISMATCH`. Land it on `dev`, and when it ships, publish the Unity package and the CLI binary in the same release so `#main` users never see a mismatch.
+- Versioning (SemVer): bug fixes and non-breaking changes are patch bumps (`v0.3.1` → `v0.3.2`); a wire-protocol bump or any other breaking change is at least a minor bump (`v0.3.x` → `v0.4.0`). Major bumps only when explicitly requested.
+- **Reverted work on `main` never merges back cleanly.** When `main` carries a revert of something `dev` still builds on, a content merge resurrects the revert and silently deletes that work — the deletions do not surface as conflicts. Take the `dev` tree whole (`git merge -s ours main` from the release branch) and hand-carry anything `main` uniquely owns.
 
 ## Verification After Changes
 
