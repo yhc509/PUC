@@ -17,12 +17,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 - Fixed package compilation on Unity 6000.5 and later after Unity object instance ID APIs became compile-time errors. `execute` and `custom` results still use the `instanceID` field name for Unity objects, but the value is now emitted as a JSON string so Unity 6000.4 and newer 64-bit object identifiers remain exact for JavaScript consumers.
 - Commands issued during a domain reload (script recompilation) no longer fail intermittently with `UNAUTHORIZED`. The Editor keeps its registry entry and auth token across the reload; while the bridge listener is restarting, callers get a retryable unavailable response instead.
-- Auth tokens are stored in a per-instance owner-only sidecar file instead of the shared instance registry, so an Editor running an older package version can no longer strip a newer Editor's token (#115).
 - `asset find` no longer fails outright when a search term matches assets under `Packages/`. Package paths resolve through symlinks into the package cache (or, for local packages, outside the project), which the asset-root containment check rejected — so common search terms could break the whole command.
 - The Unity CLI Manager window now refreshes status while open and handles prerelease or custom CLI version suffixes without clearing the installer state (#143).
 
 ### Security
-- Live IPC now requires a per-Editor authentication token. The wire protocol is bumped to `5`, so the CLI binary and Unity package must be upgraded together; mixed versions are rejected before commands run.
+- Live IPC now requires a per-Editor authentication token. The wire protocol is bumped to `5`, so the CLI binary and Unity package must be upgraded together; mixed versions are rejected before commands run. Each Editor's token lives in its own owner-only file rather than the shared instance registry, so one Editor cannot read or strip another's (#115).
 
 ### Compatibility
 - Breaking: the minimum supported Unity version is now `2023.1`, and this package pins `com.unity.recorder` `5.1.6` for Play Mode recording. Older Recorder releases fail to compile on Unity `6000.4` and newer, because Unity promotes the obsolete object identity API to a compile-time error.

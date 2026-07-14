@@ -51,6 +51,8 @@ Add the following to your `Packages/manifest.json`:
 
 The bridge starts automatically when the Editor opens. No configuration needed.
 
+> **Upgrading from 0.3.x?** `0.4.0` bumps the wire protocol to `5`, so a `0.3.x` CLI cannot talk to a `0.4.0` package — every command fails with `PROTOCOL_MISMATCH` until both sides match. Update the CLI at the same time as the package, from **Window > Unity CLI Manager**.
+
 ### 2. Install the CLI
 
 **Option A: From Unity Editor** (recommended)
