@@ -288,7 +288,7 @@ public static class CliApp
             {
                 return CreateLiveUnavailableResponse(
                     target.projectHash,
-                    "Bridge 인증 정보를 아직 읽을 수 없습니다. Unity Editor가 재시작 또는 스크립트 재컴파일 중일 수 있으니 잠시 후 다시 시도하세요.");
+                    "Bridge 인증 정보를 읽지 못했습니다. Unity Editor가 실행 중이 아니거나, 시작·재시작·스크립트 재컴파일 중일 수 있습니다. Editor가 떠 있다면 잠시 후 다시 시도하세요.");
             }
 
             try

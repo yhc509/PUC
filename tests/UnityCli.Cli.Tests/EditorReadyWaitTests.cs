@@ -232,7 +232,7 @@ public sealed class EditorReadyWaitTests
         Assert.Equal("LIVE_UNAVAILABLE", result.error?.code);
         Assert.True(result.retryable);
         Assert.Equal(expectedProjectHash, result.target);
-        Assert.Contains("Bridge 인증 정보를 아직 읽을 수 없습니다", result.error?.details?.GetString());
+        Assert.Contains("Bridge 인증 정보를 읽지 못했습니다", result.error?.details?.GetString());
     }
 
     [Fact]

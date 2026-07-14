@@ -113,7 +113,6 @@ namespace UnityCliBridge.Bridge.Editor
             _isStarted = true;
             ConsoleLogBuffer.Start();
             _lastHeartbeatTime = EditorApplication.timeSinceStartup;
-            WriteTokenSidecarSafely();
             StartListener();
 
             EditorApplication.update += OnEditorUpdate;
@@ -349,6 +348,10 @@ namespace UnityCliBridge.Bridge.Editor
                                 _pipeName = candidatePipeName;
                                 _namedPipeOwnershipLock = ownershipLock;
                                 ownershipLock = null;
+
+                                // The hash is only settled here, and a client can connect as soon as
+                                // the listener exists. Publish the token before that can happen.
+                                WriteTokenSidecarSafely();
                                 return server;
                             }
                             catch (IOException)
@@ -483,6 +486,10 @@ namespace UnityCliBridge.Bridge.Editor
                                 socket.Listen(8);
                                 _projectHash = hash;
                                 _pipeName = candidatePipeName;
+
+                                // The hash is only settled here, and a client can connect as soon as
+                                // the listener exists. Publish the token before that can happen.
+                                WriteTokenSidecarSafely();
                                 return socket;
                             }
                             catch (SocketException)
