@@ -40,6 +40,9 @@ public sealed class LocalIpcClientTests
             "Unity package version is incompatible with this CLI. Please upgrade both CLI binary and Unity package together.",
             result.error?.message);
         Assert.False(result.data.HasValue);
+
+        // The peer's protocol version survives the rewrite; version dispatch routes on it.
+        Assert.Equal(protocolVersion, result.protocolVersion);
     }
 
     [Fact]

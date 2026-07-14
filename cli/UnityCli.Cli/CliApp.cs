@@ -8,7 +8,9 @@ namespace UnityCli.Cli;
 
 public static class CliApp
 {
-    public static async Task<int> RunAsync(string[] args)
+    public static Task<int> RunAsync(string[] args) => RunAsync(args, dispatcher: null);
+
+    internal static async Task<int> RunAsync(string[] args, ICliVersionDispatcher? dispatcher)
     {
         var outputMode = CliCommandMetadata.DetectOutputMode(args);
         ParsedCommand? parsed = null;
@@ -36,6 +38,36 @@ public static class CliApp
                 CommandKind.QaWait => await RunQaWait(parsed),
                 _ => await ExecuteUnityCommandAsync(parsed, registryStore, projectRoot),
             };
+
+            // Zero cost unless the bridge answered PROTOCOL_MISMATCH: Decide() short-circuits before
+            // it touches the filesystem or the environment.
+            var versionDispatcher = dispatcher ?? new ProcessCliVersionDispatcher();
+            var decision = CliDispatchPolicy.Decide(parsed.Kind, response, versionDispatcher);
+            switch (decision.Action)
+            {
+                case DispatchAction.Exec:
+                    try
+                    {
+                        // Unix: replaces this process and never returns. Windows: child's exit code.
+                        return versionDispatcher.Exec(decision.Match!.ExecutablePath, args);
+                    }
+                    catch (CliDispatchException ex)
+                    {
+                        // Routing around the mismatch failed; the mismatch is still the real problem.
+                        response = CliDispatchPolicy.BuildHandoffFailedResponse(
+                            response,
+                            decision.Match!,
+                            ex.Message);
+                    }
+
+                    break;
+                case DispatchAction.NoMatchingVersion:
+                    response = CliDispatchPolicy.BuildNoMatchingVersionResponse(
+                        response,
+                        decision.RequiredProtocolVersion,
+                        decision.InstalledVersions);
+                    break;
+            }
 
             Console.WriteLine(ResponseFormatter.Format(parsed.OutputMode, response));
             return response.status == "success" ? 0 : 1;
