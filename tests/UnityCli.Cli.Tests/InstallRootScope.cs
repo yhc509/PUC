@@ -47,6 +47,28 @@ internal sealed class InstallRootScope : IDisposable
             "{\"cliVersion\":\"" + metaCliVersion + "\",\"protocolVersion\":\"" + metaProtocolVersion + "\"}");
     }
 
+    /// <summary>
+    /// Mimics the macOS/Linux PATH target: a symlink into versions/&lt;version&gt;/, plus the marker.
+    /// This is what the shipped Manager actually creates, and what every test was missing.
+    /// </summary>
+    public void SetPathTargetSymlink(string version, string protocolVersion)
+    {
+        Directory.CreateDirectory(CliInstallLayout.GetPathTargetDirectory());
+        File.CreateSymbolicLink(
+            CliInstallLayout.GetPathTargetExecutablePath(),
+            CliInstallLayout.GetVersionExecutablePath(version));
+        CliInstallLayout.WriteMeta(CliInstallLayout.GetPathTargetMetaPath(), version, protocolVersion);
+    }
+
+    /// <summary>A PATH-target symlink whose target has been deleted by hand.</summary>
+    public void SetDanglingPathTargetSymlink()
+    {
+        Directory.CreateDirectory(CliInstallLayout.GetPathTargetDirectory());
+        File.CreateSymbolicLink(
+            CliInstallLayout.GetPathTargetExecutablePath(),
+            System.IO.Path.Combine(CliInstallLayout.GetVersionsDirectory(), "9.9.9", "unity-cli"));
+    }
+
     /// <summary>Mimics the Windows PATH target: a byte-identical copy of the version, plus the marker.</summary>
     public void SetPathTargetCopy(string version, string protocolVersion)
     {

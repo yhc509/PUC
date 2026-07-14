@@ -129,6 +129,12 @@ public sealed class CliInstallLayoutTests
     [InlineData(".unity-cli-backup-abc", false)]
     [InlineData("garbage", false)]
     [InlineData("", false)]
+    // RemoveVersion recursively deletes GetVersionDirectory(version), so these must never be accepted:
+    // ".." resolves to the install root and "../.." escapes it entirely.
+    [InlineData("..", false)]
+    [InlineData("../..", false)]
+    [InlineData("../../..", false)]
+    [InlineData("/", false)]
     public void IsVersionDirectoryName_AcceptsOnlyNormalizedVersions(string directoryName, bool expected)
     {
         Assert.Equal(expected, CliInstallLayout.IsVersionDirectoryName(directoryName));
@@ -276,6 +282,141 @@ public sealed class CliInstallLayoutTests
 
         Assert.True(CliInstallLayout.IsPathTargetRedundant());
         Assert.False(CliInstallLayout.IsUnmanagedPathTargetBinaryPresent());
+    }
+
+    // Every PATH-target test used to model the Windows copy layout, so nothing ever exercised the
+    // symlink that the Manager actually creates on the platform this ships on. That is how a guard
+    // which could never fire on macOS/Linux survived three reviews.
+
+    [Fact]
+    public void IsPathTargetRedundant_WhenPathTargetIsOurSymlinkIntoVersions_IsTrue()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var root = new InstallRootScope();
+        root.AddVersion("0.4.1", "5");
+        root.SetPathTargetSymlink("0.4.1", "5");
+
+        Assert.True(CliInstallLayout.IsSymbolicLink(CliInstallLayout.GetPathTargetExecutablePath()));
+        Assert.True(CliInstallLayout.IsPathTargetRedundant());
+        Assert.False(CliInstallLayout.IsUnmanagedPathTargetBinaryPresent());
+    }
+
+    [Fact]
+    public void GetPathTargetReleaseAction_UnlinksOurSymlinkAndNeverQuarantinesIt()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var root = new InstallRootScope();
+        root.AddVersion("0.4.1", "5");
+        root.SetPathTargetSymlink("0.4.1", "5");
+
+        Assert.Equal(PathTargetReleaseAction.Unlink, CliInstallLayout.GetPathTargetReleaseAction());
+    }
+
+    [Fact]
+    public void GetPathTargetReleaseAction_UnlinksADanglingSymlinkInsteadOfQuarantiningIt()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var root = new InstallRootScope();
+        root.SetDanglingPathTargetSymlink();
+
+        // File.Exists is TRUE for a dangling symlink, so link status has to be asked separately.
+        Assert.True(File.Exists(CliInstallLayout.GetPathTargetExecutablePath()));
+        Assert.Equal(PathTargetReleaseAction.Unlink, CliInstallLayout.GetPathTargetReleaseAction());
+        Assert.False(CliInstallLayout.IsUnmanagedPathTargetBinaryPresent());
+    }
+
+    [Fact]
+    public void GetPathTargetReleaseAction_QuarantinesAHandPlacedBinaryWithAStaleMarker()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var root = new InstallRootScope();
+        root.AddVersion("0.4.1", "5");
+        root.SetPathTargetSymlink("0.4.1", "5");
+
+        // The documented manual download extracts over the PATH directory: tar unlinks our symlink and
+        // drops a real binary, leaving our marker behind to vouch for a file it knows nothing about.
+        File.Delete(CliInstallLayout.GetPathTargetExecutablePath());
+        root.OverwritePathTargetExecutable("someone else's 0.3.5 binary");
+
+        Assert.Equal(PathTargetReleaseAction.Quarantine, CliInstallLayout.GetPathTargetReleaseAction());
+        Assert.True(CliInstallLayout.IsUnmanagedPathTargetBinaryPresent());
+    }
+
+    [Fact]
+    public void GetPathTargetReleaseAction_DeletesOurWindowsStyleCopy()
+    {
+        using var root = new InstallRootScope();
+        root.AddVersion("0.4.1", "5");
+        root.SetPathTargetCopy("0.4.1", "5");
+
+        Assert.Equal(PathTargetReleaseAction.Delete, CliInstallLayout.GetPathTargetReleaseAction());
+    }
+
+    [Fact]
+    public void GetPathTargetReleaseAction_WhenNothingIsThere_DoesNothing()
+    {
+        using var root = new InstallRootScope();
+
+        Assert.Equal(PathTargetReleaseAction.Nothing, CliInstallLayout.GetPathTargetReleaseAction());
+    }
+
+    [Fact]
+    public void FilesHaveSameContent_ThroughASymlink_ComparesTheTargetsBytes()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var root = new InstallRootScope();
+        string target = Path.Combine(root.Path, "target-with-a-long-name-so-the-path-string-differs-in-length.bin");
+        File.WriteAllText(target, "seventeen bytes!!");
+        string link = Path.Combine(root.Path, "link.bin");
+        File.CreateSymbolicLink(link, target);
+
+        // Regression guard: FileInfo.Length is lstat-based and reports the length of the LINK PATH
+        // STRING, not the target's size. Comparing FileInfo lengths short-circuits false for every
+        // symlink, which made the whole redundancy proof unable to fire on macOS/Linux.
+        Assert.NotEqual(new FileInfo(link).Length, new FileInfo(target).Length);
+
+        Assert.True(CliInstallLayout.FilesHaveSameContent(link, target));
+    }
+
+    [Fact]
+    public void IsSymbolicLink_DistinguishesLinksFromRegularFiles()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var root = new InstallRootScope();
+        root.AddVersion("0.4.1", "5");
+        root.SetPathTargetSymlink("0.4.1", "5");
+
+        string versionExecutablePath = CliInstallLayout.GetVersionExecutablePath("0.4.1");
+        Assert.False(CliInstallLayout.IsSymbolicLink(versionExecutablePath));
+        Assert.True(CliInstallLayout.IsRegularFile(versionExecutablePath));
+
+        string pathTargetExecutablePath = CliInstallLayout.GetPathTargetExecutablePath();
+        Assert.True(CliInstallLayout.IsSymbolicLink(pathTargetExecutablePath));
+        Assert.False(CliInstallLayout.IsRegularFile(pathTargetExecutablePath));
     }
 
     [Fact]

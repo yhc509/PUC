@@ -329,12 +329,21 @@ namespace UnityCliBridge.Bridge.Editor
         /// <returns>The archived version, or null when nothing was archived.</returns>
         public static string? MigrateLegacyFlatInstall()
         {
-            if (!IsUnmanagedPathTargetBinaryPresent())
+            string legacyExecutablePath = CliInstallLayout.GetPathTargetExecutablePath();
+
+            // Only ever archive a REGULAR FILE. Archiving a symlink would move the link itself into
+            // versions/<v>/, leaving a pointer to some other version's binary sitting under a
+            // meta.json that claims a protocol it does not speak — a CLI that hands off to a binary
+            // which cannot answer. (Reachable today by hand-deleting the marker beside our symlink.)
+            if (!CliInstallLayout.IsRegularFile(legacyExecutablePath))
             {
                 return null;
             }
 
-            string legacyExecutablePath = CliInstallLayout.GetPathTargetExecutablePath();
+            if (!IsUnmanagedPathTargetBinaryPresent())
+            {
+                return null;
+            }
 
             // The EditorPrefs record describes the binary a Manager installed. It only describes the
             // file sitting here if no marker was ever written next to it — that is the genuine
@@ -515,6 +524,15 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             string normalizedVersion = CliInstallLayout.NormalizeVersion(version);
+
+            // This recursively deletes a directory built by string-concatenating the argument, so the
+            // argument has to be a version and nothing else: GetVersionDirectory("..") resolves to the
+            // install root, and "../.." escapes it entirely.
+            if (!CliInstallLayout.IsVersionDirectoryName(normalizedVersion))
+            {
+                throw new ArgumentException("Not a valid CLI version: " + version, nameof(version));
+            }
+
             string versionDirectory = CliInstallLayout.GetVersionDirectory(normalizedVersion);
             if (!Directory.Exists(versionDirectory))
             {
@@ -551,25 +569,24 @@ namespace UnityCliBridge.Bridge.Editor
         {
             string pathTargetExecutablePath = CliInstallLayout.GetPathTargetExecutablePath();
 
-            if (!File.Exists(pathTargetExecutablePath))
+            switch (CliInstallLayout.GetPathTargetReleaseAction())
             {
-                // Empty, or a symlink whose target was deleted by hand. File.Delete unlinks a dangling
-                // link (File.Exists follows the link and reports false for one) and is a no-op on an
-                // empty path. Neither case can lose bytes, and this is what keeps a broken symlink
-                // from being left behind on the user's PATH.
-                TryUnlink(pathTargetExecutablePath);
-                return;
+                case PathTargetReleaseAction.Nothing:
+                    return;
+                case PathTargetReleaseAction.Unlink:
+                    // Our PATH target on macOS/Linux, and any dangling link. Note File.Exists returns
+                    // TRUE for a dangling symlink, so link status has to be asked separately — but
+                    // either way unlinking costs the user nothing, because a link owns no bytes.
+                    TryUnlink(pathTargetExecutablePath);
+                    return;
+                case PathTargetReleaseAction.Delete:
+                    // A regular file whose bytes also live under versions/: our copy on Windows.
+                    File.Delete(pathTargetExecutablePath);
+                    return;
+                case PathTargetReleaseAction.Quarantine:
+                    QuarantinePathTargetBinary(pathTargetExecutablePath);
+                    return;
             }
-
-            if (CliInstallLayout.IsPathTargetRedundant())
-            {
-                // Byte-identical to the versioned binary its marker names, so this entry — our symlink
-                // on macOS/Linux, our copy on Windows — is not the last copy of anything.
-                File.Delete(pathTargetExecutablePath);
-                return;
-            }
-
-            QuarantinePathTargetBinary(pathTargetExecutablePath);
         }
 
         private static void TryUnlink(string filePath)

@@ -16,6 +16,22 @@ namespace UnityCli.Protocol
         public string protocolVersion = string.Empty;
     }
 
+    /// <summary>What must happen to the PATH-target entry before it can be replaced.</summary>
+    public enum PathTargetReleaseAction
+    {
+        /// <summary>Nothing is there.</summary>
+        Nothing,
+
+        /// <summary>A symlink. It owns no bytes, so it can always be unlinked.</summary>
+        Unlink,
+
+        /// <summary>A regular file whose bytes provably also live under versions/.</summary>
+        Delete,
+
+        /// <summary>A regular file we cannot prove is redundant. Never delete it; move it aside.</summary>
+        Quarantine,
+    }
+
     /// <summary>
     /// A CLI binary discovered under the versions directory, together with the protocol it speaks.
     /// Not a wire model: this never leaves the local machine.
@@ -141,14 +157,11 @@ namespace UnityCli.Protocol
 
         /// <summary>
         /// True when the file at the PATH target is byte-identical to the versioned binary its
-        /// meta.json marker names — that is, removing the PATH-target entry (our symlink on
-        /// macOS/Linux, our copy on Windows) cannot destroy the last copy of those bytes.
+        /// meta.json marker names — that is, removing it cannot destroy the last copy of those bytes.
         ///
-        /// This is the ONLY proof accepted before deleting anything at the PATH target. Asking
-        /// whether the entry is a symlink would not do: on Windows our own PATH target is a copy,
-        /// not a link, so that test would quarantine our own binary on every install. Content
-        /// answers the question we actually care about — is this the last copy of these bytes? —
-        /// and it holds for the symlink, for the Windows copy, and for nothing else.
+        /// This is the proof required before deleting a REGULAR FILE at the PATH target (our copy on
+        /// Windows, or anything a user hand-placed there). A symlink needs no such proof and is not
+        /// routed through here: see <see cref="GetPathTargetReleaseAction"/>.
         /// </summary>
         public static bool IsPathTargetRedundant()
         {
@@ -170,12 +183,65 @@ namespace UnityCli.Protocol
         }
 
         /// <summary>
-        /// A readable binary sits at the PATH target whose bytes exist nowhere else we manage. It may
-        /// be the only CLI the user has for an older project, so it must never be deleted for them.
+        /// A regular file sits at the PATH target whose bytes exist nowhere else we manage. It may be
+        /// the only CLI the user has for an older project, so it must never be deleted for them.
+        ///
+        /// A symlink is never "unmanaged": it owns no bytes, so removing it cannot cost the user
+        /// anything, whatever it points at.
         /// </summary>
         public static bool IsUnmanagedPathTargetBinaryPresent()
         {
-            return File.Exists(GetPathTargetExecutablePath()) && !IsPathTargetRedundant();
+            return IsRegularFile(GetPathTargetExecutablePath()) && !IsPathTargetRedundant();
+        }
+
+        /// <summary>
+        /// What has to happen to the PATH-target entry before it can be replaced. The whole
+        /// never-destroy-the-user's-only-binary rule lives here so it can be tested without an Editor.
+        /// </summary>
+        public static PathTargetReleaseAction GetPathTargetReleaseAction()
+        {
+            string pathTargetExecutablePath = GetPathTargetExecutablePath();
+
+            // Symlink first, and unconditionally. A link owns no bytes, so unlinking it can never
+            // destroy a binary — not even a dangling one, and not one pointing outside versions/.
+            // This is the macOS/Linux PATH target, and it covers the dangling case for free.
+            if (IsSymbolicLink(pathTargetExecutablePath))
+            {
+                return PathTargetReleaseAction.Unlink;
+            }
+
+            if (!File.Exists(pathTargetExecutablePath))
+            {
+                return PathTargetReleaseAction.Nothing;
+            }
+
+            // A regular file. It only goes if its bytes provably live somewhere else.
+            return IsPathTargetRedundant()
+                ? PathTargetReleaseAction.Delete
+                : PathTargetReleaseAction.Quarantine;
+        }
+
+        /// <summary>File.Exists is true for a dangling symlink, so link status must be asked separately.</summary>
+        public static bool IsSymbolicLink(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                return false;
+            }
+
+            try
+            {
+                return (File.GetAttributes(filePath) & FileAttributes.ReparsePoint) != 0;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        public static bool IsRegularFile(string filePath)
+        {
+            return File.Exists(filePath) && !IsSymbolicLink(filePath);
         }
 
         public static bool FilesHaveSameContent(string leftFilePath, string rightFilePath)
@@ -192,17 +258,21 @@ namespace UnityCli.Protocol
                     return false;
                 }
 
-                if (new FileInfo(leftFilePath).Length != new FileInfo(rightFilePath).Length)
-                {
-                    return false;
-                }
-
                 byte[] leftBuffer = new byte[FileCompareBufferSize];
                 byte[] rightBuffer = new byte[FileCompareBufferSize];
 
                 using (FileStream leftStream = File.OpenRead(leftFilePath))
                 using (FileStream rightStream = File.OpenRead(rightFilePath))
                 {
+                    // Lengths come from the opened streams, never from FileInfo. FileInfo.Length is
+                    // lstat-based: on a symlink it reports the length of the link's path string, not
+                    // the target's size, so comparing FileInfo lengths would short-circuit false for
+                    // every symlink and this proof could never succeed on macOS/Linux.
+                    if (leftStream.Length != rightStream.Length)
+                    {
+                        return false;
+                    }
+
                     while (true)
                     {
                         int leftRead = ReadBlock(leftStream, leftBuffer);
