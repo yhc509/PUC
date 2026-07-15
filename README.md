@@ -51,13 +51,34 @@ Add the following to your `Packages/manifest.json`:
 
 The bridge starts automatically when the Editor opens. No configuration needed.
 
-> **Upgrading from 0.3.x?** `0.4.0` bumps the wire protocol to `5`, so a `0.3.x` CLI cannot talk to a `0.4.0` package — every command fails with `PROTOCOL_MISMATCH` until both sides match. Update the CLI at the same time as the package, from **Window > Unity CLI Manager**.
+> **Upgrading from 0.3.x?** `0.4.0` bumps the wire protocol to `5`, so a `0.3.x` CLI cannot talk to a `0.4.0` package. From `0.4.1` on you no longer have to choose: install the CLI from each project's **Window > Unity CLI Manager**, and the `unity-cli` on your PATH hands off to the version that matches whichever project you are pointing at.
 
 ### 2. Install the CLI
 
 **Option A: From Unity Editor** (recommended)
 
-Open `Window > Unity CLI Manager` in the Editor menu. Click **Install CLI** — the correct binary is downloaded automatically to `~/.unity-cli-bridge/unity-cli/`.
+Open `Window > Unity CLI Manager` in the Editor menu. Click **Install CLI** — the CLI matching this project's package version is downloaded automatically.
+
+The install is versioned, and `~/.unity-cli-bridge/unity-cli/` stays the directory you put on your PATH:
+
+```
+~/.unity-cli-bridge/
+  unity-cli/
+    unity-cli          # PATH target -> newest installed version
+  versions/
+    0.3.5/unity-cli    # protocol 4
+    0.4.1/unity-cli    # protocol 5
+```
+
+**Projects can sit on different package versions.** Run **Install CLI** once from each project's CLI Manager. When a command reaches a bridge that speaks an older protocol, the CLI re-runs itself as the matching version — same `unity-cli` command, no flags, nothing to configure. If no installed version speaks that protocol, the command fails with `PROTOCOL_MISMATCH` and tells you to run **Install CLI** in that project.
+
+Old versions are never deleted automatically (each binary is ~78 MB). The CLI Manager lists what is installed and gives each version a **Remove** button.
+
+> **Heads-up when upgrading:** a project still on package `0.4.0` or earlier has the old CLI Manager, which installs a single flat binary over `~/.unity-cli-bridge/unity-cli/` and clobbers the dispatcher. To recover, open **Window > Unity CLI Manager** in any project on `0.4.1`+ and click **Install CLI** — it restores the PATH target and files away the flat binary it found.
+>
+> **What happens to that flat binary.** If a previous CLI Manager installed it, its version is on record: it is filed under `versions/<version>/` and stays available for hand-off — which is how a project still on `0.3.x` keeps working without any change of its own. If it was downloaded by hand (Option B), there is no version on record and nothing in the binary reports one, so its wire protocol is unknown and it cannot be a hand-off candidate. It is **not deleted** — it is moved to `~/.unity-cli-bridge/orphaned/` and listed in the CLI Manager under **Unidentified Binaries**, so you can still get at it or remove it yourself.
+>
+> Either way, the old Manager cannot install a versioned CLI for its own project. If a `0.3.x` project ends up with no CLI that speaks its protocol, upgrade that project's package to `0.4.1`+ and install from its own CLI Manager.
 
 **Option B: Manual download**
 
@@ -68,7 +89,7 @@ Download from [GitHub Releases](https://github.com/yhc509/unity-cli-bridge/relea
 | macOS (Apple Silicon) | `unity-cli-osx-arm64.tar.gz` |
 | Windows (x64) | `unity-cli-win-x64.zip` |
 
-Extract and add the binary to your PATH.
+Extract and add the binary to your PATH. A manually placed binary carries no version metadata, so it is not a hand-off candidate: it only talks to projects whose package speaks its own protocol. Use Option A if you work across projects on different package versions.
 
 > **Tip:** A short, fixed install path (`~/.unity-cli-bridge/unity-cli/`) saves tokens when AI agents invoke the CLI repeatedly — every character in the path is repeated on each call.
 

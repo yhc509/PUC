@@ -83,7 +83,7 @@ public sealed class LocalIpcClient
             return response;
         }
 
-        return ResponseEnvelope.Failure(
+        var mismatch = ResponseEnvelope.Failure(
             string.IsNullOrWhiteSpace(response.requestId) ? Guid.NewGuid().ToString("N") : response.requestId,
             response.target,
             ProtocolConstants.ErrorProtocolMismatch,
@@ -92,5 +92,11 @@ public sealed class LocalIpcClient
             response.durationMs,
             string.IsNullOrWhiteSpace(response.transport) ? ProtocolConstants.TransportLive : response.transport,
             "Expected protocolVersion " + ProtocolConstants.ProtocolVersion + ".");
+
+        // ResponseEnvelope.Failure stamps *our* protocol version. On a PROTOCOL_MISMATCH envelope the
+        // useful value is the peer's, which is what a bridge-authored mismatch carries and what the
+        // version dispatch routes on. Keep it.
+        mismatch.protocolVersion = response.protocolVersion;
+        return mismatch;
     }
 }

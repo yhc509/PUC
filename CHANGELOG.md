@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-07-15
+
+### Added
+- Projects on different package versions can now share one `unity-cli` on your PATH. Install the CLI from each project's **Window > Unity CLI Manager**; when a command reaches a bridge that speaks an older wire protocol, the CLI hands the command off to the installed version that matches it. Nothing to configure, no flags, and the command's output and exit code pass through unchanged. This also un-breaks projects still on `0.3.x`, which needed no changes of their own.
+- The CLI Manager now lists every installed CLI version with its wire protocol, shows which one your PATH resolves to, and offers a **Remove** button per version. Nothing is ever deleted automatically.
+
+### Changed
+- The CLI is now installed per version under `~/.unity-cli-bridge/versions/<version>/`. `~/.unity-cli-bridge/unity-cli/` is unchanged as the directory you put on your PATH, so existing PATH entries, aliases, and scripts keep working.
+- **Install CLI** now downloads the CLI release matching the project's package version instead of the newest release, because only the matching CLI is guaranteed to speak that package's wire protocol.
+
+### Compatibility
+- A project still on package `0.4.0` or earlier has the old CLI Manager, which installs a single flat binary over `~/.unity-cli-bridge/unity-cli/` and overwrites the dispatcher. To recover, open **Window > Unity CLI Manager** in any project on this version or later and click **Install CLI**: it restores the PATH target and files away the flat binary it found. When a previous CLI Manager installed that binary its version is on record, so it is archived under its own version and stays available for hand-off — which is what keeps a project on an older package working.
+- CLI binaries downloaded by hand from GitHub Releases carry no version metadata, and nothing in the binary reports its version, so their wire protocol is unknown and they cannot be hand-off candidates. Such a binary is never deleted: it is moved to `~/.unity-cli-bridge/orphaned/` and listed in the CLI Manager under **Unidentified Binaries**, where you can retrieve or remove it. Install from the CLI Manager if you work across projects on different package versions.
+
 ## [0.4.0] - 2026-07-14
 
 ### Added
