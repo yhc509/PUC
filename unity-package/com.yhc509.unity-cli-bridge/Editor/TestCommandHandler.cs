@@ -505,7 +505,7 @@ namespace UnityCliBridge.Bridge.Editor
         {
             TestResultsArgs args = ProtocolJson.Deserialize<TestResultsArgs>(argumentsJson) ?? new TestResultsArgs();
             string runId = args.runId;
-            if (!string.IsNullOrEmpty(runId) && !ProtocolHelpers.IsValidTestRunId(runId))
+            if (!string.IsNullOrEmpty(runId) && !ProtocolHelpers.IsValid32HexId(runId))
             {
                 throw new CommandFailureException(
                     "INVALID_ARGS",
@@ -527,6 +527,15 @@ namespace UnityCliBridge.Bridge.Editor
                     throw new CommandFailureException(
                         ProtocolConstants.ErrorTestRunNotFound,
                         "조회할 test run이 없습니다 (last-run.json 미존재).");
+                }
+
+                // last-run.json is on disk, so a corrupted or hand-edited file must not
+                // reach the path either. It reads as "no run" rather than bad input.
+                if (!ProtocolHelpers.IsValid32HexId(runId))
+                {
+                    throw new CommandFailureException(
+                        ProtocolConstants.ErrorTestRunNotFound,
+                        "조회할 test run이 없습니다 (기록된 runId 형식이 올바르지 않습니다).");
                 }
             }
 

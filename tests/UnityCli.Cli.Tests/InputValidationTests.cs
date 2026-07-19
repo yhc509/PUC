@@ -11,9 +11,9 @@ public sealed class InputValidationTests
     [Theory]
     [InlineData(ValidRunId)]
     [InlineData("0123456789ABCDEF0123456789ABCDEF")]
-    public void IsValidTestRunId_AcceptsGeneratedIdShape(string runId)
+    public void IsValid32HexId_AcceptsGeneratedIdShape(string runId)
     {
-        Assert.True(ProtocolHelpers.IsValidTestRunId(runId));
+        Assert.True(ProtocolHelpers.IsValid32HexId(runId));
     }
 
     [Theory]
@@ -27,9 +27,9 @@ public sealed class InputValidationTests
     [InlineData("0123456789abcdef0123456789abcde")]
     [InlineData("0123456789abcdef0123456789abcdef0")]
     [InlineData("0123456789abcdef0123456789abcdeg")]
-    public void IsValidTestRunId_RejectsAnythingElse(string runId)
+    public void IsValid32HexId_RejectsAnythingElse(string runId)
     {
-        Assert.False(ProtocolHelpers.IsValidTestRunId(runId));
+        Assert.False(ProtocolHelpers.IsValid32HexId(runId));
     }
 
     [Fact]
@@ -48,6 +48,50 @@ public sealed class InputValidationTests
     {
         Assert.Throws<CliUsageException>(
             () => CliArgumentParser.Parse(new[] { "test", "results", "--run-id", runId }));
+    }
+
+    [Fact]
+    public void ParseRecordStatus_AcceptsGeneratedRecordingId()
+    {
+        ParsedCommand parsed = CliArgumentParser.Parse(
+            new[] { "record", "status", "--recording-id", ValidRunId });
+
+        Assert.Equal(ValidRunId, parsed.RecordRunId);
+    }
+
+    [Theory]
+    [InlineData("../foo")]
+    [InlineData("foo/bar")]
+    [InlineData("abc.json")]
+    public void ParseRecordStatus_RejectsTraversalRecordingId(string recordingId)
+    {
+        Assert.Throws<CliUsageException>(
+            () => CliArgumentParser.Parse(new[] { "record", "status", "--recording-id", recordingId }));
+    }
+
+    [Theory]
+    [InlineData("scene")]
+    [InlineData("prefab")]
+    public void PatchSpec_NonObjectRootDoesNotThrowFromForceGating(string command)
+    {
+        // Force gating must answer "is this destructive?" without blowing up on a
+        // spec it cannot read; the editor is what rejects the malformed spec.
+        ParsedCommand parsed = CliArgumentParser.Parse(
+            new[] { command, "patch", "--path", "Assets/X." + (command == "scene" ? "unity" : "prefab"), "--spec-json", "[]" });
+
+        Assert.False(CliArgumentParser.ForceRequiredByCatalog(parsed));
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("\"nope\"")]
+    [InlineData("7")]
+    [InlineData("{\"steps\":[1]}")]
+    [InlineData("{\"steps\":[{\"wait\":[3]}]}")]
+    public void QaSequenceSpec_RejectsNonObjectShapes(string specJson)
+    {
+        Assert.Throws<CliUsageException>(
+            () => CliArgumentParser.Parse(new[] { "qa", "run-sequence", "--spec-json", specJson }));
     }
 
     [Theory]
