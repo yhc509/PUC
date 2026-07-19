@@ -52,6 +52,34 @@ namespace UnityCli.Protocol
                 || string.Equals(command, ProtocolConstants.CommandTestRun, StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// Test run IDs and recording IDs are both generated as
+        /// <c>Guid.NewGuid().ToString("N")</c>, so anything else is rejected before it can
+        /// reach a file path built from the ID. 32 hex digits cannot contain a separator or
+        /// a dot segment, so this is strictly stronger than a traversal denylist.
+        /// </summary>
+        public static bool IsValid32HexId(string id)
+        {
+            if (string.IsNullOrEmpty(id) || id.Length != 32)
+            {
+                return false;
+            }
+
+            for (int index = 0; index < id.Length; index++)
+            {
+                char character = id[index];
+                bool isHex = (character >= '0' && character <= '9')
+                    || (character >= 'a' && character <= 'f')
+                    || (character >= 'A' && character <= 'F');
+                if (!isHex)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         public static bool TestFullNameMatchesFilter(string fullName, string substringFilter)
         {
             if (string.IsNullOrEmpty(fullName) || string.IsNullOrEmpty(substringFilter))

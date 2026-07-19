@@ -145,7 +145,7 @@ unity-cli execute --file my-script.cs --force --timeout 60
 
 Assign a value to `__pucResult` when the caller needs a structured return value. The response includes `hasResult: true` and `result` as type-preserving JSON, with `float` formatted using G9 and `double` using G17 for round-trip precision. Editor-assembly custom `[PucCommand]` methods can return `ExecuteValueSerializer.Serialize(obj)`; runtime-assembly commands must serialize precise JSON themselves.
 
-`--timeout`(기본 30초, 상한 600초)은 **협력적** cancel입니다. 사용자 코드가 `__pucToken.ThrowIfCancellationRequested()`(또는 다른 token API)를 호출해야 강제 종료됩니다. 호출하지 않으면 main thread를 계속 점유하므로 `--force`를 쓰는 사용자가 책임집니다.
+`--timeout`(기본 30초, 상한 600초)은 **협력적** cancel입니다. 사용자 코드가 `__pucToken.ThrowIfCancellationRequested()`(또는 다른 token API)를 호출해야 강제 종료됩니다. 호출하지 않으면 main thread를 계속 점유하므로 `--force`를 쓰는 사용자가 책임집니다. CLI는 Editor가 `EXECUTE_TIMEOUT`을 보고할 때까지 기다리도록 IPC 타임아웃을 `--timeout`보다 길게 잡습니다 — 그래서 `--timeout`보다 짧은 `--timeout-ms`를 줘도 그 값으로 먼저 끊지 않습니다.
 
 `record start` captures the Play Mode Game View as mp4 via Unity Recorder. It returns `STARTED` plus a `recordingId` immediately; add `--duration N --wait` to auto-stop and poll until the mp4 is finalized. Without `--duration`, stop manually with `record stop`. Outputs default to `Library/com.yhc509.unity-cli-bridge/recordings/`; pass `--path` to move the finalized mp4.
 
@@ -172,7 +172,7 @@ unity-cli scene inspect --path ... --with-values --omit-defaults
 unity-cli scene inspect --path ... --node "/Player[0]/Arm[0]" --max-depth 2
 
 # Build scenes with convenience commands
-unity-cli scene add-object --name Cube --primitive Cube \
+unity-cli scene add-object --path Assets/Scenes/Main.unity --name Cube --primitive Cube \
   --parent "/Environment[0]" --position 3,0,0
 # → Response includes createdPath — no follow-up inspect needed
 
@@ -345,7 +345,7 @@ docs/                          Generated CLI reference, specs
 
 ## Safety Rules
 
-- **Destructive or dangerous ops require `--force`:** `asset delete`, `execute`, `package remove`, `scene remove-component`, `prefab remove-component` (always); `asset move` / `asset rename` / `asset create` when overwriting an existing path; destructive operations inside `scene patch` (`delete-gameobject`, `remove-component`) and `prefab patch` (`remove-node`, `remove-component`).
+- **Destructive or dangerous ops require `--force`:** `asset delete`, `execute`, `package remove`, `scene remove-component`, `prefab remove-component` (always); `asset move` / `asset rename` / `asset create` / `prefab create` when overwriting an existing path; destructive operations inside `scene patch` (`delete-gameobject`, `remove-component`) and `prefab patch` (`remove-node`, `remove-component`).
 - **Raw force payloads are explicit:** `raw --force` only injects `force=true` when the payload omits `force` or already sets it to `true`; conflicting payload values fail fast.
 - **Patch and overwrite rollback:** Scene/prefab patch and asset overwrite flows create backups for the asset body and `.meta` under `Library/com.yhc509.unity-cli-bridge/backups/`, keeping rollback files outside `Assets/` and normal git tracking.
 - **Dirty scene patch refusal:** `scene patch` refuses a target scene that is already loaded with unsaved changes, even with `--force`; save or discard the scene first.
@@ -372,6 +372,10 @@ The `unity-cli-bridge` skill teaches AI agents how to use the CLI safely: pick t
 Install from **Window > Unity CLI Manager** in the Unity Editor — select your AI tool and scope, then click **Install Skill**. Once installed, use **Remove Skill** from the same section to remove that scoped copy. Project scope is the default and writes to `<project-root>/.claude/skills/` or `<project-root>/.codex/skills/`; global scope writes to the user's agent skills directory. Supports Claude Code and Codex.
 
 ## Development
+
+Requires the .NET 9 SDK. The projects that run (CLI, doc generator, tests) set
+`RollForward=Major`, so a newer runtime (.NET 10+) also works when the .NET 9
+runtime itself is not installed.
 
 ```bash
 dotnet build UnityCliBridge.sln -c Debug

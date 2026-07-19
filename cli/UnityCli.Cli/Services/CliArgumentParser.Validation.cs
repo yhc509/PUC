@@ -364,6 +364,10 @@ public static partial class CliArgumentParser
                 throw new CliUsageException("--no-domain-reload는 --mode play에서만 사용 가능합니다.");
             case CommandKind.TestRun when parsed.TestTimeoutSeconds > ProtocolConstants.MaxTestRunTimeoutSeconds:
                 throw new CliUsageException($"--timeout 값은 {ProtocolConstants.MaxTestRunTimeoutSeconds}초를 초과할 수 없습니다.");
+            case CommandKind.TestResults
+                when !string.IsNullOrEmpty(parsed.TestRunId)
+                && !ProtocolHelpers.IsValid32HexId(parsed.TestRunId):
+                throw new CliUsageException("--run-id 값은 32자리 16진수여야 합니다 (`test run`이 반환한 runId).");
         }
     }
 
@@ -372,6 +376,11 @@ public static partial class CliArgumentParser
         if (parsed.Kind == CommandKind.RecordStart && parsed.RecordWait && parsed.RecordDuration is null)
         {
             throw new CliUsageException("`record start --wait`는 `--duration <초>`와 함께 사용해야 합니다 (수동 녹화는 `record stop`으로 종료).");
+        }
+
+        if (!string.IsNullOrEmpty(parsed.RecordRunId) && !ProtocolHelpers.IsValid32HexId(parsed.RecordRunId))
+        {
+            throw new CliUsageException("--recording-id 값은 32자리 16진수여야 합니다 (`record start`가 반환한 recordingId).");
         }
     }
 
@@ -694,6 +703,13 @@ public static partial class CliArgumentParser
         try
         {
             using var document = JsonDocument.Parse(specJson);
+            // TryGetProperty throws on a non-object root, and that escapes the JsonException
+            // catch below. A spec we cannot read holds no destructive op; the editor rejects it.
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
             if (!document.RootElement.TryGetProperty("operations", out JsonElement operations)
                 || operations.ValueKind != JsonValueKind.Array)
             {
@@ -702,7 +718,8 @@ public static partial class CliArgumentParser
 
             foreach (JsonElement operation in operations.EnumerateArray())
             {
-                if (!operation.TryGetProperty("op", out JsonElement opElement)
+                if (operation.ValueKind != JsonValueKind.Object
+                    || !operation.TryGetProperty("op", out JsonElement opElement)
                     || opElement.ValueKind != JsonValueKind.String)
                 {
                     continue;
@@ -739,6 +756,13 @@ public static partial class CliArgumentParser
         try
         {
             using var document = JsonDocument.Parse(specJson);
+            // TryGetProperty throws on a non-object root, and that escapes the JsonException
+            // catch below. A spec we cannot read holds no destructive op; the editor rejects it.
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
             if (!document.RootElement.TryGetProperty("operations", out JsonElement operations)
                 || operations.ValueKind != JsonValueKind.Array)
             {
@@ -747,7 +771,8 @@ public static partial class CliArgumentParser
 
             foreach (JsonElement operation in operations.EnumerateArray())
             {
-                if (!operation.TryGetProperty("op", out JsonElement opElement)
+                if (operation.ValueKind != JsonValueKind.Object
+                    || !operation.TryGetProperty("op", out JsonElement opElement)
                     || opElement.ValueKind != JsonValueKind.String)
                 {
                     continue;

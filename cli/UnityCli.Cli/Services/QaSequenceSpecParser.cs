@@ -52,6 +52,11 @@ public static class QaSequenceSpecParser
         using (doc)
         {
             JsonElement root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                throw new CliUsageException("--spec-json은 JSON object여야 합니다.");
+            }
+
             if (!root.TryGetProperty("steps", out JsonElement stepsEl)
                 || stepsEl.ValueKind != JsonValueKind.Array
                 || stepsEl.GetArrayLength() == 0)
@@ -72,6 +77,11 @@ public static class QaSequenceSpecParser
 
     private static QaSequenceStep ParseStep(JsonElement stepEl)
     {
+        if (stepEl.ValueKind != JsonValueKind.Object)
+        {
+            throw new CliUsageException("--spec-json: steps의 각 원소는 JSON object여야 합니다.");
+        }
+
         var wait = new List<QaSequenceCondition>();
         if (stepEl.TryGetProperty("wait", out JsonElement waitEl))
         {
@@ -256,6 +266,13 @@ public static class QaSequenceSpecParser
 
     private static string GetSinglePresentKey(JsonElement element, string[] keys, string label)
     {
+        // Every condition/action enters through here, so this one guard keeps
+        // TryGetProperty from throwing InvalidOperationException on a non-object element.
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            throw new CliUsageException($"--spec-json: {label}의 각 원소는 JSON object여야 합니다.");
+        }
+
         string? present = null;
         foreach (string key in keys)
         {

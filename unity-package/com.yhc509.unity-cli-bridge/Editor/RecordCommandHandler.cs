@@ -89,6 +89,14 @@ namespace UnityCliBridge.Bridge.Editor
         private static string HandleStatus(string argumentsJson)
         {
             RecordStatusArgs args = ProtocolJson.Deserialize<RecordStatusArgs>(argumentsJson) ?? new RecordStatusArgs();
+            if (!string.IsNullOrWhiteSpace(args.recordingId)
+                && !ProtocolHelpers.IsValid32HexId(args.recordingId))
+            {
+                throw new CommandFailureException(
+                    "INVALID_ARGS",
+                    "recordingId는 32자리 16진수여야 합니다.");
+            }
+
             string? id = string.IsNullOrWhiteSpace(args.recordingId) ? _recordingId : args.recordingId;
 
             if (HasActiveRecording()

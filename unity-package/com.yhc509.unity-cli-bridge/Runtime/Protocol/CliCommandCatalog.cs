@@ -447,7 +447,8 @@ namespace UnityCli.Protocol
                 canUseLocal: false,
                 canUseLive: true,
                 isAllowedWhileBusy: false,
-                notes: new[] { "Use this instead of asset create --type prefab for structured prefab authoring.", "Detailed prefab patch rules live in docs/prefab-spec.md." }),
+                notes: new[] { "Use this instead of asset create --type prefab for structured prefab authoring.", "Detailed prefab patch rules live in docs/prefab-spec.md." },
+                forceRule: ForceRule.OnOverwrite),
             new CliCommandDescriptor(
                 "prefab patch",
                 "prefab patch --path <Assets/...> (--spec-file <file.json> | --spec-json <json>) [--force]",

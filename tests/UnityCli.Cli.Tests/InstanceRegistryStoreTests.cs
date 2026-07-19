@@ -678,4 +678,127 @@ public sealed class InstanceRegistryStoreTests
 
         Assert.Equal(ProtocolConstants.GetCanonicalPath(liveProject), registry.activeProjectRoot);
     }
+
+    [Fact]
+    public void Update_PinsActiveProject_AndPersistsThroughSanitize()
+    {
+        using var temp = new TempDirectory();
+        var projectRoot = Path.Combine(temp.Path, "ProjectA");
+        Directory.CreateDirectory(projectRoot);
+        var projectHash = ProtocolConstants.ComputeProjectHash(projectRoot);
+        var registryPath = Path.Combine(temp.Path, "instances.json");
+        var store = new InstanceRegistryStore(registryPath);
+        store.Save(new InstanceRegistry
+        {
+            instances =
+            [
+                new InstanceRecord
+                {
+                    projectRoot = projectRoot,
+                    projectName = "ProjectA",
+                    projectHash = projectHash,
+                    pipeName = ProtocolConstants.BuildPipeName(projectHash),
+                    state = "idle",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                },
+            ],
+        });
+
+        store.Update(registry =>
+        {
+            var target = store.ResolveOrCreateTarget(registry, projectRoot);
+            registry.activeProjectRoot = target.projectRoot;
+            registry.activeProjectRootPinned = true;
+            registry.activeProjectHash = null;
+            return registry;
+        });
+
+        var reloaded = store.Load();
+        Assert.Equal(ProtocolConstants.GetCanonicalPath(projectRoot), reloaded.activeProjectRoot);
+        Assert.True(reloaded.activeProjectRootPinned);
+        Assert.Single(reloaded.instances);
+    }
+
+    [Fact]
+    public async Task Update_ConcurrentHeartbeatAppend_DoesNotLoseEitherMutation()
+    {
+        using var temp = new TempDirectory();
+        var projectA = Path.Combine(temp.Path, "ProjectA");
+        var projectB = Path.Combine(temp.Path, "ProjectB");
+        Directory.CreateDirectory(projectA);
+        Directory.CreateDirectory(projectB);
+        var hashA = ProtocolConstants.ComputeProjectHash(projectA);
+        var hashB = ProtocolConstants.ComputeProjectHash(projectB);
+        var registryPath = Path.Combine(temp.Path, "instances.json");
+        var store = new InstanceRegistryStore(registryPath);
+        store.Save(new InstanceRegistry
+        {
+            instances =
+            [
+                new InstanceRecord
+                {
+                    projectRoot = projectA,
+                    projectName = "ProjectA",
+                    projectHash = hashA,
+                    pipeName = ProtocolConstants.BuildPipeName(hashA),
+                    state = "idle",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                },
+            ],
+        });
+
+        using var barrier = new ManualResetEventSlim();
+
+        // `instances use` pins the active project through the atomic Update path.
+        var useTask = Task.Run(() =>
+        {
+            barrier.Wait();
+            store.Update(registry =>
+            {
+                var target = store.ResolveOrCreateTarget(registry, projectA);
+                registry.activeProjectRoot = target.projectRoot;
+                registry.activeProjectRootPinned = true;
+                registry.activeProjectHash = null;
+                return registry;
+            });
+        });
+
+        // A bridge heartbeat registers a second instance at the same moment. The old
+        // load / mutate / save path could drop one of these two writes; the atomic
+        // Update serializes them so both survive.
+        var heartbeatTask = Task.Run(() =>
+        {
+            barrier.Wait();
+            InstanceRegistryFile.Update(registryPath, registry =>
+            {
+                registry.instances ??= Array.Empty<InstanceRecord>();
+                registry.instances = registry.instances
+                    .Append(new InstanceRecord
+                    {
+                        projectRoot = projectB,
+                        projectName = "ProjectB",
+                        projectHash = hashB,
+                        pipeName = ProtocolConstants.BuildPipeName(hashB),
+                        state = "idle",
+                        lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                    })
+                    .ToArray();
+                return registry;
+            });
+        });
+
+        barrier.Set();
+        await Task.WhenAll(useTask, heartbeatTask);
+
+        var reloaded = store.Load();
+        Assert.True(reloaded.activeProjectRootPinned);
+        Assert.Equal(ProtocolConstants.GetCanonicalPath(projectA), reloaded.activeProjectRoot);
+        Assert.Contains(
+            reloaded.instances,
+            item => string.Equals(
+                item.projectRoot,
+                ProtocolConstants.GetCanonicalPath(projectB),
+                StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(2, reloaded.instances.Length);
+    }
 }

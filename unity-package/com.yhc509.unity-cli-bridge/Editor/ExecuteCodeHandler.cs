@@ -143,21 +143,17 @@ public static class PucExecuteWrapper
             }
             catch (TargetInvocationException ex) when (ex.InnerException != null)
             {
-                return ProtocolJson.Serialize(new ExecuteCodePayload
-                {
-                    output = string.Empty,
-                    success = false,
-                    error = ex.InnerException.Message,
-                });
+                throw new CommandFailureException(
+                    "EXECUTE_FAILED",
+                    ex.InnerException.Message,
+                    ex.InnerException.ToString());
             }
             catch (Exception ex)
             {
-                return ProtocolJson.Serialize(new ExecuteCodePayload
-                {
-                    output = string.Empty,
-                    success = false,
-                    error = ex.Message,
-                });
+                throw new CommandFailureException(
+                    "EXECUTE_FAILED",
+                    ex.Message,
+                    ex.ToString());
             }
         }
 
