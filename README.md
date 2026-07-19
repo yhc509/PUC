@@ -172,7 +172,7 @@ unity-cli scene inspect --path ... --with-values --omit-defaults
 unity-cli scene inspect --path ... --node "/Player[0]/Arm[0]" --max-depth 2
 
 # Build scenes with convenience commands
-unity-cli scene add-object --name Cube --primitive Cube \
+unity-cli scene add-object --path Assets/Scenes/Main.unity --name Cube --primitive Cube \
   --parent "/Environment[0]" --position 3,0,0
 # → Response includes createdPath — no follow-up inspect needed
 
@@ -372,6 +372,9 @@ The `unity-cli-bridge` skill teaches AI agents how to use the CLI safely: pick t
 Install from **Window > Unity CLI Manager** in the Unity Editor — select your AI tool and scope, then click **Install Skill**. Once installed, use **Remove Skill** from the same section to remove that scoped copy. Project scope is the default and writes to `<project-root>/.claude/skills/` or `<project-root>/.codex/skills/`; global scope writes to the user's agent skills directory. Supports Claude Code and Codex.
 
 ## Development
+
+Requires the .NET 9 SDK. Executable projects set `RollForward=Major`, so a newer
+runtime (.NET 10+) also works when the .NET 9 runtime itself is not installed.
 
 ```bash
 dotnet build UnityCliBridge.sln -c Debug
