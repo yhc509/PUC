@@ -170,7 +170,7 @@ Runtime extension providers can add more rows to `asset types`, but they are not
 ## Safety Rules
 
 - Query-only asset reads such as `asset info --path` may use `Assets/...` or `Packages/...`, but write paths stay under `Assets/...`.
-- Dangerous, destructive, or overwrite flows are guarded by `--force`, including `execute`, `asset delete`, overwrite variants of `asset move`, `asset rename`, and `asset create`, `package remove`, destructive `scene patch` and `prefab patch` operations, plus scene/prefab `remove-component` shortcuts.
+- Dangerous, destructive, or overwrite flows are guarded by `--force`, including `execute`, `asset delete`, overwrite variants of `asset move`, `asset rename`, `asset create`, and `prefab create`, `package remove`, destructive `scene patch` and `prefab patch` operations, plus scene/prefab `remove-component` shortcuts.
 - `raw --force` injects `force=true` only when the raw payload omits `force` or already sets it to `true`; conflicting payload values fail fast.
 - Scene/prefab patch and asset overwrite flows create backups for the asset body and `.meta` under `Library/com.yhc509.unity-cli-bridge/backups/` before mutating files.
 - `scene patch` refuses a loaded dirty target scene even with `--force`; save or discard the scene first.

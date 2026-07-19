@@ -345,7 +345,7 @@ docs/                          Generated CLI reference, specs
 
 ## Safety Rules
 
-- **Destructive or dangerous ops require `--force`:** `asset delete`, `execute`, `package remove`, `scene remove-component`, `prefab remove-component` (always); `asset move` / `asset rename` / `asset create` when overwriting an existing path; destructive operations inside `scene patch` (`delete-gameobject`, `remove-component`) and `prefab patch` (`remove-node`, `remove-component`).
+- **Destructive or dangerous ops require `--force`:** `asset delete`, `execute`, `package remove`, `scene remove-component`, `prefab remove-component` (always); `asset move` / `asset rename` / `asset create` / `prefab create` when overwriting an existing path; destructive operations inside `scene patch` (`delete-gameobject`, `remove-component`) and `prefab patch` (`remove-node`, `remove-component`).
 - **Raw force payloads are explicit:** `raw --force` only injects `force=true` when the payload omits `force` or already sets it to `true`; conflicting payload values fail fast.
 - **Patch and overwrite rollback:** Scene/prefab patch and asset overwrite flows create backups for the asset body and `.meta` under `Library/com.yhc509.unity-cli-bridge/backups/`, keeping rollback files outside `Assets/` and normal git tracking.
 - **Dirty scene patch refusal:** `scene patch` refuses a target scene that is already loaded with unsaved changes, even with `--force`; save or discard the scene first.
@@ -373,8 +373,9 @@ Install from **Window > Unity CLI Manager** in the Unity Editor — select your 
 
 ## Development
 
-Requires the .NET 9 SDK. Executable projects set `RollForward=Major`, so a newer
-runtime (.NET 10+) also works when the .NET 9 runtime itself is not installed.
+Requires the .NET 9 SDK. The projects that run (CLI, doc generator, tests) set
+`RollForward=Major`, so a newer runtime (.NET 10+) also works when the .NET 9
+runtime itself is not installed.
 
 ```bash
 dotnet build UnityCliBridge.sln -c Debug
