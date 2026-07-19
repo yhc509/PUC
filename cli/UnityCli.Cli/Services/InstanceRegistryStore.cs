@@ -27,6 +27,14 @@ public sealed class InstanceRegistryStore
         InstanceRegistryFile.Save(_registryPath, registry);
     }
 
+    // Atomic read-modify-write under the registry's exclusive lock. The raw on-disk registry is
+    // sanitized before the mutation runs so callers see the same shape Load() would return, and a
+    // concurrent heartbeat or CLI write cannot slip in between the read and the write.
+    public void Update(Func<InstanceRegistry, InstanceRegistry> mutate)
+    {
+        InstanceRegistryFile.Update(_registryPath, current => mutate(Sanitize(current)));
+    }
+
     private static bool TryResolveProjectRootByName(
         InstanceRegistry registry,
         string projectName,

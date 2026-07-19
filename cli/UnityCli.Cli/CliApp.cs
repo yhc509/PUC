@@ -170,16 +170,19 @@ public static class CliApp
             throw new CliUsageException("`instances use`에는 project hash, project path 또는 project name이 필요합니다.");
         }
 
-        var registry = registryStore.Load();
-        var target = registryStore.ResolveOrCreateTarget(registry, parsed.InstanceTarget!);
-        registry.activeProjectRoot = target.projectRoot;
-        registry.activeProjectRootPinned = true;
-        registry.activeProjectHash = null;
-        registryStore.Save(registry);
+        InstanceRecord? target = null;
+        registryStore.Update(registry =>
+        {
+            target = registryStore.ResolveOrCreateTarget(registry, parsed.InstanceTarget!);
+            registry.activeProjectRoot = target.projectRoot;
+            registry.activeProjectRootPinned = true;
+            registry.activeProjectHash = null;
+            return registry;
+        });
 
         var data = new
         {
-            activeProjectRoot = target.projectRoot,
+            activeProjectRoot = target!.projectRoot,
             target.projectName,
             target.projectRoot,
             target.projectHash,
