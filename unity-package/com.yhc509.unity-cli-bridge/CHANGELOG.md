@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- `execute --timeout` above 30 seconds now works. The connection timeout stayed at 30 seconds regardless of `--timeout`, so a longer run was cut off by the CLI at 30 seconds and reported as a connection timeout instead of running to the deadline you asked for.
 - `execute` now fails when your code throws. Previously an uncaught exception in `execute` code still returned a success response and exit code 0, so scripts and CI could mistake a failed run for a successful one. Such a run now returns an error with exit code 1 and the exception message.
 - `instances use` now updates the instance registry atomically. Previously it read, changed, and rewrote the registry in separate steps, so an Editor heartbeat or another CLI command running at the same moment could be silently overwritten, leaving stale or lost instance data.
 
