@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- `execute --timeout` above 30 seconds now works. The connection timeout stayed at 30 seconds regardless of `--timeout`, so a longer run was cut off by the CLI at 30 seconds and reported as a connection timeout instead of running to the deadline you asked for.
 - The command reference now lists `prefab create` as requiring `--force` to overwrite an existing prefab. The command already refused to overwrite without it; only the documented rule was wrong.
 - The README example for `scene add-object` now includes the required `--path`. Copying the old example gave a usage error.
 - Running `dotnet test` no longer requires the .NET 9 runtime specifically — a newer runtime works. This only affects people building this repo from source.
