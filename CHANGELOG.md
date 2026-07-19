@@ -7,8 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- A malformed `--json` payload now reports a usage error with exit code 2 instead of an internal-looking error with exit code 1. A payload whose root is not an object, whose `command` is missing or not a non-empty string, or whose `arguments` is not an object is rejected up front, so callers can tell bad input apart from a bridge failure.
 - `execute` now fails when your code throws. Previously an uncaught exception in `execute` code still returned a success response and exit code 0, so scripts and CI could mistake a failed run for a successful one. Such a run now returns an error with exit code 1 and the exception message.
 - `instances use` now updates the instance registry atomically. Previously it read, changed, and rewrote the registry in separate steps, so an Editor heartbeat or another CLI command running at the same moment could be silently overwritten, leaving stale or lost instance data.
+
+### Security
+- `test results --run-id` now requires the 32-hex-digit form that `test run` returns. The value went into a file path unchecked, so a caller on the local bridge could use path traversal in it to probe `.json` files outside the test-run directory.
 
 ## [0.4.1] - 2026-07-15
 

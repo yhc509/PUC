@@ -364,6 +364,10 @@ public static partial class CliArgumentParser
                 throw new CliUsageException("--no-domain-reload는 --mode play에서만 사용 가능합니다.");
             case CommandKind.TestRun when parsed.TestTimeoutSeconds > ProtocolConstants.MaxTestRunTimeoutSeconds:
                 throw new CliUsageException($"--timeout 값은 {ProtocolConstants.MaxTestRunTimeoutSeconds}초를 초과할 수 없습니다.");
+            case CommandKind.TestResults
+                when !string.IsNullOrEmpty(parsed.TestRunId)
+                && !ProtocolHelpers.IsValidTestRunId(parsed.TestRunId):
+                throw new CliUsageException("--run-id 값은 32자리 16진수여야 합니다 (`test run`이 반환한 runId).");
         }
     }
 

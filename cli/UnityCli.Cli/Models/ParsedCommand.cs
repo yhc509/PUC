@@ -216,9 +216,23 @@ public sealed class ParsedCommand
             {
                 var raw = JsonDocument.Parse(RawJson ?? throw new CliUsageException("raw 명령에는 `--json` payload가 필요합니다."));
                 var root = raw.RootElement;
+
+                // TryGetProperty/GetString throw InvalidOperationException on the wrong ValueKind,
+                // which escapes the JsonException catch below and surfaces as CLI_ERROR.
+                if (root.ValueKind != JsonValueKind.Object)
+                {
+                    throw new CliUsageException("raw payload는 JSON object여야 합니다.");
+                }
+
                 if (!root.TryGetProperty("command", out var commandElement))
                 {
                     throw new CliUsageException("raw payload에는 `command` 필드가 필요합니다.");
+                }
+
+                if (commandElement.ValueKind != JsonValueKind.String
+                    || string.IsNullOrWhiteSpace(commandElement.GetString()))
+                {
+                    throw new CliUsageException("raw payload의 `command`는 비어 있지 않은 문자열이어야 합니다.");
                 }
 
                 var rawRequest = new CommandEnvelope
@@ -616,6 +630,11 @@ public sealed class ParsedCommand
         if (!root.TryGetProperty("arguments", out JsonElement argumentsElement))
         {
             return Force ? "{\"force\":true}" : "{}";
+        }
+
+        if (argumentsElement.ValueKind is not (JsonValueKind.Object or JsonValueKind.Null or JsonValueKind.Undefined))
+        {
+            throw new CliUsageException("raw payload의 `arguments`는 JSON object여야 합니다.");
         }
 
         if (!Force)

@@ -118,19 +118,19 @@ public sealed class CliArgumentParserTests
         Assert.Equal(CommandKind.TestResults, noId.Kind);
         Assert.Null(noId.TestRunId);
 
-        var withId = CliArgumentParser.Parse(["test", "results", "--run-id", "abc123"]);
+        var withId = CliArgumentParser.Parse(["test", "results", "--run-id", "0123456789abcdef0123456789abcdef"]);
         Assert.Equal(CommandKind.TestResults, withId.Kind);
-        Assert.Equal("abc123", withId.TestRunId);
+        Assert.Equal("0123456789abcdef0123456789abcdef", withId.TestRunId);
     }
 
     [Fact]
     public void Parse_TestResults_AcceptsFailuresOnly()
     {
-        var parsed = CliArgumentParser.Parse(["test", "results", "--run-id", "abc123", "--failures-only"]);
+        var parsed = CliArgumentParser.Parse(["test", "results", "--run-id", "0123456789abcdef0123456789abcdef", "--failures-only"]);
         var args = ProtocolJson.Deserialize<TestResultsArgs>(parsed.ToEnvelope().argumentsJson);
 
         Assert.Equal(CommandKind.TestResults, parsed.Kind);
-        Assert.Equal("abc123", parsed.TestRunId);
+        Assert.Equal("0123456789abcdef0123456789abcdef", parsed.TestRunId);
         Assert.True(parsed.TestFailuresOnly);
         Assert.NotNull(args);
         Assert.True(args!.failuresOnly);

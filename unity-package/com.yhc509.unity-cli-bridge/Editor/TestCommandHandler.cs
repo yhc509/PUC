@@ -505,6 +505,13 @@ namespace UnityCliBridge.Bridge.Editor
         {
             TestResultsArgs args = ProtocolJson.Deserialize<TestResultsArgs>(argumentsJson) ?? new TestResultsArgs();
             string runId = args.runId;
+            if (!string.IsNullOrEmpty(runId) && !ProtocolHelpers.IsValidTestRunId(runId))
+            {
+                throw new CommandFailureException(
+                    "INVALID_ARGS",
+                    "runId는 32자리 16진수여야 합니다.");
+            }
+
             if (string.IsNullOrEmpty(runId))
             {
                 runId = TryReadLastRunId();

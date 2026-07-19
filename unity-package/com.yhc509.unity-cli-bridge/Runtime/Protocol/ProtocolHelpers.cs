@@ -52,6 +52,32 @@ namespace UnityCli.Protocol
                 || string.Equals(command, ProtocolConstants.CommandTestRun, StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// Run IDs are generated as <c>Guid.NewGuid().ToString("N")</c>, so anything else is
+        /// rejected before it can reach a file path built from the ID.
+        /// </summary>
+        public static bool IsValidTestRunId(string runId)
+        {
+            if (string.IsNullOrEmpty(runId) || runId.Length != 32)
+            {
+                return false;
+            }
+
+            for (int index = 0; index < runId.Length; index++)
+            {
+                char character = runId[index];
+                bool isHex = (character >= '0' && character <= '9')
+                    || (character >= 'a' && character <= 'f')
+                    || (character >= 'A' && character <= 'F');
+                if (!isHex)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         public static bool TestFullNameMatchesFilter(string fullName, string substringFilter)
         {
             if (string.IsNullOrEmpty(fullName) || string.IsNullOrEmpty(substringFilter))
