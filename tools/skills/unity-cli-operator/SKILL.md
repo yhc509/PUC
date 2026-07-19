@@ -36,7 +36,7 @@ description: "Unity Editor 외부 제어 1차 진입점. 씬/프리팹/에셋/�
 ## Operating Rules
 
 - 모든 asset 경로는 `Assets/...` 형식으로 다룬다. 조회 전용(`asset find`, `asset info`)은 `Packages/...`도 허용된다.
-- 파괴 연산과 덮어쓰기는 `--force`가 있을 때만 허용된다고 가정한다. 다음은 항상 force-gated: `asset delete`, `execute`, `package remove`, `scene remove-component`, `prefab remove-component`. 다음은 조건부 force-gated: 기존 경로를 덮어쓰는 `asset move`/`asset rename`/`asset create`; `scene patch` 안의 `delete-gameobject`/`remove-component`; `prefab patch` 안의 `remove-node`/`remove-component`.
+- 파괴 연산과 덮어쓰기는 `--force`가 있을 때만 허용된다고 가정한다. 다음은 항상 force-gated: `asset delete`, `execute`, `package remove`, `scene remove-component`, `prefab remove-component`. 다음은 조건부 force-gated: 기존 경로를 덮어쓰는 `asset move`/`asset rename`/`asset create`/`prefab create`; `scene patch` 안의 `delete-gameobject`/`remove-component`; `prefab patch` 안의 `remove-node`/`remove-component`.
 - scene/prefab patch와 asset overwrite는 `Library/com.yhc509.unity-cli-bridge/backups/` 디렉터리에 본체와 `.meta`를 백업한 뒤 실행된다. `BACKUP_RESTORE_FAILED`가 나오면 즉시 중단하고 응답의 백업 경로로 수동 복구를 안내한다.
 - `scene patch`는 대상 scene이 이미 dirty이면 `--force`와 무관하게 거부된다. 먼저 저장하거나 변경을 폐기한 뒤 다시 실행한다.
 - `execute`/`execute-code`는 임의 C# 실행이므로 항상 `--force`가 필요하다.

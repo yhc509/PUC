@@ -516,17 +516,28 @@ public static class CliApp
         return response;
     }
 
-    private static int ResolveLiveTimeoutMs(ParsedCommand parsed)
+    internal static int ResolveLiveTimeoutMs(ParsedCommand parsed)
     {
-        if (parsed.Kind != CommandKind.TestRun)
+        if (parsed.Kind == CommandKind.TestRun)
         {
-            return parsed.TimeoutMs;
+            int timeoutSeconds = parsed.TestTimeoutSeconds ?? ProtocolConstants.DefaultTestRunTimeoutSeconds;
+            int testTimeoutMs = ((timeoutSeconds + ProtocolConstants.TestRunCancelGraceSeconds) * 1000)
+                + ProtocolConstants.DefaultLiveTimeoutMs;
+            return Math.Max(parsed.TimeoutMs, testTimeoutMs);
         }
 
-        int timeoutSeconds = parsed.TestTimeoutSeconds ?? ProtocolConstants.DefaultTestRunTimeoutSeconds;
-        int testTimeoutMs = ((timeoutSeconds + ProtocolConstants.TestRunCancelGraceSeconds) * 1000)
-            + ProtocolConstants.DefaultLiveTimeoutMs;
-        return Math.Max(parsed.TimeoutMs, testTimeoutMs);
+        if (parsed.Kind == CommandKind.ExecuteCode)
+        {
+            // The editor cancels user code cooperatively at this deadline and still has to
+            // report EXECUTE_TIMEOUT, so the IPC read must outlive it or the CLI gives up
+            // first and reports a transport timeout instead of the real error.
+            int executeTimeoutMs = parsed.ExecuteCodeTimeoutSeconds.HasValue
+                ? parsed.ExecuteCodeTimeoutSeconds.Value * 1000
+                : ProtocolConstants.DefaultExecuteTimeoutMs;
+            return Math.Max(parsed.TimeoutMs, executeTimeoutMs + ProtocolConstants.DefaultLiveTimeoutMs);
+        }
+
+        return parsed.TimeoutMs;
     }
 
     private static int ResolveCommandCancellationTimeoutMs(ParsedCommand parsed, int liveTimeoutMs)
