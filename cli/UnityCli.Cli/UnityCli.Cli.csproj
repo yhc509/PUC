@@ -14,6 +14,7 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>unity-cli</AssemblyName>
     <TargetFramework>net9.0</TargetFramework>
+    <RollForward>Major</RollForward>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RuntimeIdentifiers>osx-arm64;win-x64</RuntimeIdentifiers>
