@@ -10,7 +10,9 @@ public sealed class LiveTimeoutTests
     {
         int resolved = CliApp.ResolveLiveTimeoutMs(new ParsedCommand(CommandKind.ExecuteCode));
 
-        Assert.True(resolved > ProtocolConstants.DefaultExecuteTimeoutMs);
+        Assert.Equal(
+            ProtocolConstants.DefaultExecuteTimeoutMs + ProtocolConstants.DefaultLiveTimeoutMs,
+            resolved);
     }
 
     [Theory]
@@ -25,7 +27,9 @@ public sealed class LiveTimeoutTests
             ExecuteCodeTimeoutSeconds = timeoutSeconds,
         });
 
-        Assert.True(resolved > timeoutSeconds * 1000);
+        // Pinned rather than `> deadline`: a short deadline still clears the old
+        // 30 s default, so a loose assertion would pass against the bug.
+        Assert.Equal((timeoutSeconds * 1000) + ProtocolConstants.DefaultLiveTimeoutMs, resolved);
     }
 
     [Fact]
