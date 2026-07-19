@@ -83,7 +83,7 @@ Commands for inspecting, creating, and patching prefab assets.
 | Command | Synopsis | Modes | Force Rule | Summary |
 | --- | --- | --- | --- | --- |
 | `prefab inspect` | `prefab inspect --path <Assets/...> [--node <nodePath>] [--with-values] [--max-depth <N>] [--omit-defaults]` | live | `None` | Inspects prefab hierarchy and serialized property paths; use --with-values when authoring patch specs and the other options to reduce payload size. |
-| `prefab create` | `prefab create --path <Assets/...> (--spec-file <file.json> \| --spec-json <json>) [--force]` | live | `None` | Creates a prefab from a JSON structure spec; use --force to overwrite an existing asset. |
+| `prefab create` | `prefab create --path <Assets/...> (--spec-file <file.json> \| --spec-json <json>) [--force]` | live | `OnOverwrite` | Creates a prefab from a JSON structure spec; use --force to overwrite an existing asset. |
 | `prefab patch` | `prefab patch --path <Assets/...> (--spec-file <file.json> \| --spec-json <json>) [--force]` | live | `OnDestructiveOp` | Applies a deterministic patch spec to an existing prefab; destructive operations require --force. |
 | `prefab add-component` | `prefab add-component --path <Assets/...> --node <nodePath> --type <ComponentType> [--values <json>]` | live | `None` | Adds a component to a prefab node; shortcut for a single add-component prefab patch operation. |
 | `prefab remove-component` | `prefab remove-component --path <Assets/...> --node <nodePath> --type <ComponentType> [--index N] --force` | live | `Always` | Removes a component from a prefab node; shortcut for a single remove-component prefab patch operation. |
@@ -170,7 +170,7 @@ Runtime extension providers can add more rows to `asset types`, but they are not
 ## Safety Rules
 
 - Query-only asset reads such as `asset info --path` may use `Assets/...` or `Packages/...`, but write paths stay under `Assets/...`.
-- Dangerous, destructive, or overwrite flows are guarded by `--force`, including `execute`, `asset delete`, overwrite variants of `asset move`, `asset rename`, and `asset create`, `package remove`, destructive `scene patch` and `prefab patch` operations, plus scene/prefab `remove-component` shortcuts.
+- Dangerous, destructive, or overwrite flows are guarded by `--force`, including `execute`, `asset delete`, overwrite variants of `asset move`, `asset rename`, `asset create`, and `prefab create`, `package remove`, destructive `scene patch` and `prefab patch` operations, plus scene/prefab `remove-component` shortcuts.
 - `raw --force` injects `force=true` only when the raw payload omits `force` or already sets it to `true`; conflicting payload values fail fast.
 - Scene/prefab patch and asset overwrite flows create backups for the asset body and `.meta` under `Library/com.yhc509.unity-cli-bridge/backups/` before mutating files.
 - `scene patch` refuses a loaded dirty target scene even with `--force`; save or discard the scene first.

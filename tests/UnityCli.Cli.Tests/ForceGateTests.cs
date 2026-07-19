@@ -305,6 +305,7 @@ public sealed class ForceGateTests
             "asset create" => new ParsedCommand(CommandKind.AssetCreate),
             "scene patch" => new ParsedCommand(CommandKind.ScenePatch) { SceneSpecJson = DestructiveScenePatchJson },
             "scene remove-component" => new ParsedCommand(CommandKind.SceneRemoveComponent),
+            "prefab create" => new ParsedCommand(CommandKind.PrefabCreate),
             "prefab patch" => new ParsedCommand(CommandKind.PrefabPatch) { PrefabSpecJson = DestructivePrefabPatchJson },
             "prefab remove-component" => new ParsedCommand(CommandKind.PrefabRemoveComponent),
             "package remove" => new ParsedCommand(CommandKind.PackageRemove),
