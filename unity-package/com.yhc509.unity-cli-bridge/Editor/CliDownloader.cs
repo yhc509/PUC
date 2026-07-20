@@ -35,6 +35,10 @@ namespace UnityCliBridge.Bridge.Editor
                 throw new ArgumentException("Download URL is required.", nameof(url));
             }
 
+            // This method is public and takes an arbitrary URL; pin it to the release location
+            // before a single byte is fetched.
+            CliInstallGuard.EnsureTrustedDownloadUrl(url);
+
             if (string.IsNullOrWhiteSpace(releaseVersion))
             {
                 throw new ArgumentException("Release version is required.", nameof(releaseVersion));
@@ -123,6 +127,9 @@ namespace UnityCliBridge.Bridge.Editor
             try
             {
                 ExtractArchive(archivePath, stagedInstallDirectory);
+                // Before anything is read out of staging: EnsureExecutableExists and the copy
+                // both dereference symlinks, so the archive must be proven symlink-free first.
+                CliInstallGuard.EnsureNoSymlinks(stagedInstallDirectory);
                 EnsureExecutableExists(stagedInstallDirectory);
                 ReplaceInstallDirectory(stagedInstallDirectory, installDir);
 
