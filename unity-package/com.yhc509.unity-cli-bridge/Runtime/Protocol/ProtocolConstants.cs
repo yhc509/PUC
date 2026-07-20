@@ -57,6 +57,8 @@ namespace UnityCli.Protocol
         public const string ErrorBackupFailed = "BACKUP_FAILED";
         public const string ErrorBackupRestoreFailed = "BACKUP_RESTORE_FAILED";
         public const string ErrorInternalInvalidPayload = "INTERNAL_INVALID_PAYLOAD";
+        public const string ErrorRequestTooLarge = "REQUEST_TOO_LARGE";
+        public const string ErrorRequestReadTimeout = "REQUEST_READ_TIMEOUT";
         public const string ErrorProtocolMismatch = "PROTOCOL_MISMATCH";
         public const string ErrorUnauthorized = "UNAUTHORIZED";
         public const string ErrorSceneDirty = "SCENE_DIRTY";
