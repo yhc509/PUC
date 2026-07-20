@@ -232,6 +232,8 @@ ucli test results --project "$PROJECT" --run-id <runId> --failures-only --output
 - `--failures-only`는 summary count를 유지하면서 `tests[]`만 non-passed로 줄인다
 - `test list --no-detail`은 `fullName`과 `mode`만 반환한다
 
+test run이 콜백 누락이나 Editor 이상으로 멈춰 락이 안 풀리면 `ucli test cancel --project "$PROJECT" --output compact`로 수동 해제한다. graceful `TestRunnerApi` cancel을 먼저 시도한 뒤 항상 락을 풀고, 취소된 `runId`를 반환한다. 진행 중인 run이 없으면 no-op 성공으로 반환된다.
+
 PlayMode domain reload를 생략할 수 있는 경우:
 
 ```bash

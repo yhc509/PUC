@@ -97,6 +97,34 @@ public sealed class ProtocolHelpersTests
     }
 
     [Fact]
+    public void IsTestCommand_IncludesTestCancel()
+    {
+        Assert.True(ProtocolHelpers.IsTestCommand(ProtocolConstants.CommandTestCancel));
+    }
+
+    [Fact]
+    public void IsDeferredTestCommand_ExcludesTestCancel()
+    {
+        // test cancel must resolve synchronously so it can release a stuck run
+        // lock without waiting behind the deferred (test list/run) queue.
+        Assert.False(ProtocolHelpers.IsDeferredTestCommand(ProtocolConstants.CommandTestCancel));
+    }
+
+    [Fact]
+    public void TestCancel_IsAllowedWhileBusy()
+    {
+        // The command that releases a stuck test-run lock must itself bypass
+        // BridgeHost's busy gate, or it can never run when it is needed most.
+        Assert.True(ProtocolHelpers.IsCommandAllowedWhileBusy(ProtocolConstants.CommandTestCancel));
+
+        CliCommandDescriptor descriptor = CliCommandCatalog.FindByCommand("test cancel")
+            ?? throw new InvalidOperationException("test cancel descriptor를 찾지 못했습니다.");
+        Assert.True(descriptor.IsAllowedWhileBusy);
+        Assert.Equal(ForceRule.None, descriptor.ForceRule);
+        Assert.Equal(ProtocolConstants.CommandTestCancel, descriptor.ProtocolCommand);
+    }
+
+    [Fact]
     public void GetTestRunResultErrorCode_MapsKnownStatuses()
     {
         Assert.Equal(

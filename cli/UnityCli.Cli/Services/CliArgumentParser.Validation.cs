@@ -635,6 +635,7 @@ public static partial class CliArgumentParser
             CommandKind.TestList => "test list",
             CommandKind.TestRun => "test run",
             CommandKind.TestResults => "test results",
+            CommandKind.TestCancel => "test cancel",
             CommandKind.RecordStart => "record start",
             CommandKind.RecordStop => "record stop",
             CommandKind.RecordStatus => "record status",
