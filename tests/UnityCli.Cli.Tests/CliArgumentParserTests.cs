@@ -137,6 +137,25 @@ public sealed class CliArgumentParserTests
     }
 
     [Fact]
+    public void Parse_TestCancel_MapsToProtocolCommand()
+    {
+        var parsed = CliArgumentParser.Parse(["test", "cancel"]);
+
+        Assert.Equal(CommandKind.TestCancel, parsed.Kind);
+
+        CommandEnvelope envelope = parsed.ToEnvelope();
+        Assert.Equal(ProtocolConstants.CommandTestCancel, envelope.command);
+    }
+
+    [Fact]
+    public void Parse_TestCancel_DoesNotRequireForce()
+    {
+        var parsed = CliArgumentParser.Parse(["test", "cancel"]);
+
+        Assert.False(CliArgumentParser.ForceRequiredByCatalog(parsed));
+    }
+
+    [Fact]
     public void Parse_ReadConsole_DefaultsToIncludingStackTrace()
     {
         var parsed = CliArgumentParser.Parse(["read-console"]);

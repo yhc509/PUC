@@ -301,7 +301,7 @@ public static partial class CliArgumentParser
     {
         if (tokens.Count == 0)
         {
-            throw new CliUsageException("`test` 다음에는 `list`, `run`, `results` 중 하나가 필요합니다.");
+            throw new CliUsageException("`test` 다음에는 `list`, `run`, `results`, `cancel` 중 하나가 필요합니다.");
         }
 
         var subCommand = tokens.Dequeue().ToLowerInvariant();
@@ -310,6 +310,7 @@ public static partial class CliArgumentParser
             "list" => ParseTestList(),
             "run" => ParseTestRun(),
             "results" => ParseTestResults(),
+            "cancel" => ParseTestCancel(),
             _ => throw new CliUsageException($"알 수 없는 test 하위 명령입니다: {subCommand}"),
         };
     }
@@ -330,6 +331,11 @@ public static partial class CliArgumentParser
     private static ParsedCommand ParseTestResults()
     {
         return new ParsedCommand(CommandKind.TestResults);
+    }
+
+    private static ParsedCommand ParseTestCancel()
+    {
+        return new ParsedCommand(CommandKind.TestCancel);
     }
 
     private static ParsedCommand ParseRecordCommand(Queue<string> tokens)

@@ -31,7 +31,7 @@
 
 ## Test Runner 에러 코드
 
-- `TEST_RUN_IN_PROGRESS` — single-flight 락 충돌. 진행 중인 `runId`가 동봉되므로 기다리거나 watchdog deadline 만료 뒤 다시 확인한다.
+- `TEST_RUN_IN_PROGRESS` — single-flight 락 충돌. 진행 중인 `runId`가 동봉되므로 기다리거나 watchdog deadline 만료 뒤 다시 확인한다. 콜백 누락 등으로 락이 안 풀리면 `test cancel`로 수동 해제한다.
 - `TEST_RUN_TIMEOUT` — `--timeout` 초과. result payload `status: TimedOut`이며 CLI exit code 1로 반환된다.
 - `TEST_PLAYMODE_ENTRY_FAILED` — `TestRunnerApi.Execute` 뒤 15초 안에 `isPlaying = true`로 전환되지 않았다. dirty scene, 컴파일 중, asmdef 인식 실패를 먼저 본다.
 - `TEST_LIST_TIMEOUT` — `RetrieveTestList` 콜백이 30초 내 도착하지 않았다. Editor가 compile 또는 asset import 중일 수 있다.

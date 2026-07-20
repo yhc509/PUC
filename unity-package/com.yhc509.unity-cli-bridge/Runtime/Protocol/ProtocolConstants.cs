@@ -80,6 +80,7 @@ namespace UnityCli.Protocol
         public const string CommandTestList = "test-list";
         public const string CommandTestRun = "test-run";
         public const string CommandTestResults = "test-results";
+        public const string CommandTestCancel = "test-cancel";
         public const string CommandPackageList = "package-list";
         public const string CommandPackageAdd = "package-add";
         public const string CommandPackageRemove = "package-remove";
