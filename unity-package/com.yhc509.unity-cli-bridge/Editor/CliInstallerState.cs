@@ -26,10 +26,12 @@ namespace UnityCliBridge.Bridge.Editor
         private const string LatestReleaseCheckTimeKey = "UnityCliBridge.CLI.LatestReleaseCheckTime";
         private const string LatestReleaseFailureCheckTimeKey = "UnityCliBridge.CLI.LatestReleaseFailureCheckTime";
         private const string PackageJsonFileName = "package.json";
-        private const string RepositoryUrl = "https://github.com/yhc509/unity-cli-bridge";
+        // Shared with CliInstallGuard so the URLs built here and the origin enforced there
+        // can never drift apart.
+        private const string RepositoryUrl = CliInstallGuard.RepositoryUrl;
         private const string GitHubApiLatestReleaseUrl = "https://api.github.com/repos/yhc509/unity-cli-bridge/releases/latest";
         private const string GitHubApiUserAgent = "unity-cli-bridge";
-        private const string ReleaseDownloadUrlPattern = RepositoryUrl + "/releases/download/v{0}/unity-cli-{1}.{2}";
+        private const string ReleaseDownloadUrlPattern = RepositoryUrl + CliInstallGuard.ReleaseDownloadPathSegment + "v{0}/unity-cli-{1}.{2}";
         private const string ReleasePageUrlPattern = RepositoryUrl + "/releases/tag/v{0}";
         private const string SymlinkExecutablePath = "/bin/ln";
         private const string MacPlatformAssetName = "osx-arm64";
