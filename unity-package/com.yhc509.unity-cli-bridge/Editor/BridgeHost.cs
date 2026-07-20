@@ -590,9 +590,52 @@ namespace UnityCliBridge.Bridge.Editor
         {
             using (stream)
             using (var writer = new StreamWriter(stream, _utf8WithoutBomEncoding, 1024, true))
-            using (var reader = new StreamReader(stream, Encoding.UTF8, false, 1024, true))
             {
-                string? line = await reader.ReadLineAsync().ConfigureAwait(false);
+                // Bounded initial read: caps how much a single connection can make
+                // the Editor buffer, and reclaims connections that open and never
+                // write. The deadline covers this read only — command execution
+                // past this point is not bounded by it.
+                BoundedRequestReadResult readResult = await BoundedRequestReader
+                    .ReadLineAsync(stream, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (readResult.Status == BoundedRequestReadStatus.ExceededSize)
+                {
+                    var error = ResponseEnvelope.Failure(
+                        Guid.NewGuid().ToString("N"),
+                        _projectHash,
+                        ProtocolConstants.ErrorRequestTooLarge,
+                        "Request exceeded the maximum size of "
+                            + BoundedRequestReader.MaxRequestBytes
+                            + " bytes.",
+                        false,
+                        0,
+                        ProtocolConstants.TransportLive,
+                        ProtocolErrorDetails.FromString(
+                            "Read " + readResult.BytesRead + " bytes without a complete request line."));
+                    await WriteResponseAsync(writer, error);
+                    return;
+                }
+
+                if (readResult.Status == BoundedRequestReadStatus.TimedOut)
+                {
+                    var error = ResponseEnvelope.Failure(
+                        Guid.NewGuid().ToString("N"),
+                        _projectHash,
+                        ProtocolConstants.ErrorRequestReadTimeout,
+                        "Request was not fully received within "
+                            + BoundedRequestReader.ReadTimeoutMs
+                            + " ms.",
+                        true,
+                        0,
+                        ProtocolConstants.TransportLive,
+                        ProtocolErrorDetails.FromString(
+                            "Read " + readResult.BytesRead + " bytes before the read deadline elapsed."));
+                    await WriteResponseAsync(writer, error);
+                    return;
+                }
+
+                string line = readResult.Line ?? string.Empty;
                 if (string.IsNullOrWhiteSpace(line))
                 {
                     return;
@@ -675,6 +718,10 @@ namespace UnityCliBridge.Bridge.Editor
                 var pending = new PendingRequest(command);
                 _pendingRequests.Enqueue(pending);
 
+                // Constructed only now, never before the bounded read: a
+                // StreamReader wrapped around the stream earlier would pre-buffer
+                // request bytes into itself and corrupt that read.
+                using (var reader = new StreamReader(stream, Encoding.UTF8, false, 1024, true))
                 using (cancellationToken.Register(CancelPendingRequest, pending))
                 {
                     _ = MonitorClientDisconnectAsync(reader, pending);

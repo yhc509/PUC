@@ -58,7 +58,7 @@ public sealed class LocalIpcClient
         using var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true);
         using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
 
-        await writer.WriteLineAsync(ProtocolJson.Serialize(command));
+        await writer.WriteLineAsync(ProtocolJson.Serialize(command).AsMemory(), cancellationToken);
         await writer.FlushAsync(cancellationToken);
 
         var responseLine = await reader.ReadLineAsync(cancellationToken);
