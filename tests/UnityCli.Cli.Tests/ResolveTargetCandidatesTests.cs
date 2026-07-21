@@ -4,8 +4,11 @@ using UnityCli.Protocol;
 
 namespace UnityCli.Cli.Tests;
 
-// Pure in-memory candidate-ordering tests, mirroring ResolveTargetTests.cs's style (no
-// InstanceRegistryStore/Sanitize involved, so fabricated paths like "/a" work directly).
+// Pure in-memory candidate-ordering tests, mirroring ResolveTargetTests.cs's style. The
+// no-project-root cases compare registry strings verbatim, so fabricated paths like "/a" work
+// directly. The explicit-root case is different: ResolveTarget canonicalizes the requested path,
+// and "/a" is not rooted on Windows (it canonicalizes to a drive-qualified form), so that test
+// derives its paths from the same canonical function to stay platform-independent.
 public sealed class ResolveTargetCandidatesTests
 {
     private static InstanceRecord Record(string root, string state)
@@ -96,15 +99,20 @@ public sealed class ResolveTargetCandidatesTests
     public void ExplicitProjectRoot_IgnoresOtherLiveInstances_ReturnsSingleCandidate()
     {
         // Explicit (or CWD-detected) targeting must stay exactly as stable as ResolveTarget's own
-        // explicit-root branch: no failover candidates are ever offered.
+        // explicit-root branch: no failover candidates are ever offered. The requested path is
+        // canonicalized before it is matched against the registry, so the registry entry and the
+        // expectation both come from GetCanonicalPath — otherwise "/a" would match its own literal
+        // on Unix but a drive-qualified form on Windows.
+        var rootA = ProtocolConstants.GetCanonicalPath("/a");
+        var rootB = ProtocolConstants.GetCanonicalPath("/b");
         var registry = new InstanceRegistry
         {
-            instances = [Record("/a", "idle"), Record("/b", "idle")],
+            instances = [Record(rootA, "idle"), Record(rootB, "idle")],
         };
 
         var candidates = UnityCli.Cli.CliApp.ResolveTargetCandidates(registry, "/a");
 
         Assert.Single(candidates);
-        Assert.Equal("/a", candidates[0].projectRoot);
+        Assert.Equal(rootA, candidates[0].projectRoot);
     }
 }

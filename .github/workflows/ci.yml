@@ -12,13 +12,21 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      # Run every OS to completion so a platform-specific failure is reported
+      # alongside the passing ones, not hidden behind the first cancellation.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # Filesystem-independent check; running it once is enough.
       - name: Verify UPM .meta files
+        if: matrix.os == 'ubuntu-latest'
         run: scripts/check-unity-meta.sh
 
       - name: Setup .NET 9
