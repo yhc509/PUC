@@ -15,6 +15,13 @@ namespace UnityCliBridge.Bridge.Editor
         private static TestRunnerCallbacks? _playModeCallbacks;
         private static EditorApplication.CallbackFunction? _playModeWatchdog;
 
+        /// <summary>
+        /// Set while a `test run --mode play` client is still waiting for its STARTED response.
+        /// Tearing the watchdog down (e.g. from `test cancel` during a stuck PlayMode entry)
+        /// without invoking this would leave that client hanging until its IPC timeout.
+        /// </summary>
+        private static Action? _playModePendingStartResponder;
+
         private void StartPlayModeRun(
             TestRunArgs args,
             TaskCompletionSource<ResponseEnvelope> completion,
@@ -137,14 +144,29 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static TestRunnerCallbacks EnsureCallbacksForCompletion(string runId, string mode)
         {
+            return EnsureCallbacksForCompletion(runId, mode, out _);
+        }
+
+        /// <param name="fabricated">
+        /// True when no live callbacks object for <paramref name="runId"/> was found and a
+        /// replacement had to be created. Callers that may be looking at a still-registered
+        /// object (EditMode runs own theirs) must only destroy a fabricated one.
+        /// </param>
+        private static TestRunnerCallbacks EnsureCallbacksForCompletion(
+            string runId,
+            string mode,
+            out bool fabricated)
+        {
             TestRunnerCallbacks? callbacks = TestRunnerCallbacks.TryFindFromSession();
             if (callbacks != null && string.Equals(callbacks.RunId, runId, StringComparison.Ordinal))
             {
+                fabricated = false;
                 return callbacks;
             }
 
             callbacks = CreateCallbacksFromActiveSession(runId, mode);
             callbacks.StoreInstanceIdToSession();
+            fabricated = true;
             return callbacks;
         }
 
@@ -280,9 +302,57 @@ namespace UnityCliBridge.Bridge.Editor
                 }
             }
 
+            void RespondToPendingStart()
+            {
+                if (startResponseSent)
+                {
+                    return;
+                }
+
+                startResponseSent = true;
+
+                // A cancel writes the result sidecar before tearing the watchdog down, so prefer
+                // the real cancelled payload and only synthesize an envelope if it is missing.
+                if (TestRunCompletedOnDisk(runId, out string? cancelledJson))
+                {
+                    completion!.TrySetResult(BuildTestRunResultEnvelope(
+                        requestId!,
+                        projectHash,
+                        cancelledJson!,
+                        0,
+                        failuresOnly));
+                    return;
+                }
+
+                completion!.TrySetResult(ResponseEnvelope.Failure(
+                    requestId!,
+                    projectHash,
+                    ProtocolConstants.ErrorTestCancelled,
+                    "PlayMode test run이 STARTED 응답 전에 취소되었습니다.",
+                    false,
+                    0,
+                    ProtocolConstants.TransportLive,
+                    null));
+            }
+
             _playModeWatchdog = Poll;
+            _playModePendingStartResponder = completion == null ? null : (Action)RespondToPendingStart;
             EditorApplication.update += _playModeWatchdog;
             Poll();
+        }
+
+        /// <summary>
+        /// Answers a `test run --mode play` client that is still waiting for its STARTED response,
+        /// before the watchdog that owns that response is unsubscribed.
+        /// </summary>
+        private static void RespondToPendingPlayModeStart()
+        {
+            Action? responder = _playModePendingStartResponder;
+            _playModePendingStartResponder = null;
+            if (responder != null)
+            {
+                responder();
+            }
         }
 
         private static ResponseEnvelope BuildPlayModeStartedResponse(
@@ -344,6 +414,8 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static void StopPlayModeWatchdog()
         {
+            _playModePendingStartResponder = null;
+
             if (_playModeWatchdog == null)
             {
                 return;

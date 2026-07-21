@@ -43,7 +43,8 @@ namespace UnityCli.Protocol
         {
             return string.Equals(command, ProtocolConstants.CommandTestList, StringComparison.Ordinal)
                 || string.Equals(command, ProtocolConstants.CommandTestRun, StringComparison.Ordinal)
-                || string.Equals(command, ProtocolConstants.CommandTestResults, StringComparison.Ordinal);
+                || string.Equals(command, ProtocolConstants.CommandTestResults, StringComparison.Ordinal)
+                || string.Equals(command, ProtocolConstants.CommandTestCancel, StringComparison.Ordinal);
         }
 
         public static bool IsDeferredTestCommand(string command)

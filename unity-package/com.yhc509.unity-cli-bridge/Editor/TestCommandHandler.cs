@@ -17,6 +17,14 @@ namespace UnityCliBridge.Bridge.Editor
     {
         private static readonly object _activeLock = new object();
         private static bool _hasActiveRun;
+
+        /// <summary>
+        /// Bumped whenever a cancel releases the run lock before the run id was persisted.
+        /// A filter resolution that is still in flight compares the generation it captured when
+        /// it took the lock against this counter, so it can tell "the lock is still mine" from
+        /// "a cancel already released it" and abort instead of starting the run outside the lock.
+        /// </summary>
+        private static int _cancelGeneration;
         private static EditorApplication.CallbackFunction? _editModeRestoreWatchdog;
         private const int TestListTimeoutSeconds = 30;
         private const int TestFilterResolutionTimeoutSeconds = 15;
@@ -42,6 +50,11 @@ namespace UnityCliBridge.Bridge.Editor
             if (string.Equals(command, ProtocolConstants.CommandTestResults, StringComparison.Ordinal))
             {
                 return HandleResults(argumentsJson);
+            }
+
+            if (string.Equals(command, ProtocolConstants.CommandTestCancel, StringComparison.Ordinal))
+            {
+                return HandleCancel();
             }
 
             throw new InvalidOperationException("Deferred test command must be started through StartDeferred: " + command);
@@ -446,6 +459,12 @@ namespace UnityCliBridge.Bridge.Editor
             Stopwatch stopwatch,
             Action<string[]?> start)
         {
+            // Captured in the same main-thread dispatch that took the run lock, before any
+            // EditorApplication.update poll can run. Filter resolution can take up to
+            // TestFilterResolutionTimeoutSeconds, during which the run id is not persisted yet
+            // and a `test cancel` can release the lock — the generation tells us that happened.
+            int startGeneration = GetCancelGeneration();
+
             if (string.IsNullOrEmpty(args.filter))
             {
                 TryStartResolvedRun(null);
@@ -458,6 +477,16 @@ namespace UnityCliBridge.Bridge.Editor
                 resolvedFullNames => TryStartResolvedRun(resolvedFullNames),
                 errorMessage =>
                 {
+                    if (TryCompleteCancelledStart(
+                        startGeneration,
+                        completion,
+                        projectHash,
+                        requestId,
+                        stopwatch))
+                    {
+                        return;
+                    }
+
                     stopwatch.Stop();
                     EndRun();
                     completion.TrySetResult(ResponseEnvelope.Failure(
@@ -473,6 +502,18 @@ namespace UnityCliBridge.Bridge.Editor
 
             void TryStartResolvedRun(string[]? resolvedFullNames)
             {
+                // Must precede every other branch: once a cancel has released the lock it may
+                // already belong to a different run, so neither EndRun() nor start() may run.
+                if (TryCompleteCancelledStart(
+                    startGeneration,
+                    completion,
+                    projectHash,
+                    requestId,
+                    stopwatch))
+                {
+                    return;
+                }
+
                 if (completion.Task.IsCompleted)
                 {
                     stopwatch.Stop();
@@ -499,6 +540,44 @@ namespace UnityCliBridge.Bridge.Editor
                         null));
                 }
             }
+        }
+
+        private static int GetCancelGeneration()
+        {
+            lock (_activeLock)
+            {
+                return _cancelGeneration;
+            }
+        }
+
+        /// <summary>
+        /// Answers a pending <c>test run</c> whose start was cancelled while its filter was still
+        /// resolving. Deliberately does NOT call <see cref="EndRun"/>: the cancel already released
+        /// the lock, which a later <c>test run</c> may since have taken.
+        /// </summary>
+        private static bool TryCompleteCancelledStart(
+            int startGeneration,
+            TaskCompletionSource<ResponseEnvelope> completion,
+            string projectHash,
+            string requestId,
+            Stopwatch stopwatch)
+        {
+            if (GetCancelGeneration() == startGeneration)
+            {
+                return false;
+            }
+
+            stopwatch.Stop();
+            completion.TrySetResult(ResponseEnvelope.Failure(
+                requestId,
+                projectHash,
+                ProtocolConstants.ErrorTestCancelled,
+                "test run이 시작되기 전에 취소되었습니다.",
+                false,
+                stopwatch.ElapsedMilliseconds,
+                ProtocolConstants.TransportLive,
+                null));
+            return true;
         }
 
         private static string HandleResults(string argumentsJson)
@@ -582,6 +661,105 @@ namespace UnityCliBridge.Bridge.Editor
             throw new CommandFailureException(
                 ProtocolConstants.ErrorTestRunNotFound,
                 "runId '" + runId + "'에 해당하는 test run이 없습니다.");
+        }
+
+        private static string HandleCancel()
+        {
+            string activeRunId;
+            string activeMode;
+            lock (_activeLock)
+            {
+                if (!_hasActiveRun)
+                {
+                    return ProtocolJson.Serialize(new TestCancelPayload
+                    {
+                        cancelled = false,
+                        runId = string.Empty,
+                        mode = string.Empty,
+                        message = "취소할 진행 중인 test run이 없습니다.",
+                    });
+                }
+
+                activeRunId = SessionState.GetString(ProtocolConstants.TestSessionKeyActiveRunId, string.Empty);
+                activeMode = SessionState.GetString(ProtocolConstants.TestSessionKeyActiveMode, string.Empty);
+
+                if (!ProtocolHelpers.IsValid32HexId(activeRunId))
+                {
+                    // The lock is held but no run id has been persisted yet — the start is still
+                    // resolving its --filter. Release the lock without synthesizing a completion:
+                    // fabricating callbacks with an empty run id would write a stray
+                    // "<runsDir>/.json" sidecar and repoint last-run.json at an empty run id,
+                    // breaking `test results` with no --run-id.
+                    _cancelGeneration++;
+                    EndRun();
+
+                    return ProtocolJson.Serialize(new TestCancelPayload
+                    {
+                        cancelled = true,
+                        runId = string.Empty,
+                        mode = activeMode,
+                        message = "시작 준비 중이던 test run을 취소했습니다.",
+                    });
+                }
+            }
+
+            bool isPlayMode = string.Equals(activeMode, "play", StringComparison.Ordinal);
+
+            // Attempt a graceful TestRunnerApi cancel first; MarkCancelled() below always
+            // releases the lock (via TestCommandHandler.EndRun() in its finally block) even
+            // if the graceful cancel fails or the run guid is stale.
+            TryCancelActiveUnityTestRun();
+
+            lock (_activeLock)
+            {
+                string currentRunId = SessionState.GetString(
+                    ProtocolConstants.TestSessionKeyActiveRunId,
+                    string.Empty);
+                if (!_hasActiveRun || !string.Equals(currentRunId, activeRunId, StringComparison.Ordinal))
+                {
+                    // CancelTestRun forces a play-mode exit and can pump the editor loop, so
+                    // Unity's RunFinished may have landed in that gap and already written the real
+                    // result. Synthesizing a "Cancelled" payload now would overwrite a genuinely
+                    // completed run with a zeroed summary and repoint last-run.json at it.
+                    return ProtocolJson.Serialize(new TestCancelPayload
+                    {
+                        cancelled = false,
+                        runId = activeRunId,
+                        mode = activeMode,
+                        message = "test run이 취소 요청 직전에 이미 종료되었습니다 (runId=" + activeRunId + ").",
+                    });
+                }
+            }
+
+            TestRunnerCallbacks callbacks = EnsureCallbacksForCompletion(
+                activeRunId,
+                activeMode,
+                out bool fabricatedCallbacks);
+            callbacks.MarkCancelled();
+
+            if (isPlayMode)
+            {
+                // The sidecar exists now, so the pending `test run` client gets the cancelled
+                // result instead of hanging until its IPC timeout when the watchdog is torn down.
+                RespondToPendingPlayModeStart();
+                DestroyIfNotRegisteredPlayModeCallback(callbacks);
+                CleanupPlayModeRegistration();
+            }
+            else if (fabricatedCallbacks)
+            {
+                // EditMode runs are dispatchable mid-run and their live callbacks object is still
+                // registered against StartEditModeRunResolved's api and captured by its Poll
+                // closure — only an object this call just fabricated may be destroyed here.
+                UnityEngine.Object.DestroyImmediate(callbacks);
+            }
+
+            return ProtocolJson.Serialize(new TestCancelPayload
+            {
+                cancelled = true,
+                runId = activeRunId,
+                mode = activeMode,
+                message = "test run이 취소되었습니다 (runId=" + activeRunId + ").",
+            });
         }
 
         private static string TryReadLastRunId()

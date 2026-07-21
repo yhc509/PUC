@@ -57,6 +57,8 @@ namespace UnityCli.Protocol
         public const string ErrorBackupFailed = "BACKUP_FAILED";
         public const string ErrorBackupRestoreFailed = "BACKUP_RESTORE_FAILED";
         public const string ErrorInternalInvalidPayload = "INTERNAL_INVALID_PAYLOAD";
+        public const string ErrorRequestTooLarge = "REQUEST_TOO_LARGE";
+        public const string ErrorRequestReadTimeout = "REQUEST_READ_TIMEOUT";
         public const string ErrorProtocolMismatch = "PROTOCOL_MISMATCH";
         public const string ErrorUnauthorized = "UNAUTHORIZED";
         public const string ErrorSceneDirty = "SCENE_DIRTY";
@@ -80,6 +82,7 @@ namespace UnityCli.Protocol
         public const string CommandTestList = "test-list";
         public const string CommandTestRun = "test-run";
         public const string CommandTestResults = "test-results";
+        public const string CommandTestCancel = "test-cancel";
         public const string CommandPackageList = "package-list";
         public const string CommandPackageAdd = "package-add";
         public const string CommandPackageRemove = "package-remove";

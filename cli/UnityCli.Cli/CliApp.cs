@@ -198,17 +198,28 @@ public static class CliApp
             transport: "cli");
     }
 
-    private static async Task<ResponseEnvelope> RunStatusAsync(InstanceRegistryStore registryStore, string? projectRoot)
+    internal static async Task<ResponseEnvelope> RunStatusAsync(
+        InstanceRegistryStore registryStore,
+        string? projectRoot,
+        Func<InstanceRecord, CommandEnvelope, int, CancellationToken, Task<ResponseEnvelope>>? sendAsync = null)
     {
         var registry = registryStore.Load();
-        var target = ResolveTarget(registry, projectRoot);
-        if (target is not null && !IsMissingAuthTokenForSyntheticTarget(registry, projectRoot, target))
+        var candidates = ResolveTargetCandidates(registry, projectRoot);
+        var primaryTarget = candidates.Length > 0 ? candidates[0] : null;
+        var sendCommandAsync = sendAsync ?? new LocalIpcClient().SendAsync;
+
+        foreach (var candidate in candidates)
         {
+            if (IsMissingAuthTokenForSyntheticTarget(registry, projectRoot, candidate))
+            {
+                continue;
+            }
+
             try
             {
                 using var cts = new CancellationTokenSource(5_000);
-                return await new LocalIpcClient().SendAsync(
-                    target,
+                var response = await sendCommandAsync(
+                    candidate,
                     new CommandEnvelope
                     {
                         requestId = Guid.NewGuid().ToString("N"),
@@ -217,6 +228,12 @@ public static class CliApp
                     },
                     5_000,
                     cts.Token);
+
+                // A diagnostic read-only command: honest about it if a fallback candidate answered
+                // instead of the originally resolved (pinned/active) target.
+                return candidate == primaryTarget
+                    ? response
+                    : AttachFailoverInfo(response, primaryTarget!, candidate);
             }
             catch
             {
@@ -235,52 +252,68 @@ public static class CliApp
 
         return ResponseEnvelope.Success(
             Guid.NewGuid().ToString("N"),
-            target?.projectHash,
+            primaryTarget?.projectHash,
             CreateDataElement(data),
             durationMs: 0,
             transport: "cli");
     }
 
-    private static async Task<ResponseEnvelope> RunDoctorAsync(
+    internal static async Task<ResponseEnvelope> RunDoctorAsync(
         InstanceRegistryStore registryStore,
         UnityProjectLocator locator,
         ParsedCommand parsed,
-        string? projectRoot)
+        string? projectRoot,
+        Func<InstanceRecord, CommandEnvelope, int, CancellationToken, Task<ResponseEnvelope>>? sendAsync = null)
     {
         var registry = registryStore.Load();
-        var target = ResolveTarget(registry, projectRoot);
+        var candidates = ResolveTargetCandidates(registry, projectRoot);
+        var primaryTarget = candidates.Length > 0 ? candidates[0] : null;
         var unityPath = !string.IsNullOrWhiteSpace(projectRoot)
             ? UnityEditorLocator.TryResolve(projectRoot)
             : null;
+        var sendCommandAsync = sendAsync ?? new LocalIpcClient().SendAsync;
 
         var liveReachable = false;
         string? liveErrorCode = null;
         string? liveErrorMessage = null;
-        if (target is not null && !IsMissingAuthTokenForSyntheticTarget(registry, projectRoot, target))
+        InstanceRecord? respondedTarget = null;
+
+        foreach (var candidate in candidates)
         {
+            if (IsMissingAuthTokenForSyntheticTarget(registry, projectRoot, candidate))
+            {
+                continue;
+            }
+
             try
             {
                 using var cts = new CancellationTokenSource(5_000);
-                var ipcClient = new LocalIpcClient();
                 var ping = new CommandEnvelope
                 {
                     requestId = Guid.NewGuid().ToString("N"),
                     command = "ping",
                     argumentsJson = "{}",
                 };
-                var response = await ipcClient.SendAsync(target, ping, 5_000, cts.Token);
+                var response = await sendCommandAsync(candidate, ping, 5_000, cts.Token);
+                respondedTarget = candidate;
                 liveReachable = response.status == "success";
                 if (!liveReachable && response.error is not null)
                 {
                     liveErrorCode = response.error.code;
                     liveErrorMessage = response.error.message;
                 }
+
+                // Candidate answered (even if with an error) — connectivity itself is resolved,
+                // no point trying further fallbacks.
+                break;
             }
             catch
             {
                 liveReachable = false;
             }
         }
+
+        var reportedTarget = respondedTarget ?? primaryTarget;
 
         var data = new
         {
@@ -289,9 +322,9 @@ public static class CliApp
             projectRoot,
             projectDetectedFromChildren = string.IsNullOrWhiteSpace(projectRoot) ? locator.TryFindProjectRoot(Environment.CurrentDirectory) : projectRoot,
             activeProjectRoot = registry.activeProjectRoot,
-            targetProjectHash = target?.projectHash,
-            targetProjectName = target?.projectName,
-            pipeName = target?.pipeName,
+            targetProjectHash = reportedTarget?.projectHash,
+            targetProjectName = reportedTarget?.projectName,
+            pipeName = reportedTarget?.pipeName,
             liveReachable,
             liveErrorCode,
             liveErrorMessage,
@@ -299,12 +332,70 @@ public static class CliApp
             instanceCount = registry.instances.Length,
         };
 
-        return ResponseEnvelope.Success(
+        var result = ResponseEnvelope.Success(
             Guid.NewGuid().ToString("N"),
-            target?.projectHash,
+            reportedTarget?.projectHash,
             CreateDataElement(data),
             durationMs: 0,
             transport: "cli");
+
+        // Diagnostic honesty: surface that the reported live instance is a fallback, not the
+        // originally resolved (pinned/active) target. Deliberately not gated on `liveReachable` —
+        // a fallback that answers with an error (PROTOCOL_MISMATCH on a mixed-version machine, say)
+        // still has its identity and error code reported here, so without the marker the user
+        // would debug the wrong project.
+        if (respondedTarget is not null
+            && primaryTarget is not null
+            && !string.Equals(respondedTarget.projectRoot, primaryTarget.projectRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            result = AttachFailoverInfo(result, primaryTarget, respondedTarget);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Merges a `failedOverFrom` marker into a diagnostic response's data payload, identifying the
+    /// originally resolved target that failed to connect. Read-only-diagnostic-only (`status`/`doctor`);
+    /// mutating command dispatch (<see cref="ExecuteUnityCommandAsync"/>) never fails over.
+    /// </summary>
+    private static ResponseEnvelope AttachFailoverInfo(
+        ResponseEnvelope response,
+        InstanceRecord attemptedTarget,
+        InstanceRecord respondedTarget)
+    {
+        var failedOverFrom = new
+        {
+            projectHash = attemptedTarget.projectHash,
+            projectRoot = attemptedTarget.projectRoot,
+            projectName = attemptedTarget.projectName,
+        };
+
+        JsonNode? node = response.data.HasValue
+            ? JsonNode.Parse(response.data.Value.GetRawText())
+            : null;
+
+        JsonObject obj;
+        if (node is JsonObject existing)
+        {
+            obj = existing;
+        }
+        else if (node is null)
+        {
+            obj = new JsonObject();
+        }
+        else
+        {
+            // status/doctor payloads are objects today, so this is unreachable — but a non-object
+            // payload has nowhere to hold a `failedOverFrom` sibling, and dropping it would be
+            // silent data loss. Nest it verbatim instead.
+            obj = new JsonObject { ["data"] = node };
+        }
+
+        obj["failedOverFrom"] = JsonSerializer.SerializeToNode(failedOverFrom, ProtocolJson.Default);
+
+        response.data = JsonSerializer.SerializeToElement(obj, ProtocolJson.Default);
+        return response;
     }
 
     internal static async Task<ResponseEnvelope> ExecuteUnityCommandAsync(
@@ -1297,6 +1388,38 @@ public static class CliApp
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Ordered failover candidates for read-only diagnostic commands (`status`/`doctor`) only.
+    /// The first element always matches what <see cref="ResolveTarget"/> would return, so mutating
+    /// command dispatch (<see cref="ExecuteUnityCommandAsync"/>), which calls
+    /// <see cref="ResolveTarget"/> directly, is completely unaffected by this method's existence.
+    /// With an explicit/detected <paramref name="projectRoot"/>, targeting is explicit and no
+    /// fallback candidates are offered — only the resolved (possibly synthetic/offline) target.
+    /// With no project root, remaining live instances (excluding the primary) are appended as
+    /// fallbacks, ordered the same way ambiguous-target candidate listings are elsewhere.
+    /// </summary>
+    internal static InstanceRecord[] ResolveTargetCandidates(InstanceRegistry registry, string? projectRoot)
+    {
+        var primary = ResolveTarget(registry, projectRoot);
+        if (primary is null)
+        {
+            return Array.Empty<InstanceRecord>();
+        }
+
+        if (!string.IsNullOrWhiteSpace(projectRoot))
+        {
+            return new[] { primary };
+        }
+
+        var fallbacks = registry.instances
+            .Where(item => !string.Equals(item.state, "offline", StringComparison.OrdinalIgnoreCase))
+            .Where(item => !string.Equals(item.projectRoot, primary.projectRoot, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(item => item.projectName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.projectRoot, StringComparer.OrdinalIgnoreCase);
+
+        return new[] { primary }.Concat(fallbacks).ToArray();
     }
 
     private static CliUsageException CreateAmbiguousTargetException(InstanceRecord[] candidates)

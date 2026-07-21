@@ -27,7 +27,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\unity-package\com.yhc509.unity-cli-bridge\Editor\BoundedRequestReader.cs" Link="UnityEditor\BoundedRequestReader.cs" />
     <Compile Include="..\..\unity-package\com.yhc509.unity-cli-bridge\Editor\ClientDisconnectMonitor.cs" Link="UnityEditor\ClientDisconnectMonitor.cs" />
+    <Compile Include="..\..\unity-package\com.yhc509.unity-cli-bridge\Editor\CliInstallGuard.cs" Link="UnityEditor\CliInstallGuard.cs" />
     <Compile Include="..\..\unity-package\com.yhc509.unity-cli-bridge\Editor\EnvelopeJsonWriter.cs" Link="UnityEditor\EnvelopeJsonWriter.cs" />
     <Compile Include="..\..\unity-package\com.yhc509.unity-cli-bridge\Editor\NamedPipeOwnershipLock.cs" Link="UnityEditor\NamedPipeOwnershipLock.cs" />
     <Compile Include="..\..\unity-package\com.yhc509.unity-cli-bridge\Editor\PendingRequestState.cs" Link="UnityEditor\PendingRequestState.cs" />

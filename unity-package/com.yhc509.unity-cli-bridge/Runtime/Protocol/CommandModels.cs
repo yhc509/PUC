@@ -844,6 +844,15 @@ namespace UnityCli.Protocol
     }
 
     [Serializable]
+    public sealed class TestCancelPayload
+    {
+        public bool cancelled;
+        public string runId = string.Empty;
+        public string mode = string.Empty;
+        public string message = string.Empty;
+    }
+
+    [Serializable]
     public sealed class TestRunResultPayload
     {
         public string runId = string.Empty;

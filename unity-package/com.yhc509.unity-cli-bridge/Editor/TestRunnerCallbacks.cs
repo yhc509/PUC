@@ -75,7 +75,6 @@ namespace UnityCliBridge.Bridge.Editor
 
         public void RunFinished(ITestResultAdaptor result)
         {
-            _runFinished = true;
             AppendLeafResults(result);
             CompleteRun("Completed");
         }
@@ -97,6 +96,17 @@ namespace UnityCliBridge.Bridge.Editor
 
         private void CompleteRun(string status, string[]? extraWarnings = null)
         {
+            // Every completion path is idempotent: once this run has been finalized — by Unity's
+            // RunFinished or by a cancel/timeout/failure mark — a later mark must not overwrite the
+            // recorded result with a synthesized one, nor release a run lock it no longer owns.
+            // Serialized so the flag survives a domain reload alongside the rest of the state.
+            if (_runFinished)
+            {
+                return;
+            }
+
+            _runFinished = true;
+
             List<string> warnings = BuildWarnings(extraWarnings);
             TestRunResultPayload payload = BuildPayload(status, warnings);
 
