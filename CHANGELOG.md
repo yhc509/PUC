@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-07-21
+
 ### Security
 - Installing the CLI from **Window > Unity CLI Manager** now refuses an archive that contains a symbolic link, and only downloads from this project's own release location. Extraction already rejected entries that tried to escape the staging folder, but an archive could still ship a link that the install step followed — copying whatever it pointed at, anywhere the Editor could read, into the install directory. Real releases contain a plain executable, so normal installs are unaffected.
 
