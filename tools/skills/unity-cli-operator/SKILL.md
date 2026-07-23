@@ -97,6 +97,16 @@ unity-cli does not have dedicated script create/delete commands. Use this combin
 
 코드 수정 뒤 테스트 러너 기본 호출, `--failures-only`/`--wait`/`--no-domain-reload` 사용 기준, `refresh` 후 재실행 루프는 [references/command-flows.md](references/command-flows.md)의 `테스트 러너` 절을 따른다.
 
+### Profile Workflow
+
+성능 진단은 다음 루프를 따른다:
+
+1. `unity-cli qa run-sequence --spec-json <spec> --profile`로 시퀀스를 실행하며 동시에 캡처한다. 응답의 `profileSummary`에 frame-time percentile, spike frame, hotspot, GC, CPU/GPU-bound verdict가 바로 들어온다.
+2. 시퀀스 없이 캡처만 필요하면 `unity-cli profile capture start --frames <n>`으로 시작하고 `unity-cli profile capture stop --wait`로 요약이 나올 때까지 기다린다.
+3. summary에서 이상 징후(overBudget count, spike, verdict)를 확인한 뒤 `unity-cli profile analyze <captureId> --gc` / `--frame <n>` / `--marker <name>` / `--spikes`로 로컬 sidecar를 드릴다운한다. Editor 왕복이 없어 반복 조회에 안전하다.
+4. 원인을 찾아 코드/에셋을 수정하고, 같은 시퀀스를 다시 `--profile`로 실행해 개선 여부를 비교한다.
+5. Edit Mode에서 카운터만 빠르게 보고 싶으면 `unity-cli profile stats --frames 30 --preset memory`처럼 프리셋(`frame`/`render`/`gc`/`memory`/`all`)을 사용한다.
+
 ### Component Operations
 
 **List components on a node:**
