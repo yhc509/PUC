@@ -36,6 +36,7 @@ public static class CliApp
                 CommandKind.InstancesUse => UseInstance(registryStore, parsed),
                 CommandKind.Doctor => await RunDoctorAsync(registryStore, locator, parsed, projectRoot),
                 CommandKind.QaWait => await RunQaWait(parsed),
+                CommandKind.ProfileAnalyze => ProfileAnalyzer.Run(parsed, projectRoot),
                 _ => await ExecuteUnityCommandAsync(parsed, registryStore, projectRoot),
             };
 
@@ -626,6 +627,14 @@ public static class CliApp
                 ? parsed.ExecuteCodeTimeoutSeconds.Value * 1000
                 : ProtocolConstants.DefaultExecuteTimeoutMs;
             return Math.Max(parsed.TimeoutMs, executeTimeoutMs + ProtocolConstants.DefaultLiveTimeoutMs);
+        }
+
+        if (parsed.Kind == CommandKind.ProfileStats)
+        {
+            // stats waits N editor frames before the bridge responds; an unfocused editor
+            // can tick as slow as ~4fps, so budget 250ms per frame on top of the base timeout.
+            int frames = parsed.ProfileFrames ?? ProtocolConstants.DefaultProfileStatsFrames;
+            return Math.Max(parsed.TimeoutMs, frames * 250 + ProtocolConstants.DefaultLiveTimeoutMs);
         }
 
         return parsed.TimeoutMs;
