@@ -448,6 +448,15 @@ public static class CliApp
                     return await PollRecordStatusAsync(parsed, target, sendCommandAsync, response, cts.Token);
                 }
 
+                if (ShouldPollProfileStop(parsed, response))
+                {
+                    var stopSummary = DeserializeData<ProfileSummaryPayload>(response);
+                    if (stopSummary != null && !string.IsNullOrEmpty(stopSummary.captureId))
+                    {
+                        response = await PollProfileStatusAsync(target, sendCommandAsync, stopSummary.captureId, cts.Token);
+                    }
+                }
+
                 if (ShouldPollEditorReady(parsed, response))
                 {
                     TimeSpan waitTimeout = ResolveEditorReadyWaitTimeout(parsed);
@@ -655,6 +664,12 @@ public static class CliApp
             return totalMs >= int.MaxValue ? int.MaxValue : Math.Max(1, (int)Math.Ceiling(totalMs));
         }
 
+        if (parsed.Kind == CommandKind.ProfileCaptureStop && parsed.ProfileWait)
+        {
+            double totalMs = Math.Max(liveTimeoutMs, (ProtocolConstants.ProfileStopWaitTimeoutSeconds + 15) * 1000d);
+            return totalMs >= int.MaxValue ? int.MaxValue : Math.Max(1, (int)Math.Ceiling(totalMs));
+        }
+
         return liveTimeoutMs;
     }
 
@@ -670,6 +685,13 @@ public static class CliApp
     {
         return parsed.Kind == CommandKind.RecordStart
             && parsed.RecordWait
+            && string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal);
+    }
+
+    private static bool ShouldPollProfileStop(ParsedCommand parsed, ResponseEnvelope response)
+    {
+        return parsed.Kind == CommandKind.ProfileCaptureStop
+            && parsed.ProfileWait
             && string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal);
     }
 
@@ -849,6 +871,82 @@ public static class CliApp
         }
 
         return finalPoll;
+    }
+
+    internal static async Task<ResponseEnvelope> PollProfileStatusAsync(
+        InstanceRecord target,
+        Func<InstanceRecord, CommandEnvelope, int, CancellationToken, Task<ResponseEnvelope>> sendAsync,
+        string captureId,
+        CancellationToken cancellationToken,
+        Func<TimeSpan, CancellationToken, Task>? delayAsync = null,
+        TimeSpan? pollInterval = null)
+    {
+        delayAsync ??= Task.Delay;
+        TimeSpan interval = pollInterval ?? TimeSpan.FromSeconds(1);
+        DateTime deadline = DateTime.UtcNow.AddSeconds(ProtocolConstants.ProfileStopWaitTimeoutSeconds);
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var command = new ParsedCommand(CommandKind.ProfileStatus)
+            {
+                ProfileCaptureId = captureId,
+            }.ToEnvelope();
+            ResponseEnvelope poll = await sendAsync(target, command, ProtocolConstants.DefaultLiveTimeoutMs, cancellationToken);
+            if (!string.Equals(poll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+            {
+                return poll;
+            }
+
+            var summary = DeserializeData<ProfileSummaryPayload>(poll);
+            if (summary is null)
+            {
+                return poll;
+            }
+
+            if (string.Equals(summary.status, "Completed", StringComparison.Ordinal))
+            {
+                return poll;
+            }
+
+            if (!string.Equals(summary.status, "Capturing", StringComparison.Ordinal)
+                && !string.Equals(summary.status, "Processing", StringComparison.Ordinal))
+            {
+                return ResponseEnvelope.Failure(
+                    poll.requestId,
+                    poll.target,
+                    GetProfileResultErrorCode(summary.status),
+                    $"profile capture `{captureId}` 상태가 {summary.status}입니다.",
+                    false,
+                    poll.durationMs,
+                    poll.transport);
+            }
+
+            if (DateTime.UtcNow >= deadline)
+            {
+                return ResponseEnvelope.Failure(
+                    poll.requestId,
+                    poll.target,
+                    ProtocolConstants.ErrorProfileTimeout,
+                    $"profile capture `{captureId}` 요약이 {ProtocolConstants.ProfileStopWaitTimeoutSeconds}초 안에 완료되지 않았습니다.",
+                    true,
+                    poll.durationMs,
+                    poll.transport);
+            }
+
+            await delayAsync(interval, cancellationToken);
+        }
+    }
+
+    private static string GetProfileResultErrorCode(string status)
+    {
+        return status switch
+        {
+            "NotFound" => ProtocolConstants.ErrorProfileNotFound,
+            "Interrupted" => ProtocolConstants.ErrorProfileInterrupted,
+            _ => ProtocolConstants.ErrorProfileFailed,
+        };
     }
 
     private static async Task<ResponseEnvelope> SendRecordStatusPollAsync(
