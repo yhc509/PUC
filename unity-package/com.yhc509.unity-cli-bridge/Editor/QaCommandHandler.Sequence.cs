@@ -58,6 +58,8 @@ namespace UnityCliBridge.Bridge.Editor
             var changedBaselines = new Dictionary<int, string>();
             string recordingPath = string.Empty;
             bool recordingStarted = false;
+            string profileCaptureId = string.Empty;
+            bool profileStarted = false;
 
             void Poll()
             {
@@ -66,6 +68,7 @@ namespace UnityCliBridge.Bridge.Editor
                     EditorApplication.update -= Poll;
                     AbortActiveSwipe();
                     StopSequenceRecordingIfNeeded();
+                    StopSequenceProfileIfNeeded();
                     return;
                 }
 
@@ -153,6 +156,7 @@ namespace UnityCliBridge.Bridge.Editor
                 AbortActiveSwipe();
                 stopwatch.Stop();
                 string finalRecordingPath = StopSequenceRecordingIfNeeded();
+                StopSequenceProfileIfNeeded();
                 completion.TrySetResult(CreateSuccessResponse(requestId, projectHash, new QaRunSequencePayload
                 {
                     status = "Completed",
@@ -161,6 +165,7 @@ namespace UnityCliBridge.Bridge.Editor
                     hasFailure = false,
                     elapsedMs = stopwatch.ElapsedMilliseconds,
                     recordingPath = finalRecordingPath,
+                    profileCaptureId = profileCaptureId,
                 }, stopwatch.ElapsedMilliseconds));
             }
 
@@ -174,6 +179,7 @@ namespace UnityCliBridge.Bridge.Editor
                 AbortActiveSwipe();
                 stopwatch.Stop();
                 string finalRecordingPath = StopSequenceRecordingIfNeeded();
+                StopSequenceProfileIfNeeded();
                 completion.TrySetResult(CreateSuccessResponse(requestId, projectHash, new QaRunSequencePayload
                 {
                     status = "TimedOut",
@@ -189,6 +195,7 @@ namespace UnityCliBridge.Bridge.Editor
                     },
                     elapsedMs = stopwatch.ElapsedMilliseconds,
                     recordingPath = finalRecordingPath,
+                    profileCaptureId = profileCaptureId,
                 }, stopwatch.ElapsedMilliseconds));
             }
 
@@ -221,6 +228,25 @@ namespace UnityCliBridge.Bridge.Editor
                 return recordingPath;
             }
 
+            void StopSequenceProfileIfNeeded()
+            {
+                if (!args.profile || !profileStarted)
+                {
+                    return;
+                }
+
+                try
+                {
+                    ProfileCommandHandler.StopForSequenceIfActive();
+                }
+                catch (Exception ex)
+                {
+                    UnityEngine.Debug.LogError("[UCB] qa run-sequence profile stop failed: " + ex);
+                }
+
+                profileStarted = false;
+            }
+
             void AbortActiveSwipe()
             {
 #if ENABLE_INPUT_SYSTEM
@@ -233,6 +259,19 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 RecordCommandHandler.StartForSequence(args.recordPath);
                 recordingStarted = true;
+            }
+
+            if (args.profile && EditorApplication.isPlaying)
+            {
+                try
+                {
+                    profileCaptureId = ProfileCommandHandler.StartForSequence();
+                    profileStarted = !string.IsNullOrEmpty(profileCaptureId);
+                }
+                catch (Exception ex)
+                {
+                    UnityEngine.Debug.LogError("[UCB] qa run-sequence profile start failed: " + ex);
+                }
             }
 
             EditorApplication.update += Poll;

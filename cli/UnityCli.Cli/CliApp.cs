@@ -457,6 +457,13 @@ public static class CliApp
                     }
                 }
 
+                if (parsed.Kind == CommandKind.QaRunSequence
+                    && parsed.QaSequenceProfile
+                    && string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+                {
+                    response = await MergeQaProfileSummaryAsync(target, sendCommandAsync, response, cts.Token);
+                }
+
                 if (ShouldPollEditorReady(parsed, response))
                 {
                     TimeSpan waitTimeout = ResolveEditorReadyWaitTimeout(parsed);
@@ -947,6 +954,73 @@ public static class CliApp
             "Interrupted" => ProtocolConstants.ErrorProfileInterrupted,
             _ => ProtocolConstants.ErrorProfileFailed,
         };
+    }
+
+    internal static async Task<ResponseEnvelope> MergeQaProfileSummaryAsync(
+        InstanceRecord target,
+        Func<InstanceRecord, CommandEnvelope, int, CancellationToken, Task<ResponseEnvelope>> sendAsync,
+        ResponseEnvelope response,
+        CancellationToken cancellationToken)
+    {
+        var payload = DeserializeData<QaRunSequencePayload>(response);
+        if (payload is null || string.IsNullOrEmpty(payload.profileCaptureId))
+        {
+            return response;
+        }
+
+        ResponseEnvelope poll = await PollProfileStatusAsync(
+            target, sendAsync, payload.profileCaptureId, cancellationToken);
+        if (!string.Equals(poll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+        {
+            // 요약 실패는 시퀀스 결과를 침몰시키지 않는다 — captureId로 나중에 조회 가능.
+            return response;
+        }
+
+        var summary = DeserializeData<ProfileSummaryPayload>(poll);
+        if (summary is null)
+        {
+            return response;
+        }
+
+        return InjectProfileSummary(response, summary);
+    }
+
+    internal static ResponseEnvelope InjectProfileSummary(ResponseEnvelope response, ProfileSummaryPayload summary)
+    {
+        string dataJson = GetDataJsonString(response);
+        if (string.IsNullOrWhiteSpace(dataJson))
+        {
+            return response;
+        }
+
+        System.Text.Json.Nodes.JsonNode? root = System.Text.Json.Nodes.JsonNode.Parse(dataJson);
+        if (root is null)
+        {
+            return response;
+        }
+
+        root["profileSummary"] = System.Text.Json.Nodes.JsonNode.Parse(
+            JsonSerializer.Serialize(summary, ProtocolJson.Default));
+
+        return ResponseEnvelope.Success(
+            response.requestId,
+            response.target,
+            JsonSerializer.SerializeToElement(root, ProtocolJson.Default),
+            response.durationMs,
+            response.transport);
+    }
+
+    private static string GetDataJsonString(ResponseEnvelope response)
+    {
+        if (!response.data.HasValue)
+        {
+            return string.Empty;
+        }
+
+        JsonElement data = response.data.Value;
+        return data.ValueKind == JsonValueKind.String
+            ? data.GetString() ?? string.Empty
+            : data.GetRawText();
     }
 
     private static async Task<ResponseEnvelope> SendRecordStatusPollAsync(

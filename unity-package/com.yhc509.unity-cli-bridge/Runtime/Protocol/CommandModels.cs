@@ -791,6 +791,7 @@ namespace UnityCli.Protocol
         public QaSequenceFailure failedStep = new QaSequenceFailure();
         public long elapsedMs;
         public string recordingPath = string.Empty;
+        public string profileCaptureId = string.Empty;
     }
 
     [Serializable]
