@@ -749,6 +749,7 @@ namespace UnityCli.Protocol
         public QaSequenceStep[] steps = Array.Empty<QaSequenceStep>();
         public int timeoutMs;
         public bool record;
+        public bool profile;
         public string? recordPath;
     }
 

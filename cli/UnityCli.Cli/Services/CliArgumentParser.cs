@@ -75,6 +75,7 @@ public static partial class CliArgumentParser
             "material" => ParseMaterial(tokens),
             "qa" => ParseQa(tokens),
             "record" => ParseRecordCommand(tokens),
+            "profile" => ParseProfile(tokens),
             "instances" => ParseInstances(tokens),
             "doctor" => new ParsedCommand(CommandKind.Doctor),
             "raw" => new ParsedCommand(CommandKind.Raw),
@@ -353,6 +354,61 @@ public static partial class CliArgumentParser
             "status" => new ParsedCommand(CommandKind.RecordStatus),
             _ => throw new CliUsageException($"알 수 없는 record 하위 명령입니다: {subCommand}"),
         };
+    }
+
+    private static ParsedCommand ParseProfile(Queue<string> tokens)
+    {
+        if (tokens.Count == 0)
+        {
+            throw new CliUsageException("`profile` 다음에는 `stats`, `capture`, `status`, `analyze` 중 하나가 필요합니다.");
+        }
+
+        var subCommand = tokens.Dequeue().ToLowerInvariant();
+        switch (subCommand)
+        {
+            case "stats":
+                return new ParsedCommand(CommandKind.ProfileStats);
+            case "capture":
+            {
+                if (tokens.Count == 0)
+                {
+                    throw new CliUsageException("`profile capture` 다음에는 `start` 또는 `stop`이 필요합니다.");
+                }
+
+                var captureSub = tokens.Dequeue().ToLowerInvariant();
+                return captureSub switch
+                {
+                    "start" => new ParsedCommand(CommandKind.ProfileCaptureStart),
+                    "stop" => new ParsedCommand(CommandKind.ProfileCaptureStop),
+                    _ => throw new CliUsageException($"알 수 없는 profile capture 하위 명령입니다: {captureSub}"),
+                };
+            }
+            case "status":
+            {
+                var parsed = new ParsedCommand(CommandKind.ProfileStatus);
+                if (tokens.Count > 0 && !tokens.Peek().StartsWith("--", StringComparison.Ordinal))
+                {
+                    parsed.ProfileCaptureId = tokens.Dequeue();
+                }
+
+                return parsed;
+            }
+            case "analyze":
+            {
+                if (tokens.Count == 0 || tokens.Peek().StartsWith("--", StringComparison.Ordinal))
+                {
+                    throw new CliUsageException("`profile analyze`에는 <captureId>가 필요합니다.");
+                }
+
+                var parsed = new ParsedCommand(CommandKind.ProfileAnalyze)
+                {
+                    ProfileCaptureId = tokens.Dequeue(),
+                };
+                return parsed;
+            }
+            default:
+                throw new CliUsageException($"알 수 없는 profile 하위 명령입니다: {subCommand}");
+        }
     }
 
     private static ParsedCommand ParseMaterial(Queue<string> tokens)
@@ -698,6 +754,61 @@ public static partial class CliArgumentParser
                     parsed.QaSequenceRecord = true;
                     parsed.QaSequenceRecordPath = RequireValue(tokens, "--record-path");
                     break;
+                case CommandKind.QaRunSequence when token == "--profile":
+                    parsed.QaSequenceProfile = true;
+                    break;
+                case CommandKind.ProfileStats when token == "--frames":
+                    parsed.ProfileFrames = RequireInt(RequireValue(tokens, "--frames"), "--frames");
+                    break;
+                case CommandKind.ProfileStats when token == "--preset":
+                {
+                    string preset = RequireValue(tokens, "--preset").ToLowerInvariant();
+                    if (preset is not ("frame" or "render" or "gc" or "memory" or "all"))
+                    {
+                        throw new CliUsageException("--preset 값은 frame|render|gc|memory|all 중 하나여야 합니다.");
+                    }
+
+                    parsed.ProfilePreset = preset;
+                    break;
+                }
+                case CommandKind.ProfileCaptureStart when token == "--frames":
+                    parsed.ProfileFrames = RequireInt(RequireValue(tokens, "--frames"), "--frames");
+                    break;
+                case CommandKind.ProfileCaptureStart when token == "--duration":
+                    parsed.ProfileDuration = RequireInt(RequireValue(tokens, "--duration"), "--duration");
+                    break;
+                case CommandKind.ProfileCaptureStart when token == "--budget-ms":
+                {
+                    string rawBudget = RequireValue(tokens, "--budget-ms");
+                    if (!double.TryParse(rawBudget, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double budget) || budget <= 0)
+                    {
+                        throw new CliUsageException("--budget-ms 값은 양수(ms)여야 합니다.");
+                    }
+
+                    parsed.ProfileBudgetMs = budget;
+                    break;
+                }
+                case CommandKind.ProfileCaptureStop when token == "--wait":
+                    parsed.ProfileWait = true;
+                    break;
+                case CommandKind.ProfileStatus when token == "--capture-id":
+                    parsed.ProfileCaptureId = RequireValue(tokens, "--capture-id");
+                    break;
+                case CommandKind.ProfileAnalyze when token == "--marker":
+                    parsed.ProfileAnalyzeMarker = RequireValue(tokens, "--marker");
+                    break;
+                case CommandKind.ProfileAnalyze when token == "--frame":
+                    parsed.ProfileAnalyzeFrame = RequireInt(RequireValue(tokens, "--frame"), "--frame", minimumValue: 0);
+                    break;
+                case CommandKind.ProfileAnalyze when token == "--gc":
+                    parsed.ProfileAnalyzeGc = true;
+                    break;
+                case CommandKind.ProfileAnalyze when token == "--spikes":
+                    parsed.ProfileAnalyzeSpikes = true;
+                    break;
+                case CommandKind.ProfileAnalyze when token == "--limit":
+                    parsed.ProfileLimit = RequireInt(RequireValue(tokens, "--limit"), "--limit");
+                    break;
                 case CommandKind.AssetFind when token == "--name":
                     parsed.AssetName = RequireValue(tokens, "--name");
                     break;
@@ -922,6 +1033,7 @@ public static partial class CliArgumentParser
         ValidatePackageOptions(parsed);
         ValidateTestOptions(parsed);
         ValidateRecordOptions(parsed);
+        ValidateProfileOptions(parsed);
         ValidateMaterialOptions(parsed);
         ValidateQaOptions(parsed);
         ValidateExecuteOptions(parsed);

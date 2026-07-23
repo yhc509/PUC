@@ -384,6 +384,26 @@ public static partial class CliArgumentParser
         }
     }
 
+    private static void ValidateProfileOptions(ParsedCommand parsed)
+    {
+        if (parsed.Kind == CommandKind.ProfileCaptureStart && parsed.ProfileFrames.HasValue && parsed.ProfileDuration.HasValue)
+        {
+            throw new CliUsageException("profile capture start에서 --frames와 --duration은 동시에 쓸 수 없습니다.");
+        }
+
+        if (parsed.Kind == CommandKind.ProfileAnalyze)
+        {
+            int queryCount = (string.IsNullOrEmpty(parsed.ProfileAnalyzeMarker) ? 0 : 1)
+                + (parsed.ProfileAnalyzeFrame.HasValue ? 1 : 0)
+                + (parsed.ProfileAnalyzeGc ? 1 : 0)
+                + (parsed.ProfileAnalyzeSpikes ? 1 : 0);
+            if (queryCount != 1)
+            {
+                throw new CliUsageException("profile analyze에는 --marker, --frame, --gc, --spikes 중 정확히 하나가 필요합니다.");
+            }
+        }
+    }
+
     private static void ValidateMaterialOptions(ParsedCommand parsed)
     {
         switch (parsed.Kind)
@@ -639,6 +659,11 @@ public static partial class CliArgumentParser
             CommandKind.RecordStart => "record start",
             CommandKind.RecordStop => "record stop",
             CommandKind.RecordStatus => "record status",
+            CommandKind.ProfileStats => "profile stats",
+            CommandKind.ProfileCaptureStart => "profile capture start",
+            CommandKind.ProfileCaptureStop => "profile capture stop",
+            CommandKind.ProfileStatus => "profile status",
+            CommandKind.ProfileAnalyze => "profile analyze",
             CommandKind.PackageList => "package list",
             CommandKind.PackageAdd => "package add",
             CommandKind.PackageRemove => "package remove",
