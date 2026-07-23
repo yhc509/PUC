@@ -10,7 +10,7 @@ namespace UnityCli.Protocol
     public static class ProtocolConstants
     {
         public const string AppName = "unity-cli";
-        public const string ProtocolVersion = "5";
+        public const string ProtocolVersion = "6";
         public const int DefaultLiveTimeoutMs = 30_000;
         public const int DefaultTimeoutMs = DefaultLiveTimeoutMs;
         public const int DefaultExecuteTimeoutMs = 30_000;
@@ -51,6 +51,13 @@ namespace UnityCli.Protocol
         public const string ErrorRecordInterrupted = "RECORD_INTERRUPTED";
         public const string ErrorRecordNotFound = "RECORD_NOT_FOUND";
         public const string ErrorRecordTimeout = "RECORD_TIMEOUT";
+        public const string ErrorProfileRequiresPlaymode = "PROFILE_REQUIRES_PLAYMODE";
+        public const string ErrorProfileInProgress = "PROFILE_IN_PROGRESS";
+        public const string ErrorProfileNotRunning = "PROFILE_NOT_RUNNING";
+        public const string ErrorProfileNotFound = "PROFILE_NOT_FOUND";
+        public const string ErrorProfileFailed = "PROFILE_FAILED";
+        public const string ErrorProfileInterrupted = "PROFILE_INTERRUPTED";
+        public const string ErrorProfileTimeout = "PROFILE_TIMEOUT";
         public const string ErrorCompileWaitTimeout = "COMPILE_WAIT_TIMEOUT";
         public const string ErrorRefreshWaitTimeout = "REFRESH_WAIT_TIMEOUT";
         public const string ErrorSceneForceRequired = "SCENE_FORCE_REQUIRED";
@@ -117,6 +124,10 @@ namespace UnityCli.Protocol
         public const string CommandQaWaitUntil = "qa-wait-until";
         public const string CommandQaWorldDump = "qa-world-dump";
         public const string CommandQaRunSequence = "qa-run-sequence";
+        public const string CommandProfileStats = "profile-stats";
+        public const string CommandProfileCaptureStart = "profile-capture-start";
+        public const string CommandProfileCaptureStop = "profile-capture-stop";
+        public const string CommandProfileStatus = "profile-status";
         public const int DefaultQaWaitUntilTimeoutMs = 10_000;
         public const int DefaultQaSwipeDurationMs = 300;
         public const int DefaultQaRunSequenceTimeoutMs = 60_000;
@@ -149,6 +160,19 @@ namespace UnityCli.Protocol
         public const string RecordSessionKeyTargetPath = "UCB.Record.targetPath";
         public const string RecordSessionKeyStartedAt = "UCB.Record.startedAt";
         public const string RecordSessionKeyDurationSeconds = "UCB.Record.durationSeconds";
+        public const string ProfilesDirectoryRelative = "Library/com.yhc509.unity-cli-bridge/profiles";
+        public const int DefaultProfileStatsFrames = 60;
+        public const int MaxProfileStatsFrames = 1000;
+        public const int ProfileStatsTimeoutSeconds = 120;
+        public const int MaxProfileCaptureSeconds = 600;
+        public const int ProfileRingBufferFallbackFrames = 2000;
+        public const float DefaultProfileBudgetMs = 16.67f;
+        public const int ProfileWalkFramesPerTick = 50;
+        public const int ProfileFrameTopMarkerCount = 10;
+        public const int DefaultProfileListLimit = 5;
+        public const int ProfileStopWaitTimeoutSeconds = 120;
+        public const string ProfileSessionKeyActiveId = "UCB.Profile.activeId";
+        public const string GpuWaitMarkerName = "Gfx.WaitForPresentOnGfxThread";
         public static readonly string[] SupportedScenePrimitiveNames =
         {
             "Cube",
