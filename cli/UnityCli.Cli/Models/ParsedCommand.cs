@@ -70,6 +70,11 @@ public enum CommandKind
     RecordStart,
     RecordStop,
     RecordStatus,
+    ProfileStats,
+    ProfileCaptureStart,
+    ProfileCaptureStop,
+    ProfileStatus,
+    ProfileAnalyze,
 }
 
 public sealed class ParsedCommand
@@ -126,6 +131,18 @@ public sealed class ParsedCommand
     public int? RecordFps { get; set; }
     public int? RecordMaxWidth { get; set; }
     public string? RecordRunId { get; set; }
+    public int? ProfileFrames { get; set; }
+    public string? ProfilePreset { get; set; }
+    public int? ProfileDuration { get; set; }
+    public double? ProfileBudgetMs { get; set; }
+    public bool ProfileWait { get; set; }
+    public string? ProfileCaptureId { get; set; }
+    public string? ProfileAnalyzeMarker { get; set; }
+    public int? ProfileAnalyzeFrame { get; set; }
+    public bool ProfileAnalyzeGc { get; set; }
+    public bool ProfileAnalyzeSpikes { get; set; }
+    public int? ProfileLimit { get; set; }
+    public bool QaSequenceProfile { get; set; }
     public string? ExecuteCodeSnippet { get; set; }
     public string? ExecuteCodeFile { get; set; }
     public string? ExecuteCodeArgsJson { get; set; }
@@ -312,6 +329,10 @@ public sealed class ParsedCommand
                 CommandKind.RecordStart => ProtocolConstants.CommandRecordStart,
                 CommandKind.RecordStop => ProtocolConstants.CommandRecordStop,
                 CommandKind.RecordStatus => ProtocolConstants.CommandRecordStatus,
+                CommandKind.ProfileStats => ProtocolConstants.CommandProfileStats,
+                CommandKind.ProfileCaptureStart => ProtocolConstants.CommandProfileCaptureStart,
+                CommandKind.ProfileCaptureStop => ProtocolConstants.CommandProfileCaptureStop,
+                CommandKind.ProfileStatus => ProtocolConstants.CommandProfileStatus,
                 _ => throw new CliUsageException($"지원하지 않는 live 명령입니다: {Kind}"),
             },
             argumentsJson = BuildArgumentsJson(),
@@ -398,6 +419,22 @@ public sealed class ParsedCommand
                 recordingId = RecordRunId,
             },
             CommandKind.RecordStop => new { },
+            CommandKind.ProfileStats => new ProfileStatsArgs
+            {
+                frames = ProfileFrames ?? 0,
+                preset = ProfilePreset ?? string.Empty,
+            },
+            CommandKind.ProfileCaptureStart => new ProfileCaptureStartArgs
+            {
+                frames = ProfileFrames ?? 0,
+                durationSeconds = ProfileDuration ?? 0,
+                budgetMs = (float)(ProfileBudgetMs ?? 0),
+            },
+            CommandKind.ProfileCaptureStop => new { },
+            CommandKind.ProfileStatus => new ProfileStatusArgs
+            {
+                captureId = ProfileCaptureId,
+            },
             CommandKind.ExecuteCode => new ExecuteCodeArgs
             {
                 code = ResolveExecuteCode(),
@@ -622,6 +659,7 @@ public sealed class ParsedCommand
             args.timeoutMs = QaSequenceTimeoutMs;
         }
 
+        args.profile = QaSequenceProfile;
         args.record = QaSequenceRecord;
         args.recordPath = QaSequenceRecordPath;
         return args;

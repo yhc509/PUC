@@ -307,6 +307,18 @@ Implement `UnityCliBridge.Bridge.IQaQueryable` on a game component to expose sta
 
 Same-named sibling world objects share a path and resolve to the first match; give tappable objects unique names/labels to target them individually.
 
+### Profiling
+
+```bash
+unity-cli profile stats --frames 30 --preset memory
+unity-cli profile capture start --frames 120
+unity-cli profile capture stop --wait
+unity-cli profile analyze <captureId> --gc
+unity-cli qa run-sequence --spec-json '{"steps":[{"actions":[{"wait":3000}]}]}' --profile
+```
+
+`profile stats` samples built-in `ProfilerRecorder` counters over N frames and returns min/median/p95/max per counter; it works in both Edit Mode and Play Mode. `profile capture start` records Play Mode frames and returns a `captureId` immediately; `profile capture stop --wait` polls until the summary — frame-time percentiles, spike frames, hotspots, per-marker GC bytes, and a CPU/GPU-bound verdict — is ready. `profile analyze <captureId>` drills into the finished capture's sidecar locally with `--marker <name>`, `--frame <n>`, `--gc`, or `--spikes`, with no Editor round-trip required. Add `--profile` to `qa run-sequence` to capture the sequence run and merge its summary into the response as `profileSummary`.
+
 `screenshot` responses include both image size (`width`/`height`) and live input metadata (`screenWidth`/`screenHeight`, `imageOrigin=top-left`, `coordinateOrigin=bottom-left`). `qa tap` takes screenshot image coordinates as-is, reuses the last successful `screenshot` dimensions when `--screenshot-width`/`--screenshot-height` are omitted, and lets the bridge handle Y-flip plus resolution scaling into Unity screen space. See [qa-testing.md](tools/skills/unity-cli-operator/references/qa-testing.md) for the coordinate workflow.
 
 ## Token Optimization
