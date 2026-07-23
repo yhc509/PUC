@@ -791,9 +791,6 @@ public static partial class CliArgumentParser
                 case CommandKind.ProfileCaptureStop when token == "--wait":
                     parsed.ProfileWait = true;
                     break;
-                case CommandKind.ProfileStatus when token == "--capture-id":
-                    parsed.ProfileCaptureId = RequireValue(tokens, "--capture-id");
-                    break;
                 case CommandKind.ProfileAnalyze when token == "--marker":
                     parsed.ProfileAnalyzeMarker = RequireValue(tokens, "--marker");
                     break;

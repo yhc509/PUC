@@ -453,7 +453,15 @@ public static class CliApp
                     var stopSummary = DeserializeData<ProfileSummaryPayload>(response);
                     if (stopSummary != null && !string.IsNullOrEmpty(stopSummary.captureId))
                     {
-                        response = await PollProfileStatusAsync(target, sendCommandAsync, stopSummary.captureId, cts.Token);
+                        try
+                        {
+                            response = await PollProfileStatusAsync(target, sendCommandAsync, stopSummary.captureId, cts.Token);
+                        }
+                        catch (Exception)
+                        {
+                            // stop 자체는 이미 성공(Processing)이므로, 폴링이 취소/전송 예외로 throw해도
+                            // 원본 응답을 유지한다 — captureId로 나중에 `profile status`를 조회할 수 있다.
+                        }
                     }
                 }
 
@@ -648,9 +656,13 @@ public static class CliApp
         if (parsed.Kind == CommandKind.ProfileStats)
         {
             // stats waits N editor frames before the bridge responds; an unfocused editor
-            // can tick as slow as ~4fps, so budget 250ms per frame on top of the base timeout.
+            // can tick as slow as ~4fps, so budget 250ms per frame. Floor it at the editor's
+            // own stats timeout (+base) so the CLI always outlives the bridge's PROFILE_TIMEOUT
+            // instead of giving up first and reporting a generic transport error.
             int frames = parsed.ProfileFrames ?? ProtocolConstants.DefaultProfileStatsFrames;
-            return Math.Max(parsed.TimeoutMs, frames * 250 + ProtocolConstants.DefaultLiveTimeoutMs);
+            int frameBudgetMs = frames * 250 + ProtocolConstants.DefaultLiveTimeoutMs;
+            int editorFloorMs = ProtocolConstants.ProfileStatsTimeoutSeconds * 1000 + ProtocolConstants.DefaultLiveTimeoutMs;
+            return Math.Max(parsed.TimeoutMs, Math.Max(frameBudgetMs, editorFloorMs));
         }
 
         return parsed.TimeoutMs;
@@ -674,6 +686,16 @@ public static class CliApp
         if (parsed.Kind == CommandKind.ProfileCaptureStop && parsed.ProfileWait)
         {
             double totalMs = Math.Max(liveTimeoutMs, (ProtocolConstants.ProfileStopWaitTimeoutSeconds + 15) * 1000d);
+            return totalMs >= int.MaxValue ? int.MaxValue : Math.Max(1, (int)Math.Ceiling(totalMs));
+        }
+
+        if (parsed.Kind == CommandKind.QaRunSequence && parsed.QaSequenceProfile)
+        {
+            // After the sequence returns, the CLI polls profile status for up to
+            // ProfileStopWaitTimeoutSeconds while the editor walks the captured frames.
+            // Add that window on top of the sequence budget so a slow walk never cancels
+            // an already-successful sequence run.
+            double totalMs = liveTimeoutMs + (ProtocolConstants.ProfileStopWaitTimeoutSeconds + 15) * 1000d;
             return totalMs >= int.MaxValue ? int.MaxValue : Math.Max(1, (int)Math.Ceiling(totalMs));
         }
 
@@ -968,8 +990,19 @@ public static class CliApp
             return response;
         }
 
-        ResponseEnvelope poll = await PollProfileStatusAsync(
-            target, sendAsync, payload.profileCaptureId, cancellationToken);
+        ResponseEnvelope poll;
+        try
+        {
+            poll = await PollProfileStatusAsync(
+                target, sendAsync, payload.profileCaptureId, cancellationToken);
+        }
+        catch (Exception)
+        {
+            // 폴링이 취소(cts)나 전송 예외로 throw해도 성공한 시퀀스 결과를 침몰시키지 않는다.
+            // captureId는 응답에 남아 있으므로 나중에 `profile status`로 요약을 조회할 수 있다.
+            return response;
+        }
+
         if (!string.Equals(poll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
         {
             // 요약 실패는 시퀀스 결과를 침몰시키지 않는다 — captureId로 나중에 조회 가능.

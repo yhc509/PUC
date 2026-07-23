@@ -5,7 +5,7 @@ namespace UnityCli.Cli.Tests;
 public sealed class ProtocolConstantsTests
 {
     [Fact]
-    public void ProtocolVersion_BumpedToFive_ForIpcAuthentication()
+    public void ProtocolVersion_BumpedToSix_ForProfileCommands()
     {
         Assert.Equal("6", ProtocolConstants.ProtocolVersion);
     }

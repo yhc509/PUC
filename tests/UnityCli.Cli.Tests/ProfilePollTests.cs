@@ -61,6 +61,72 @@ public sealed class ProfilePollTests
         Assert.Equal(expectedCode, result.error!.code);
     }
 
+    [Fact]
+    public async Task MergeQaProfileSummary_PollThrows_KeepsOriginalResponse()
+    {
+        var target = new InstanceRecord { projectHash = "target-1", projectName = "Sample" };
+        ResponseEnvelope original = Success(new QaRunSequencePayload
+        {
+            status = "Completed",
+            profileCaptureId = "cap1",
+        });
+
+        // 폴링 중 전송 예외가 throw되는 상황.
+        Task<ResponseEnvelope> Throwing(InstanceRecord _, CommandEnvelope __, int ___, CancellationToken ____)
+            => throw new InvalidOperationException("socket reset");
+
+        ResponseEnvelope result = await CliApp.MergeQaProfileSummaryAsync(
+            target, Throwing, original, CancellationToken.None);
+
+        // 성공한 시퀀스 응답이 침몰하지 않고 그대로 유지된다.
+        Assert.Equal(ProtocolConstants.StatusSuccess, result.status);
+        Assert.DoesNotContain("profileSummary", result.data!.Value.GetRawText());
+    }
+
+    [Fact]
+    public async Task MergeQaProfileSummary_Cancelled_KeepsOriginalResponse()
+    {
+        var target = new InstanceRecord { projectHash = "target-1", projectName = "Sample" };
+        ResponseEnvelope original = Success(new QaRunSequencePayload
+        {
+            status = "Completed",
+            profileCaptureId = "cap1",
+        });
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // 폴링은 계속 Processing을 돌려주지만, 취소된 토큰이 PollProfileStatusAsync를 throw시킨다.
+        Task<ResponseEnvelope> Fake(InstanceRecord _, CommandEnvelope __, int ___, CancellationToken ____)
+            => Task.FromResult(Success(new ProfileSummaryPayload { captureId = "cap1", status = "Processing" }));
+
+        ResponseEnvelope result = await CliApp.MergeQaProfileSummaryAsync(
+            target, Fake, original, cts.Token);
+
+        Assert.Equal(ProtocolConstants.StatusSuccess, result.status);
+        Assert.DoesNotContain("profileSummary", result.data!.Value.GetRawText());
+    }
+
+    [Fact]
+    public async Task MergeQaProfileSummary_Completed_InjectsSummary()
+    {
+        var target = new InstanceRecord { projectHash = "target-1", projectName = "Sample" };
+        ResponseEnvelope original = Success(new QaRunSequencePayload
+        {
+            status = "Completed",
+            profileCaptureId = "cap1",
+        });
+
+        Task<ResponseEnvelope> Fake(InstanceRecord _, CommandEnvelope __, int ___, CancellationToken ____)
+            => Task.FromResult(Success(new ProfileSummaryPayload { captureId = "cap1", status = "Completed" }));
+
+        ResponseEnvelope result = await CliApp.MergeQaProfileSummaryAsync(
+            target, Fake, original, CancellationToken.None);
+
+        Assert.Equal(ProtocolConstants.StatusSuccess, result.status);
+        Assert.Contains("profileSummary", result.data!.Value.GetRawText());
+    }
+
     private static ResponseEnvelope Success<T>(T data)
     {
         return ResponseEnvelope.Success(
