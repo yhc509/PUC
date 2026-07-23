@@ -60,6 +60,7 @@ namespace UnityCliBridge.Bridge.Editor
         private readonly MaterialCommandHandler _materialCommandHandler;
         private readonly QaCommandHandler _qaCommandHandler;
         private readonly RecordCommandHandler _recordCommandHandler;
+        private readonly ProfileCommandHandler _profileCommandHandler;
         private NamedPipeOwnershipLock? _namedPipeOwnershipLock;
 #if !UNITY_5_3_OR_NEWER || UNITY_6000_0_OR_NEWER
         private Socket? _unixListener;
@@ -98,6 +99,7 @@ namespace UnityCliBridge.Bridge.Editor
             _materialCommandHandler = new MaterialCommandHandler();
             _qaCommandHandler = new QaCommandHandler();
             _recordCommandHandler = new RecordCommandHandler();
+            _profileCommandHandler = new ProfileCommandHandler();
 
             TestCommandHandler.RestoreLockFromSession();
             DomainReloadDisableScope.RestoreIfOrphaned();
@@ -848,6 +850,12 @@ namespace UnityCliBridge.Bridge.Editor
                     continue;
                 }
 
+                if (_profileCommandHandler.CanHandle(pending.Command.command) && _profileCommandHandler.IsDeferred(pending.Command.command, pending.Command.argumentsJson))
+                {
+                    StartDeferredProfileRequest(pending);
+                    continue;
+                }
+
                 ResponseEnvelope response = HandleCommand(pending.Command);
                 pending.Completion.TrySetResult(response);
             }
@@ -995,6 +1003,50 @@ namespace UnityCliBridge.Bridge.Editor
             }
         }
 
+        private void StartDeferredProfileRequest(PendingRequest pending)
+        {
+            CommandEnvelope command = pending.Command;
+            var stopwatch = Stopwatch.StartNew();
+
+            try
+            {
+                if (IsBusyEditorCommand(command.command))
+                {
+                    stopwatch.Stop();
+                    pending.Completion.TrySetResult(BuildBusyResponse(command, stopwatch.ElapsedMilliseconds));
+                    return;
+                }
+
+                _profileCommandHandler.StartDeferred(command.command, command.argumentsJson, pending.Completion, _projectHash);
+            }
+            catch (CommandFailureException exception)
+            {
+                stopwatch.Stop();
+                pending.Completion.TrySetResult(ResponseEnvelope.Failure(
+                    command.requestId,
+                    _projectHash,
+                    exception.ErrorCode,
+                    exception.Message,
+                    exception.IsRetryable,
+                    stopwatch.ElapsedMilliseconds,
+                    ProtocolConstants.TransportLive,
+                    exception.Details));
+            }
+            catch (Exception exception)
+            {
+                stopwatch.Stop();
+                pending.Completion.TrySetResult(ResponseEnvelope.Failure(
+                    command.requestId,
+                    _projectHash,
+                    "COMMAND_FAILED",
+                    exception.Message,
+                    false,
+                    stopwatch.ElapsedMilliseconds,
+                    ProtocolConstants.TransportLive,
+                    ProtocolErrorDetails.FromString(exception.ToString())));
+            }
+        }
+
         private void OnEditorQuitting()
         {
             Dispose();
@@ -1061,6 +1113,10 @@ namespace UnityCliBridge.Bridge.Editor
                 else if (_recordCommandHandler.CanHandle(command.command))
                 {
                     data = _recordCommandHandler.Handle(command.command, command.argumentsJson);
+                }
+                else if (_profileCommandHandler.CanHandle(command.command))
+                {
+                    data = _profileCommandHandler.Handle(command.command, command.argumentsJson);
                 }
                 else
                 {
