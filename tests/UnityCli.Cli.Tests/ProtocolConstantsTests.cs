@@ -7,7 +7,7 @@ public sealed class ProtocolConstantsTests
     [Fact]
     public void ProtocolVersion_BumpedToFive_ForIpcAuthentication()
     {
-        Assert.Equal("5", ProtocolConstants.ProtocolVersion);
+        Assert.Equal("6", ProtocolConstants.ProtocolVersion);
     }
 
     [Fact]
