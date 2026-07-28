@@ -1,6 +1,5 @@
 #nullable enable
 using System;
-using System.IO;
 using System.Linq;
 using System.Text.Json;
 using UnityCli.Cli.Models;
@@ -13,55 +12,10 @@ internal static class ProfileAnalyzer
 {
     internal static ResponseEnvelope Run(ParsedCommand parsed, string? projectRoot)
     {
-        if (string.IsNullOrWhiteSpace(projectRoot))
+        if (!ProfileSidecarLoader.TryLoad(
+                projectRoot, parsed.ProfileCaptureId, out ProfileSidecarFile sidecar, out ResponseEnvelope? loadFailure))
         {
-            return ResponseEnvelope.Failure(
-                "local",
-                null,
-                "CLI_USAGE",
-                "프로젝트 루트를 찾을 수 없습니다. Unity 프로젝트 안에서 실행하거나 --project를 지정하세요.",
-                false,
-                0,
-                "cli");
-        }
-
-        string sidecarPath = Path.Combine(
-            projectRoot,
-            ProtocolConstants.ProfilesDirectoryRelative.Replace('/', Path.DirectorySeparatorChar),
-            parsed.ProfileCaptureId + ".json");
-        if (!File.Exists(sidecarPath))
-        {
-            return ResponseEnvelope.Failure(
-                "local",
-                null,
-                ProtocolConstants.ErrorProfileNotFound,
-                $"captureId `{parsed.ProfileCaptureId}`의 sidecar를 찾을 수 없습니다: {sidecarPath}",
-                false,
-                0,
-                "cli");
-        }
-
-        ProfileSidecarFile? sidecar;
-        try
-        {
-            sidecar = ProtocolJson.Deserialize<ProfileSidecarFile>(File.ReadAllText(sidecarPath));
-        }
-        catch (JsonException exception)
-        {
-            return ResponseEnvelope.Failure(
-                "local",
-                null,
-                ProtocolConstants.ErrorProfileFailed,
-                "sidecar JSON을 읽지 못했습니다: " + exception.Message,
-                false,
-                0,
-                "cli");
-        }
-
-        if (sidecar is null)
-        {
-            return ResponseEnvelope.Failure(
-                "local", null, ProtocolConstants.ErrorProfileFailed, "sidecar가 비어 있습니다.", false, 0, "cli");
+            return loadFailure!;
         }
 
         int limit = parsed.ProfileLimit ?? ProtocolConstants.DefaultProfileListLimit;

@@ -75,6 +75,7 @@ public enum CommandKind
     ProfileCaptureStop,
     ProfileStatus,
     ProfileAnalyze,
+    ProfileCompare,
 }
 
 public sealed class ParsedCommand
@@ -142,6 +143,9 @@ public sealed class ParsedCommand
     public bool ProfileAnalyzeGc { get; set; }
     public bool ProfileAnalyzeSpikes { get; set; }
     public int? ProfileLimit { get; set; }
+    public string? ProfileCompareBaseId { get; set; }
+    public string? ProfileCompareHeadId { get; set; }
+    public double? ProfileThresholdPercent { get; set; }
     public bool QaSequenceProfile { get; set; }
     public string? ExecuteCodeSnippet { get; set; }
     public string? ExecuteCodeFile { get; set; }

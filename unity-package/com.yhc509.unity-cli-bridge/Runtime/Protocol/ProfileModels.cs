@@ -204,4 +204,66 @@ namespace UnityCli.Protocol
         public float budgetMs;
         public ProfileFrameEntry[] frames = Array.Empty<ProfileFrameEntry>();
     }
+
+    /// <summary>One side (base or head) of a `profile compare` run, for comparability checks.</summary>
+    [Serializable]
+    public sealed class ProfileCompareSide
+    {
+        public string captureId = string.Empty;
+        public int capturedFrames;
+        public float budgetMs;
+        public string mode = string.Empty;
+        public string unityVersion = string.Empty;
+        public string bound = "unknown";
+    }
+
+    /// <summary>A single scalar metric compared across two captures.</summary>
+    [Serializable]
+    public sealed class ProfileCompareDelta
+    {
+        public double baseValue;
+        public double headValue;
+        public double delta;
+        public double deltaPercent;
+
+        /// <summary>False when the base value is zero or negative, which leaves the percentage undefined; deltaPercent is 0 then and must be ignored.</summary>
+        public bool deltaPercentAvailable = true;
+    }
+
+    /// <summary>A marker present in both captures, with its self-time and GC movement.</summary>
+    [Serializable]
+    public sealed class ProfileMarkerDelta
+    {
+        public string marker = string.Empty;
+        public double baseSelfMedianMs;
+        public double headSelfMedianMs;
+        public double deltaMs;
+        public double deltaPercent;
+
+        /// <summary>False when the base self-time is zero or negative, which leaves the percentage undefined; deltaPercent is 0 then and must be ignored.</summary>
+        public bool deltaPercentAvailable = true;
+        public long baseGcBytes;
+        public long headGcBytes;
+        public long gcBytesDelta;
+    }
+
+    [Serializable]
+    public sealed class ProfileComparePayload
+    {
+        public ProfileCompareSide baseCapture = new ProfileCompareSide();
+        public ProfileCompareSide headCapture = new ProfileCompareSide();
+        public double thresholdPercent;
+        public string verdict = "unchanged";
+        public ProfileCompareDelta frameTimeMedianMs = new ProfileCompareDelta();
+        public ProfileCompareDelta frameTimeP95Ms = new ProfileCompareDelta();
+        public ProfileCompareDelta frameTimeWorstMs = new ProfileCompareDelta();
+        public ProfileCompareDelta overBudgetFrames = new ProfileCompareDelta();
+        public ProfileCompareDelta gcBytesTotal = new ProfileCompareDelta();
+        public ProfileMarkerDelta[] regressions = Array.Empty<ProfileMarkerDelta>();
+        public ProfileMarkerDelta[] improvements = Array.Empty<ProfileMarkerDelta>();
+        public string[] markersAdded = Array.Empty<string>();
+        public string[] markersRemoved = Array.Empty<string>();
+        public bool truncated;
+        public string[] notes = Array.Empty<string>();
+    }
 }
