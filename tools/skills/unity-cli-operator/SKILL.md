@@ -112,6 +112,14 @@ unity-cli does not have dedicated script create/delete commands. Use this combin
    - budget/Unity 버전/프레임 수가 다르면 `notes`에 경고가 붙으므로 그 경우 결과를 그대로 신뢰하지 않는다.
 6. Edit Mode에서 카운터만 빠르게 보고 싶으면 `unity-cli profile stats --frames 30 --preset memory`처럼 프리셋(`frame`/`render`/`gc`/`memory`/`all`)을 사용한다.
 
+**수치를 해석하기 전에 [references/profiling.md](references/profiling.md)를 읽는다.** 특히:
+- 이 수치는 Editor 안에서 잰 것이라 절대값을 출시 성능으로 보고하면 안 된다 — 상대 비교 전용이다.
+- hotspot 1위가 `Semaphore.WaitForSignal` / `WaitForTargetFPS` / `EditorLoop` / `Gfx.WaitFor*`면 그건 원인이 아니라 대기이거나 Editor 오버헤드다. 흔한 정상 상황이다.
+- `gpuMedianMs: -1`은 "GPU 0ms"가 아니라 미측정 sentinel이다.
+- `deltaPercent`가 커도 `deltaMs`가 프레임 예산 대비 무시할 크기면 노이즈다. Unity는 노이즈 임계값을 공표한 적이 없으므로 지어내지 않는다.
+- `--budget-ms` 기본 16.67은 PC 60fps 가정이다. 모바일이면 30fps 기준 21.66ms가 Unity 권고값이다.
+- 최적화를 제안하기 전에 `references/profiling.md`의 folklore 표를 확인한다 — `Camera.main` 캐싱, `foreach` boxing, `GetComponent` GC는 현재 Unity에서 전부 틀린 조언이다.
+
 ### Component Operations
 
 **List components on a node:**
@@ -148,5 +156,6 @@ unity-cli does not have dedicated script create/delete commands. Use this combin
 - 일반 운용, 에셋 생성, scene inspect/patch: [references/command-flows.md](references/command-flows.md)
 - prefab create/inspect/patch와 spec 작성: [references/prefab-workflows.md](references/prefab-workflows.md)
 - QA 테스트 자동화 (Play Mode 입력 시뮬레이션): [references/qa-testing.md](references/qa-testing.md)
+- 프로파일링 결과 해석 (무시할 마커, 노이즈 판단, 예산, folklore): [references/profiling.md](references/profiling.md)
 - stale instance, busy, liveReachable, 로그 확인: [references/troubleshooting.md](references/troubleshooting.md)
 - 빠르게 시작할 JSON 템플릿: `assets/`
