@@ -36,6 +36,7 @@ public static class CliApp
                 CommandKind.InstancesUse => UseInstance(registryStore, parsed),
                 CommandKind.Doctor => await RunDoctorAsync(registryStore, locator, parsed, projectRoot),
                 CommandKind.QaWait => await RunQaWait(parsed),
+                CommandKind.ProfileAnalyze => ProfileAnalyzer.Run(parsed, projectRoot),
                 _ => await ExecuteUnityCommandAsync(parsed, registryStore, projectRoot),
             };
 
@@ -447,6 +448,30 @@ public static class CliApp
                     return await PollRecordStatusAsync(parsed, target, sendCommandAsync, response, cts.Token);
                 }
 
+                if (ShouldPollProfileStop(parsed, response))
+                {
+                    var stopSummary = DeserializeData<ProfileSummaryPayload>(response);
+                    if (stopSummary != null && !string.IsNullOrEmpty(stopSummary.captureId))
+                    {
+                        try
+                        {
+                            response = await PollProfileStatusAsync(target, sendCommandAsync, stopSummary.captureId, cts.Token);
+                        }
+                        catch (Exception)
+                        {
+                            // stop 자체는 이미 성공(Processing)이므로, 폴링이 취소/전송 예외로 throw해도
+                            // 원본 응답을 유지한다 — captureId로 나중에 `profile status`를 조회할 수 있다.
+                        }
+                    }
+                }
+
+                if (parsed.Kind == CommandKind.QaRunSequence
+                    && parsed.QaSequenceProfile
+                    && string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+                {
+                    response = await MergeQaProfileSummaryAsync(target, sendCommandAsync, response, cts.Token);
+                }
+
                 if (ShouldPollEditorReady(parsed, response))
                 {
                     TimeSpan waitTimeout = ResolveEditorReadyWaitTimeout(parsed);
@@ -628,6 +653,18 @@ public static class CliApp
             return Math.Max(parsed.TimeoutMs, executeTimeoutMs + ProtocolConstants.DefaultLiveTimeoutMs);
         }
 
+        if (parsed.Kind == CommandKind.ProfileStats)
+        {
+            // stats waits N editor frames before the bridge responds; an unfocused editor
+            // can tick as slow as ~4fps, so budget 250ms per frame. Floor it at the editor's
+            // own stats timeout (+base) so the CLI always outlives the bridge's PROFILE_TIMEOUT
+            // instead of giving up first and reporting a generic transport error.
+            int frames = parsed.ProfileFrames ?? ProtocolConstants.DefaultProfileStatsFrames;
+            int frameBudgetMs = frames * 250 + ProtocolConstants.DefaultLiveTimeoutMs;
+            int editorFloorMs = ProtocolConstants.ProfileStatsTimeoutSeconds * 1000 + ProtocolConstants.DefaultLiveTimeoutMs;
+            return Math.Max(parsed.TimeoutMs, Math.Max(frameBudgetMs, editorFloorMs));
+        }
+
         return parsed.TimeoutMs;
     }
 
@@ -646,6 +683,22 @@ public static class CliApp
             return totalMs >= int.MaxValue ? int.MaxValue : Math.Max(1, (int)Math.Ceiling(totalMs));
         }
 
+        if (parsed.Kind == CommandKind.ProfileCaptureStop && parsed.ProfileWait)
+        {
+            double totalMs = Math.Max(liveTimeoutMs, (ProtocolConstants.ProfileStopWaitTimeoutSeconds + 15) * 1000d);
+            return totalMs >= int.MaxValue ? int.MaxValue : Math.Max(1, (int)Math.Ceiling(totalMs));
+        }
+
+        if (parsed.Kind == CommandKind.QaRunSequence && parsed.QaSequenceProfile)
+        {
+            // After the sequence returns, the CLI polls profile status for up to
+            // ProfileStopWaitTimeoutSeconds while the editor walks the captured frames.
+            // Add that window on top of the sequence budget so a slow walk never cancels
+            // an already-successful sequence run.
+            double totalMs = liveTimeoutMs + (ProtocolConstants.ProfileStopWaitTimeoutSeconds + 15) * 1000d;
+            return totalMs >= int.MaxValue ? int.MaxValue : Math.Max(1, (int)Math.Ceiling(totalMs));
+        }
+
         return liveTimeoutMs;
     }
 
@@ -661,6 +714,13 @@ public static class CliApp
     {
         return parsed.Kind == CommandKind.RecordStart
             && parsed.RecordWait
+            && string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal);
+    }
+
+    private static bool ShouldPollProfileStop(ParsedCommand parsed, ResponseEnvelope response)
+    {
+        return parsed.Kind == CommandKind.ProfileCaptureStop
+            && parsed.ProfileWait
             && string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal);
     }
 
@@ -840,6 +900,160 @@ public static class CliApp
         }
 
         return finalPoll;
+    }
+
+    internal static async Task<ResponseEnvelope> PollProfileStatusAsync(
+        InstanceRecord target,
+        Func<InstanceRecord, CommandEnvelope, int, CancellationToken, Task<ResponseEnvelope>> sendAsync,
+        string captureId,
+        CancellationToken cancellationToken,
+        Func<TimeSpan, CancellationToken, Task>? delayAsync = null,
+        TimeSpan? pollInterval = null)
+    {
+        delayAsync ??= Task.Delay;
+        TimeSpan interval = pollInterval ?? TimeSpan.FromSeconds(1);
+        DateTime deadline = DateTime.UtcNow.AddSeconds(ProtocolConstants.ProfileStopWaitTimeoutSeconds);
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var command = new ParsedCommand(CommandKind.ProfileStatus)
+            {
+                ProfileCaptureId = captureId,
+            }.ToEnvelope();
+            ResponseEnvelope poll = await sendAsync(target, command, ProtocolConstants.DefaultLiveTimeoutMs, cancellationToken);
+            if (!string.Equals(poll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+            {
+                return poll;
+            }
+
+            var summary = DeserializeData<ProfileSummaryPayload>(poll);
+            if (summary is null)
+            {
+                return poll;
+            }
+
+            if (string.Equals(summary.status, "Completed", StringComparison.Ordinal))
+            {
+                return poll;
+            }
+
+            if (!string.Equals(summary.status, "Capturing", StringComparison.Ordinal)
+                && !string.Equals(summary.status, "Processing", StringComparison.Ordinal))
+            {
+                return ResponseEnvelope.Failure(
+                    poll.requestId,
+                    poll.target,
+                    GetProfileResultErrorCode(summary.status),
+                    $"profile capture `{captureId}` 상태가 {summary.status}입니다.",
+                    false,
+                    poll.durationMs,
+                    poll.transport);
+            }
+
+            if (DateTime.UtcNow >= deadline)
+            {
+                return ResponseEnvelope.Failure(
+                    poll.requestId,
+                    poll.target,
+                    ProtocolConstants.ErrorProfileTimeout,
+                    $"profile capture `{captureId}` 요약이 {ProtocolConstants.ProfileStopWaitTimeoutSeconds}초 안에 완료되지 않았습니다.",
+                    true,
+                    poll.durationMs,
+                    poll.transport);
+            }
+
+            await delayAsync(interval, cancellationToken);
+        }
+    }
+
+    private static string GetProfileResultErrorCode(string status)
+    {
+        return status switch
+        {
+            "NotFound" => ProtocolConstants.ErrorProfileNotFound,
+            "Interrupted" => ProtocolConstants.ErrorProfileInterrupted,
+            _ => ProtocolConstants.ErrorProfileFailed,
+        };
+    }
+
+    internal static async Task<ResponseEnvelope> MergeQaProfileSummaryAsync(
+        InstanceRecord target,
+        Func<InstanceRecord, CommandEnvelope, int, CancellationToken, Task<ResponseEnvelope>> sendAsync,
+        ResponseEnvelope response,
+        CancellationToken cancellationToken)
+    {
+        var payload = DeserializeData<QaRunSequencePayload>(response);
+        if (payload is null || string.IsNullOrEmpty(payload.profileCaptureId))
+        {
+            return response;
+        }
+
+        ResponseEnvelope poll;
+        try
+        {
+            poll = await PollProfileStatusAsync(
+                target, sendAsync, payload.profileCaptureId, cancellationToken);
+        }
+        catch (Exception)
+        {
+            // 폴링이 취소(cts)나 전송 예외로 throw해도 성공한 시퀀스 결과를 침몰시키지 않는다.
+            // captureId는 응답에 남아 있으므로 나중에 `profile status`로 요약을 조회할 수 있다.
+            return response;
+        }
+
+        if (!string.Equals(poll.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal))
+        {
+            // 요약 실패는 시퀀스 결과를 침몰시키지 않는다 — captureId로 나중에 조회 가능.
+            return response;
+        }
+
+        var summary = DeserializeData<ProfileSummaryPayload>(poll);
+        if (summary is null)
+        {
+            return response;
+        }
+
+        return InjectProfileSummary(response, summary);
+    }
+
+    internal static ResponseEnvelope InjectProfileSummary(ResponseEnvelope response, ProfileSummaryPayload summary)
+    {
+        string dataJson = GetDataJsonString(response);
+        if (string.IsNullOrWhiteSpace(dataJson))
+        {
+            return response;
+        }
+
+        System.Text.Json.Nodes.JsonNode? root = System.Text.Json.Nodes.JsonNode.Parse(dataJson);
+        if (root is null)
+        {
+            return response;
+        }
+
+        root["profileSummary"] = System.Text.Json.Nodes.JsonNode.Parse(
+            JsonSerializer.Serialize(summary, ProtocolJson.Default));
+
+        return ResponseEnvelope.Success(
+            response.requestId,
+            response.target,
+            JsonSerializer.SerializeToElement(root, ProtocolJson.Default),
+            response.durationMs,
+            response.transport);
+    }
+
+    private static string GetDataJsonString(ResponseEnvelope response)
+    {
+        if (!response.data.HasValue)
+        {
+            return string.Empty;
+        }
+
+        JsonElement data = response.data.Value;
+        return data.ValueKind == JsonValueKind.String
+            ? data.GetString() ?? string.Empty
+            : data.GetRawText();
     }
 
     private static async Task<ResponseEnvelope> SendRecordStatusPollAsync(

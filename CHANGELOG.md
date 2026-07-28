@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-28
+
+### Added
+- New `profile` command group turns the Editor into an agent-friendly profiler: `profile stats` samples built-in counters (min/median/p95/max), `profile capture start/stop` records Play Mode frames and produces a compact summary (frame-time percentiles, spike frames with their top marker, hotspots, per-marker GC bytes, and a CPU/GPU-bound verdict), and `profile analyze` drills into the capture sidecar locally without a running Editor. `qa run-sequence --profile` captures a sequence run and merges the summary into the response.
+
 ## [0.4.3] - 2026-07-21
 
 ### Security

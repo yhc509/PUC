@@ -213,6 +213,72 @@ namespace UnityCli.Protocol
                 canUseLive: true,
                 isAllowedWhileBusy: true),
             new CliCommandDescriptor(
+                "profile stats",
+                "profile stats [--frames <n> (default: 60)] [--preset <frame|render|gc|memory|all> (default: all)]",
+                "Samples built-in profiler counters over N frames via ProfilerRecorder and returns min/median/p95/max per counter. Works in Edit Mode and Play Mode; render/gc counters are only meaningful while playing.",
+                CliCommandGroup.Diagnostics,
+                ProtocolConstants.CommandProfileStats,
+                canUseLocal: false,
+                canUseLive: true,
+                isAllowedWhileBusy: true,
+                notes: new[]
+                {
+                    "Live-only. Waits N editor frames before responding; the CLI raises its IPC timeout accordingly.",
+                    "Counters missing on the current Unity version are listed under `unavailable` instead of failing.",
+                }),
+            new CliCommandDescriptor(
+                "profile capture start",
+                "profile capture start [--frames <n> | --duration <seconds>] [--budget-ms <ms> (default: 16.67)]",
+                "Starts a Play Mode profiler capture and returns immediately with a captureId. Auto-stops after --frames/--duration or the 600s safety cap.",
+                CliCommandGroup.Diagnostics,
+                ProtocolConstants.CommandProfileCaptureStart,
+                canUseLocal: false,
+                canUseLive: true,
+                isAllowedWhileBusy: true,
+                notes: new[]
+                {
+                    "Live-only. Requires Play Mode.",
+                    "Only one capture can run at a time (PROFILE_IN_PROGRESS otherwise).",
+                    "--budget-ms sets the frame budget used for spike detection and the verdict.",
+                }),
+            new CliCommandDescriptor(
+                "profile capture stop",
+                "profile capture stop [--wait]",
+                "Stops the active capture and starts summary processing (chunked frame walk). --wait polls `profile status` until the summary is ready and prints it.",
+                CliCommandGroup.Diagnostics,
+                ProtocolConstants.CommandProfileCaptureStop,
+                canUseLocal: false,
+                canUseLive: true,
+                isAllowedWhileBusy: true,
+                notes: new[]
+                {
+                    "Live-only. Fails with PROFILE_NOT_RUNNING when no capture is active.",
+                    "Without --wait the response status is `Processing`; poll with `profile status <captureId>`.",
+                }),
+            new CliCommandDescriptor(
+                "profile status",
+                "profile status [<captureId>]",
+                "Reports the state of the active capture (Capturing/Processing) or the finished summary read from the profiles sidecar.",
+                CliCommandGroup.Diagnostics,
+                ProtocolConstants.CommandProfileStatus,
+                canUseLocal: false,
+                canUseLive: true,
+                isAllowedWhileBusy: true),
+            new CliCommandDescriptor(
+                "profile analyze",
+                "profile analyze <captureId> (--marker <name> | --frame <n> | --gc | --spikes) [--limit <n> (default: 5)]",
+                "Drills into a finished capture by reading its sidecar JSON locally — no Editor round-trip. Works after the Editor exits as long as the sidecar file exists.",
+                CliCommandGroup.Diagnostics,
+                null,
+                canUseLocal: true,
+                canUseLive: false,
+                isAllowedWhileBusy: true,
+                notes: new[]
+                {
+                    "Local-only. Resolves the project root the same way as other commands (--project, CWD).",
+                    "--marker frame appearances come from each frame's top-10 table, not the full hierarchy.",
+                }),
+            new CliCommandDescriptor(
                 "execute",
                 "execute (--code <csharp> | --file <path>) [--args <json>] [--timeout <초>] --force",
                 "Executes arbitrary C# code in the running editor context with optional JSON arguments, structured __pucResult return values, and an optional cooperative timeout; always requires --force.",
