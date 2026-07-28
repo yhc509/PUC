@@ -73,6 +73,77 @@ public class ProfileParserTests
     }
 
     [Fact]
+    public void Parse_ProfileCompare_TwoPositionalIdsAndOptions()
+    {
+        var parsed = CliArgumentParser.Parse(["profile", "compare", "capA", "capB", "--threshold", "2.5", "--limit", "8"]);
+        Assert.Equal(CommandKind.ProfileCompare, parsed.Kind);
+        Assert.Equal("capA", parsed.ProfileCompareBaseId);
+        Assert.Equal("capB", parsed.ProfileCompareHeadId);
+        Assert.Equal(2.5, parsed.ProfileThresholdPercent!.Value, precision: 3);
+        Assert.Equal(8, parsed.ProfileLimit);
+    }
+
+    [Fact]
+    public void Parse_ProfileCompare_DefaultsLeaveOptionsUnset()
+    {
+        var parsed = CliArgumentParser.Parse(["profile", "compare", "capA", "capB"]);
+        Assert.Equal(CommandKind.ProfileCompare, parsed.Kind);
+        Assert.Null(parsed.ProfileThresholdPercent);
+        Assert.Null(parsed.ProfileLimit);
+    }
+
+    [Fact]
+    public void Parse_ProfileCompare_RequiresBothCaptureIds()
+    {
+        Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["profile", "compare"]));
+        Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["profile", "compare", "--threshold", "5"]));
+        Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["profile", "compare", "capA"]));
+        Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["profile", "compare", "capA", "--limit", "3"]));
+    }
+
+    [Fact]
+    public void Parse_ProfileCompare_RejectsNegativeThreshold()
+    {
+        Assert.Throws<CliUsageException>(() =>
+            CliArgumentParser.Parse(["profile", "compare", "capA", "capB", "--threshold", "-1"]));
+    }
+
+    [Fact]
+    public void Parse_ProfileCompare_AcceptsZeroThreshold()
+    {
+        var parsed = CliArgumentParser.Parse(["profile", "compare", "capA", "capB", "--threshold", "0"]);
+        Assert.Equal(0.0, parsed.ProfileThresholdPercent!.Value);
+    }
+
+    [Theory]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
+    [InlineData("-Infinity")]
+    [InlineData("1e400")]
+    public void Parse_ProfileCompare_RejectsNonFiniteThreshold(string value)
+    {
+        // double.TryParse accepts these (1e400 overflows to +Infinity); the serializer cannot write them.
+        Assert.Throws<CliUsageException>(() =>
+            CliArgumentParser.Parse(["profile", "compare", "capA", "capB", "--threshold", value]));
+    }
+
+    [Fact]
+    public void Parse_ProfileCompare_RejectsNonPositiveLimit()
+    {
+        Assert.Throws<CliUsageException>(() =>
+            CliArgumentParser.Parse(["profile", "compare", "capA", "capB", "--limit", "0"]));
+        Assert.Throws<CliUsageException>(() =>
+            CliArgumentParser.Parse(["profile", "compare", "capA", "capB", "--limit", "-3"]));
+    }
+
+    [Fact]
+    public void Parse_ProfileCompare_RejectsNonNumericThreshold()
+    {
+        Assert.Throws<CliUsageException>(() =>
+            CliArgumentParser.Parse(["profile", "compare", "capA", "capB", "--threshold", "fast"]));
+    }
+
+    [Fact]
     public void Parse_QaRunSequence_ProfileFlag()
     {
         var parsed = CliArgumentParser.Parse([

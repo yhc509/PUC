@@ -37,6 +37,7 @@ public static class CliApp
                 CommandKind.Doctor => await RunDoctorAsync(registryStore, locator, parsed, projectRoot),
                 CommandKind.QaWait => await RunQaWait(parsed),
                 CommandKind.ProfileAnalyze => ProfileAnalyzer.Run(parsed, projectRoot),
+                CommandKind.ProfileCompare => ProfileComparer.Run(parsed, projectRoot),
                 _ => await ExecuteUnityCommandAsync(parsed, registryStore, projectRoot),
             };
 

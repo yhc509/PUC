@@ -279,6 +279,23 @@ namespace UnityCli.Protocol
                     "--marker frame appearances come from each frame's top-10 table, not the full hierarchy.",
                 }),
             new CliCommandDescriptor(
+                "profile compare",
+                "profile compare <baseCaptureId> <headCaptureId> [--threshold <percent> (default: 5.0)] [--limit <n> (default: 5)]",
+                "Diffs two finished captures by reading both sidecar JSON files locally — no Editor round-trip. Returns a regression/improvement/unchanged verdict plus the frame-time, over-budget, GC, and per-marker deltas that explain it.",
+                CliCommandGroup.Diagnostics,
+                null,
+                canUseLocal: true,
+                canUseLive: false,
+                isAllowedWhileBusy: true,
+                notes: new[]
+                {
+                    "Local-only. Both captures must have a sidecar under the same project root.",
+                    "--threshold is the median frame-time change (in percent) below which the verdict stays `unchanged`.",
+                    "A capture that did not finish (any status other than Completed, or zero captured frames) is rejected with PROFILE_FAILED instead of being compared.",
+                    "Captures recorded with different budgets, Unity versions, or frame counts are still compared; the mismatch is reported in `notes`.",
+                    "`deltaPercent` is only meaningful when the matching `deltaPercentAvailable` is true; a zero base leaves the percentage undefined.",
+                }),
+            new CliCommandDescriptor(
                 "execute",
                 "execute (--code <csharp> | --file <path>) [--args <json>] [--timeout <초>] --force",
                 "Executes arbitrary C# code in the running editor context with optional JSON arguments, structured __pucResult return values, and an optional cooperative timeout; always requires --force.",

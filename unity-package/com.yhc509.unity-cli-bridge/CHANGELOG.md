@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- `profile compare <baseCaptureId> <headCaptureId>` answers "did my change make it faster or slower?" in one command. Point it at a capture from before your change and one from after, and it reports a `regression` / `improvement` / `unchanged` verdict together with the numbers behind it: median, 95th-percentile and worst frame time, how many frames went over budget, total GC allocation, and which markers got slower or faster (plus markers that appeared or disappeared between the two runs). A marker whose time stayed flat but whose allocation grew or shrank is listed too, so allocation-only regressions are not missed. `--threshold <percent>` sets how much the median frame time may move before the run still counts as unchanged (default 5), and `--limit <n>` caps each marker list; ties are broken by marker name, so repeated runs give the same list. Like `profile analyze`, it reads the capture files on disk, so it works with the Editor closed. A capture that never finished — for example one cut short by a script recompile — is rejected with a clear error rather than compared, so a dead capture can't be mistaken for a huge speed-up. Percentages come with a `deltaPercentAvailable` flag: when the "before" value was zero there is no percentage to report and only the absolute change is meaningful. If the two captures were recorded with different frame budgets, Unity versions, or very different frame counts, the response says so in `notes` instead of quietly comparing apples to oranges.
+
 ## [0.5.0] - 2026-07-28
 
 ### Added
