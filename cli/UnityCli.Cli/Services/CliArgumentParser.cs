@@ -360,7 +360,7 @@ public static partial class CliArgumentParser
     {
         if (tokens.Count == 0)
         {
-            throw new CliUsageException("`profile` 다음에는 `stats`, `capture`, `status`, `analyze` 중 하나가 필요합니다.");
+            throw new CliUsageException("`profile` 다음에는 `stats`, `capture`, `status`, `analyze`, `compare` 중 하나가 필요합니다.");
         }
 
         var subCommand = tokens.Dequeue().ToLowerInvariant();
@@ -404,6 +404,25 @@ public static partial class CliArgumentParser
                 {
                     ProfileCaptureId = tokens.Dequeue(),
                 };
+                return parsed;
+            }
+            case "compare":
+            {
+                if (tokens.Count == 0 || tokens.Peek().StartsWith("--", StringComparison.Ordinal))
+                {
+                    throw new CliUsageException("`profile compare`에는 <baseCaptureId>와 <headCaptureId>가 필요합니다.");
+                }
+
+                var parsed = new ParsedCommand(CommandKind.ProfileCompare)
+                {
+                    ProfileCompareBaseId = tokens.Dequeue(),
+                };
+                if (tokens.Count == 0 || tokens.Peek().StartsWith("--", StringComparison.Ordinal))
+                {
+                    throw new CliUsageException("`profile compare`에는 비교 대상인 <headCaptureId>도 필요합니다.");
+                }
+
+                parsed.ProfileCompareHeadId = tokens.Dequeue();
                 return parsed;
             }
             default:
@@ -804,6 +823,20 @@ public static partial class CliArgumentParser
                     parsed.ProfileAnalyzeSpikes = true;
                     break;
                 case CommandKind.ProfileAnalyze when token == "--limit":
+                    parsed.ProfileLimit = RequireInt(RequireValue(tokens, "--limit"), "--limit");
+                    break;
+                case CommandKind.ProfileCompare when token == "--threshold":
+                {
+                    string rawThreshold = RequireValue(tokens, "--threshold");
+                    if (!double.TryParse(rawThreshold, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double threshold))
+                    {
+                        throw new CliUsageException("--threshold 값은 퍼센트 숫자여야 합니다.");
+                    }
+
+                    parsed.ProfileThresholdPercent = threshold;
+                    break;
+                }
+                case CommandKind.ProfileCompare when token == "--limit":
                     parsed.ProfileLimit = RequireInt(RequireValue(tokens, "--limit"), "--limit");
                     break;
                 case CommandKind.AssetFind when token == "--name":

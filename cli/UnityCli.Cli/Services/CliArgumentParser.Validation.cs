@@ -402,6 +402,15 @@ public static partial class CliArgumentParser
                 throw new CliUsageException("profile analyze에는 --marker, --frame, --gc, --spikes 중 정확히 하나가 필요합니다.");
             }
         }
+
+        // double.TryParse accepts NaN/Infinity and overflows 1e400 to +Infinity; a non-finite value would
+        // otherwise reach the JSON serializer (which refuses to write it) instead of failing as a usage error.
+        if (parsed.Kind == CommandKind.ProfileCompare
+            && parsed.ProfileThresholdPercent.HasValue
+            && (!double.IsFinite(parsed.ProfileThresholdPercent.Value) || parsed.ProfileThresholdPercent.Value < 0))
+        {
+            throw new CliUsageException("--threshold 값은 0 이상의 유한한 숫자여야 합니다.");
+        }
     }
 
     private static void ValidateMaterialOptions(ParsedCommand parsed)
@@ -664,6 +673,7 @@ public static partial class CliArgumentParser
             CommandKind.ProfileCaptureStop => "profile capture stop",
             CommandKind.ProfileStatus => "profile status",
             CommandKind.ProfileAnalyze => "profile analyze",
+            CommandKind.ProfileCompare => "profile compare",
             CommandKind.PackageList => "package list",
             CommandKind.PackageAdd => "package add",
             CommandKind.PackageRemove => "package remove",
