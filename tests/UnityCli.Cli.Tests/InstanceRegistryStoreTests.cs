@@ -59,6 +59,38 @@ public sealed class InstanceRegistryStoreTests
     }
 
     [Fact]
+    public void Load_PreservesEditorModeThroughSanitize()
+    {
+        using var temp = new TempDirectory();
+        var projectRoot = Path.Combine(temp.Path, "ProjectA");
+        Directory.CreateDirectory(projectRoot);
+        string projectHash = ProtocolConstants.ComputeProjectHash(projectRoot);
+        var store = new InstanceRegistryStore(Path.Combine(temp.Path, "instances.json"));
+        store.Save(new InstanceRegistry
+        {
+            instances =
+            [
+                new InstanceRecord
+                {
+                    projectRoot = projectRoot,
+                    projectName = "ProjectA",
+                    projectHash = projectHash,
+                    pipeName = ProtocolConstants.BuildPipeName(projectHash),
+                    editorProcessId = Environment.ProcessId,
+                    state = "idle",
+                    lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
+                    editorMode = "headless",
+                },
+            ],
+        });
+
+        InstanceRegistry registry = store.Load();
+
+        Assert.Single(registry.instances);
+        Assert.Equal("headless", registry.instances[0].editorMode);
+    }
+
+    [Fact]
     public void ResolveOrCreateTarget_UsesRegisteredProjectName()
     {
         using var temp = new TempDirectory();

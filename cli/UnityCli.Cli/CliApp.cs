@@ -38,6 +38,8 @@ public static class CliApp
                 CommandKind.QaWait => await RunQaWait(parsed),
                 CommandKind.ProfileAnalyze => ProfileAnalyzer.Run(parsed, projectRoot),
                 CommandKind.ProfileCompare => ProfileComparer.Run(parsed, projectRoot),
+                CommandKind.EditorLaunch => await EditorLauncher.LaunchAsync(parsed, registryStore, projectRoot),
+                CommandKind.EditorStop => await RunEditorStopAsync(parsed, registryStore, projectRoot),
                 _ => await ExecuteUnityCommandAsync(parsed, registryStore, projectRoot),
             };
 
@@ -519,6 +521,54 @@ public static class CliApp
             retryable: false,
             transport: "cli",
             details: noTargetDetails);
+    }
+
+    private static async Task<ResponseEnvelope> RunEditorStopAsync(
+        ParsedCommand parsed,
+        InstanceRegistryStore registryStore,
+        string? projectRoot)
+    {
+        ResponseEnvelope response = await ExecuteUnityCommandAsync(parsed, registryStore, projectRoot);
+        if (!string.Equals(response.status, ProtocolConstants.StatusSuccess, StringComparison.Ordinal)
+            || parsed.EditorNoWait)
+        {
+            return response;
+        }
+
+        int editorProcessId;
+        try
+        {
+            editorProcessId = DeserializeData<EditorQuitPayload>(response)?.editorProcessId ?? 0;
+        }
+        catch (JsonException)
+        {
+            return response;
+        }
+
+        if (editorProcessId <= 0)
+        {
+            return response;
+        }
+
+        int timeoutSeconds = parsed.EditorWaitTimeoutSeconds ?? 30;
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(timeoutSeconds);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            if (!EditorLauncher.IsProcessAlive(editorProcessId))
+            {
+                return response;
+            }
+
+            await Task.Delay(1000);
+        }
+
+        return ResponseEnvelope.Failure(
+            response.requestId,
+            response.target,
+            ProtocolConstants.ErrorEditorStopTimeout,
+            $"에디터가 종료 응답 후 {timeoutSeconds}초 안에 프로세스를 끝내지 않았습니다 (PID {editorProcessId}). 강제 종료가 필요하면 kill을 사용하세요.",
+            retryable: true,
+            transport: "cli");
     }
 
     private static async Task<(ResponseEnvelope Response, InstanceRecord Target)> RetryUnauthorizedOnceAsync(

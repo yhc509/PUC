@@ -674,6 +674,8 @@ public static partial class CliArgumentParser
             CommandKind.ProfileStatus => "profile status",
             CommandKind.ProfileAnalyze => "profile analyze",
             CommandKind.ProfileCompare => "profile compare",
+            CommandKind.EditorLaunch => "editor launch",
+            CommandKind.EditorStop => "editor stop",
             CommandKind.PackageList => "package list",
             CommandKind.PackageAdd => "package add",
             CommandKind.PackageRemove => "package remove",

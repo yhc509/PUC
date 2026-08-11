@@ -5,9 +5,9 @@ namespace UnityCli.Cli.Tests;
 public sealed class ProtocolConstantsTests
 {
     [Fact]
-    public void ProtocolVersion_BumpedToSix_ForProfileCommands()
+    public void ProtocolVersion_BumpedToSeven_ForHeadlessEditorCommands()
     {
-        Assert.Equal("6", ProtocolConstants.ProtocolVersion);
+        Assert.Equal("7", ProtocolConstants.ProtocolVersion);
     }
 
     [Fact]

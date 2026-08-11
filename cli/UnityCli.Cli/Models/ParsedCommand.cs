@@ -76,6 +76,8 @@ public enum CommandKind
     ProfileStatus,
     ProfileAnalyze,
     ProfileCompare,
+    EditorLaunch,
+    EditorStop,
 }
 
 public sealed class ParsedCommand
@@ -229,6 +231,11 @@ public sealed class ParsedCommand
     public int QaSequenceTimeoutMs { get; set; }
     public bool QaSequenceRecord { get; set; }
     public string? QaSequenceRecordPath { get; set; }
+    public bool EditorGui { get; set; }
+    public bool EditorNoGraphics { get; set; }
+    public string? EditorPathOverride { get; set; }
+    public bool EditorNoWait { get; set; }
+    public int? EditorWaitTimeoutSeconds { get; set; }
 
     public CommandEnvelope ToEnvelope()
     {
@@ -337,6 +344,7 @@ public sealed class ParsedCommand
                 CommandKind.ProfileCaptureStart => ProtocolConstants.CommandProfileCaptureStart,
                 CommandKind.ProfileCaptureStop => ProtocolConstants.CommandProfileCaptureStop,
                 CommandKind.ProfileStatus => ProtocolConstants.CommandProfileStatus,
+                CommandKind.EditorStop => ProtocolConstants.CommandEditorQuit,
                 _ => throw new CliUsageException($"지원하지 않는 live 명령입니다: {Kind}"),
             },
             argumentsJson = BuildArgumentsJson(),
@@ -438,6 +446,10 @@ public sealed class ParsedCommand
             CommandKind.ProfileStatus => new ProfileStatusArgs
             {
                 captureId = ProfileCaptureId,
+            },
+            CommandKind.EditorStop => new EditorQuitArgs
+            {
+                force = Force,
             },
             CommandKind.ExecuteCode => new ExecuteCodeArgs
             {

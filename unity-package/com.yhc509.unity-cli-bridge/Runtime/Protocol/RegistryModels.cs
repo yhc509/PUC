@@ -31,6 +31,8 @@ namespace UnityCli.Protocol
         public string unityVersion = string.Empty;
         public string state = "offline";
         public string lastSeenUtc = string.Empty;
+        // "gui" | "headless" | "headless-nographics"; empty string = written by an older bridge (unknown).
+        public string editorMode = string.Empty;
         public string[] capabilities = Array.Empty<string>();
     }
 }

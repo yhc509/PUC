@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- `editor launch` and `editor stop`: the CLI can now start and stop the Unity Editor itself, so a workflow no longer needs a human to open the project first. `editor launch` finds the Unity version the project asks for, starts it headless (`-batchmode`) by default, and waits until the bridge is reachable before returning (default 300 s; `--timeout <sec>` for projects with a long first import, `--no-wait` to return immediately). It is idempotent — if the editor is already running, the live instance is reused and the response says `"reused": true` — and it refuses with `EDITOR_ALREADY_RUNNING_CONFLICT` when an editor process already holds the project without a bridge, instead of tripping Unity's own project lock. Pass `--gui` for a visible window. The spawned editor logs to `Library/com.yhc509.unity-cli-bridge/editor-launch.log` and does not hold on to the CLI's output streams, so shell pipelines like `unity-cli editor launch | grep reused` finish normally instead of hanging. `editor stop` asks the editor to quit gracefully: it refuses with `EDITOR_DIRTY` while unsaved scene or prefab changes exist (`--force` discards them), waits for the process to exit (default 30 s), and works whether the editor is headless, focused, or sitting unfocused in the background.
+- The bridge now starts in headless (`-batchmode`) editors, so every command — scene edits, tests, QA, profiling — works without an editor window. Unity's secondary processes (asset-import workers, MPE) stay excluded, so a project never registers twice. The default headless mode keeps the GPU initialized, which means `screenshot`, `record`, and coordinate-based `qa` commands keep producing real output with no window on screen. `instances list` now reports each editor's mode (`gui` / `headless` / `headless-nographics`).
+- Rendering commands under a `-nographics` editor now fail fast with `HEADLESS_NO_GRAPHICS` instead of silently returning blank images, so an agent immediately knows the capture is impossible rather than reasoning about an all-gray screenshot.
+
+### Fixed
+- A killed or crashed editor session no longer breaks the next one. The editor's IPC auth token file could be left behind when the process died without cleaning up, and the next session then kept the stale file — every CLI command failed with `UNAUTHORIZED` until it was removed by hand. The token file is now replaced on startup.
+
+### Compatibility
+- The wire protocol is bumped to `7` (adds the graceful-quit command behind `editor stop`). As usual, installed CLIs dispatch per version automatically, and the CLI matching this package ships in the same release.
+
 ## [0.5.1] - 2026-07-29
 
 ### Added
