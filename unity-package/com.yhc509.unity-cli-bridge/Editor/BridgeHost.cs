@@ -1386,10 +1386,24 @@ namespace UnityCliBridge.Bridge.Editor
                     string.Join("\n", dirtyTargets));
             }
 
-            // Reply first, exit on the next editor tick: the response is flushed on the
-            // listener thread right after this method returns, so the CLI receives a
-            // normal success envelope instead of LIVE_UNAVAILABLE.
-            EditorApplication.delayCall += () => EditorApplication.Exit(0);
+            // Reply first, exit shortly after: the response is flushed on the listener
+            // thread right after this method returns, so the CLI receives a normal
+            // success envelope instead of LIVE_UNAVAILABLE. EditorApplication.update
+            // (not delayCall) is required here — delayCall rides the inspector-update
+            // cycle and starves in an unfocused GUI editor, while update keeps ticking.
+            double quitAtTime = EditorApplication.timeSinceStartup + 0.5;
+            EditorApplication.CallbackFunction quitWhenDue = null;
+            quitWhenDue = () =>
+            {
+                if (EditorApplication.timeSinceStartup < quitAtTime)
+                {
+                    return;
+                }
+
+                EditorApplication.update -= quitWhenDue;
+                EditorApplication.Exit(0);
+            };
+            EditorApplication.update += quitWhenDue;
 
             return ProtocolJson.Serialize(new EditorQuitPayload
             {
