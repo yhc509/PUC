@@ -75,6 +75,7 @@ public static partial class CliArgumentParser
             "material" => ParseMaterial(tokens),
             "qa" => ParseQa(tokens),
             "record" => ParseRecordCommand(tokens),
+            "editor" => ParseEditorCommand(tokens),
             "profile" => ParseProfile(tokens),
             "instances" => ParseInstances(tokens),
             "doctor" => new ParsedCommand(CommandKind.Doctor),
@@ -353,6 +354,22 @@ public static partial class CliArgumentParser
             "stop" => new ParsedCommand(CommandKind.RecordStop),
             "status" => new ParsedCommand(CommandKind.RecordStatus),
             _ => throw new CliUsageException($"알 수 없는 record 하위 명령입니다: {subCommand}"),
+        };
+    }
+
+    private static ParsedCommand ParseEditorCommand(Queue<string> tokens)
+    {
+        if (tokens.Count == 0)
+        {
+            throw new CliUsageException("`editor` 다음에는 `launch` 또는 `stop`이 필요합니다.");
+        }
+
+        var subCommand = tokens.Dequeue().ToLowerInvariant();
+        return subCommand switch
+        {
+            "launch" => new ParsedCommand(CommandKind.EditorLaunch),
+            "stop" => new ParsedCommand(CommandKind.EditorStop),
+            _ => throw new CliUsageException($"알 수 없는 editor 하위 명령입니다: {subCommand}"),
         };
     }
 
@@ -652,6 +669,24 @@ public static partial class CliArgumentParser
                     break;
                 case CommandKind.RecordStatus when token == "--recording-id":
                     parsed.RecordRunId = RequireValue(tokens, "--recording-id");
+                    break;
+                case CommandKind.EditorLaunch when token == "--gui":
+                    parsed.EditorGui = true;
+                    break;
+                case CommandKind.EditorLaunch when token == "--nographics":
+                    parsed.EditorNoGraphics = true;
+                    break;
+                case CommandKind.EditorLaunch when token == "--editor-path":
+                    parsed.EditorPathOverride = RequireValue(tokens, "--editor-path");
+                    break;
+                case CommandKind.EditorLaunch or CommandKind.EditorStop when token == "--no-wait":
+                    parsed.EditorNoWait = true;
+                    break;
+                case CommandKind.EditorLaunch or CommandKind.EditorStop when token == "--timeout":
+                    parsed.EditorWaitTimeoutSeconds = RequireInt(RequireValue(tokens, "--timeout"), "--timeout");
+                    break;
+                case CommandKind.EditorStop when token == "--force":
+                    parsed.Force = true;
                     break;
                 case CommandKind.MaterialInfo when token == "--path":
                 case CommandKind.MaterialSet when token == "--path":
