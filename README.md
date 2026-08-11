@@ -117,6 +117,33 @@ When `--project` is omitted, the CLI first uses the current Unity project direct
 
 ## What You Can Do
 
+### Editor Lifecycle (headless support)
+
+```bash
+# Launch the editor headless (-batchmode, GPU kept — screenshot/record still work)
+unity-cli editor launch --project /path/to/Project
+
+# Launch with a visible window instead
+unity-cli editor launch --project /path/to/Project --gui
+
+# Idempotent: if the editor is already running, the live instance is reused
+unity-cli editor launch --project /path/to/Project   # → "reused": true
+
+# Gracefully quit (refuses on unsaved changes; --force discards them)
+unity-cli editor stop --project /path/to/Project
+```
+
+`editor launch` is a local command: it finds the matching Unity version for the project, spawns the editor, and waits until the bridge is reachable (default 300 s; tune with `--timeout`, or skip waiting with `--no-wait`). If an editor process already holds the project but never registered a bridge instance, the launch fails with `EDITOR_ALREADY_RUNNING_CONFLICT` instead of tripping Unity's own project lock. The spawned editor's log goes to `Library/com.yhc509.unity-cli-bridge/editor-launch.log`, and its output streams are detached from the CLI, so shell pipelines like `unity-cli editor launch | grep reused` terminate normally.
+
+`editor stop` asks the running editor to quit gracefully. It refuses with `EDITOR_DIRTY` while unsaved scene or prefab changes exist (`--force` discards them), waits for the process to exit (default 30 s), and cleans up the instance registry entry on the way out. It works whether the editor is headless, focused, or sitting unfocused in the background.
+
+Headless notes:
+- The default headless mode passes `-batchmode` **without** `-nographics`, so the GPU stays
+  initialized and rendering commands (`screenshot`, `record`, `qa`) keep working without a window.
+- With `--nographics`, rendering commands fail fast with `HEADLESS_NO_GRAPHICS` instead of
+  silently returning blank images. `instances list` reports each editor's mode
+  (`gui` / `headless` / `headless-nographics`).
+
 ### Editor Control
 
 ```bash
@@ -400,6 +427,6 @@ dotnet run --project cli/UnityCli.DocGen -- --check   # Verify docs match code
 ## Current Limits
 
 - macOS arm64 and Windows x64 supported
-- Live IPC required — commands fail fast when no Editor is running
+- Live IPC required — Unity commands fail fast when no Editor is running (`editor launch` can start one for you)
 - Scene patching targets saved `Assets/...unity` scenes; multi-scene orchestration is out of scope
 - Prefab-internal object references and nested variants are not yet supported
