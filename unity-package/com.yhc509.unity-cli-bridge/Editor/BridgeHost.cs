@@ -107,7 +107,7 @@ namespace UnityCliBridge.Bridge.Editor
 
         public void Start()
         {
-            if (_isStarted || Application.isBatchMode)
+            if (_isStarted || IsSecondaryUnityProcess())
             {
                 return;
             }
@@ -120,6 +120,34 @@ namespace UnityCliBridge.Bridge.Editor
             EditorApplication.update += OnEditorUpdate;
             EditorApplication.quitting += OnEditorQuitting;
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
+        }
+
+        // The bridge must run in the main editor process only — GUI or headless alike.
+        // AssetImportWorker/MPE secondary processes share the same projectRoot and would
+        // fight over the socket name and registry entry if the bridge started there.
+        private static bool IsSecondaryUnityProcess()
+        {
+            try
+            {
+                if (UnityEditor.MPE.ProcessService.level != UnityEditor.MPE.ProcessLevel.Main)
+                {
+                    return true;
+                }
+            }
+            catch (Exception)
+            {
+                // MPE unavailable: fall through to the argv check.
+            }
+
+            foreach (string arg in Environment.GetCommandLineArgs())
+            {
+                if (string.Equals(arg, "-adb2", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         public void Dispose()
@@ -1069,6 +1097,16 @@ namespace UnityCliBridge.Bridge.Editor
                     return BuildBusyResponse(command, stopwatch.ElapsedMilliseconds);
                 }
 
+                if (SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null
+                    && CliCommandCatalog.RequiresGraphics(command.command))
+                {
+                    throw new CommandFailureException(
+                        ProtocolConstants.ErrorHeadlessNoGraphics,
+                        "-nographics 에디터에서는 렌더링이 초기화되지 않아 이 명령을 사용할 수 없습니다: " + command.command,
+                        "GPU가 없으면 캡처 결과가 무의미한 단색/깨진 이미지가 되므로 명령 차원에서 차단합니다. " +
+                        "-nographics 없이 -batchmode로만 띄우면 창 없이도 렌더링 명령을 쓸 수 있습니다.");
+                }
+
                 string data;
                 if (_assetCommandHandler.CanHandle(command.command))
                 {
@@ -1166,6 +1204,9 @@ namespace UnityCliBridge.Bridge.Editor
                             break;
                         case ProtocolConstants.CommandReadConsole:
                             data = HandleReadConsole(command.argumentsJson);
+                            break;
+                        case ProtocolConstants.CommandEditorQuit:
+                            data = HandleEditorQuit(command.argumentsJson);
                             break;
                         default:
                             throw new InvalidOperationException("지원하지 않는 명령입니다: " + command.command);
@@ -1333,6 +1374,51 @@ namespace UnityCliBridge.Bridge.Editor
             return ProtocolJson.Serialize(new ReadConsolePayload { entries = entries });
         }
 
+        private string HandleEditorQuit(string argumentsJson)
+        {
+            EditorQuitArgs args = ProtocolJson.Deserialize<EditorQuitArgs>(argumentsJson) ?? new EditorQuitArgs();
+            List<string> dirtyTargets = CollectDirtyTargets();
+            if (dirtyTargets.Count > 0 && !args.force)
+            {
+                throw new CommandFailureException(
+                    ProtocolConstants.ErrorEditorDirty,
+                    "저장되지 않은 변경이 있어 에디터 종료를 거부했습니다. --force로 변경을 버리고 종료할 수 있습니다.",
+                    string.Join("\n", dirtyTargets));
+            }
+
+            // Reply first, exit on the next editor tick: the response is flushed on the
+            // listener thread right after this method returns, so the CLI receives a
+            // normal success envelope instead of LIVE_UNAVAILABLE.
+            EditorApplication.delayCall += () => EditorApplication.Exit(0);
+
+            return ProtocolJson.Serialize(new EditorQuitPayload
+            {
+                stopping = true,
+                editorProcessId = Process.GetCurrentProcess().Id,
+            });
+        }
+
+        private static List<string> CollectDirtyTargets()
+        {
+            var dirtyTargets = new List<string>();
+            for (int i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
+            {
+                UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
+                if (scene.isDirty)
+                {
+                    dirtyTargets.Add(string.IsNullOrEmpty(scene.path) ? "(untitled scene)" : scene.path);
+                }
+            }
+
+            PrefabStage prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+            if (prefabStage != null && prefabStage.scene.isDirty)
+            {
+                dirtyTargets.Add("PrefabStage:" + prefabStage.assetPath);
+            }
+
+            return dirtyTargets;
+        }
+
         private void RegisterInstance()
         {
             UpdateRegistrySafely(delegate(InstanceRegistry registry)
@@ -1440,9 +1526,22 @@ namespace UnityCliBridge.Bridge.Editor
                 editorProcessId = Process.GetCurrentProcess().Id,
                 unityVersion = Application.unityVersion,
                 state = BuildStateLabel(),
+                editorMode = ResolveEditorModeLabel(),
                 lastSeenUtc = DateTimeOffset.UtcNow.ToString("O"),
                 capabilities = (string[])_capabilities.Clone(),
             };
+        }
+
+        private static string ResolveEditorModeLabel()
+        {
+            if (!Application.isBatchMode)
+            {
+                return "gui";
+            }
+
+            return SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null
+                ? "headless-nographics"
+                : "headless";
         }
 
         private static string EnsureSessionToken()
@@ -1539,13 +1638,9 @@ namespace UnityCliBridge.Bridge.Editor
         {
             try
             {
-                string sidecarPath = InstanceRegistryFile.GetTokenSidecarPath(_registryFilePath, _projectHash);
-                if (!string.IsNullOrWhiteSpace(sidecarPath) && File.Exists(sidecarPath))
-                {
-                    return;
-                }
-
-                InstanceRegistryFile.WriteTokenSidecar(_registryFilePath, _projectHash, _authToken);
+                // Overwrite-if-different: a stale sidecar from a killed session would otherwise
+                // make every CLI call fail UNAUTHORIZED for this whole editor session.
+                InstanceRegistryFile.EnsureTokenSidecar(_registryFilePath, _projectHash, _authToken);
             }
             catch (Exception exception)
             {
