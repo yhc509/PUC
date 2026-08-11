@@ -226,6 +226,65 @@ public sealed class InstanceTokenSidecarTests
     }
 
     [Fact]
+    public void EnsureTokenSidecar_OverwritesStaleToken()
+    {
+        string tempRoot = CreateTempRoot();
+        try
+        {
+            string registryPath = Path.Combine(tempRoot, "instances.json");
+
+            InstanceRegistryFile.WriteTokenSidecar(registryPath, "abcdef012345", "stale-token");
+            InstanceRegistryFile.EnsureTokenSidecar(registryPath, "abcdef012345", "live-token");
+
+            Assert.Equal("live-token", InstanceRegistryFile.ReadTokenSidecar(registryPath, "abcdef012345"));
+        }
+        finally
+        {
+            DeleteTempRoot(tempRoot);
+        }
+    }
+
+    [Fact]
+    public void EnsureTokenSidecar_CreatesWhenMissing()
+    {
+        string tempRoot = CreateTempRoot();
+        try
+        {
+            string registryPath = Path.Combine(tempRoot, "instances.json");
+
+            InstanceRegistryFile.EnsureTokenSidecar(registryPath, "abcdef012345", "live-token");
+
+            Assert.Equal("live-token", InstanceRegistryFile.ReadTokenSidecar(registryPath, "abcdef012345"));
+        }
+        finally
+        {
+            DeleteTempRoot(tempRoot);
+        }
+    }
+
+    [Fact]
+    public void EnsureTokenSidecar_NoRewriteWhenIdentical()
+    {
+        string tempRoot = CreateTempRoot();
+        try
+        {
+            string registryPath = Path.Combine(tempRoot, "instances.json");
+
+            InstanceRegistryFile.WriteTokenSidecar(registryPath, "abcdef012345", "live-token");
+            string sidecarPath = InstanceRegistryFile.GetTokenSidecarPath(registryPath, "abcdef012345");
+            DateTime before = File.GetLastWriteTimeUtc(sidecarPath);
+
+            InstanceRegistryFile.EnsureTokenSidecar(registryPath, "abcdef012345", "live-token");
+
+            Assert.Equal(before, File.GetLastWriteTimeUtc(sidecarPath));
+        }
+        finally
+        {
+            DeleteTempRoot(tempRoot);
+        }
+    }
+
+    [Fact]
     public void Save_ThenLoad_DoesNotPersistInstanceToken()
     {
         string tempRoot = CreateTempRoot();
