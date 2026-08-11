@@ -19,9 +19,11 @@ public sealed class ForceGateTests
     public void ForceRequiredByCatalog_HonorsCatalogForceRules()
     {
         // "editor stop" has ForceRule.OnDestructiveOp but its destructiveness (unsaved
-        // changes) is only known bridge-side (EDITOR_DIRTY); the CLI-side CommandKind
-        // wiring lands with the `editor` command group. Until then there is no
-        // ParsedCommand to construct for it.
+        // changes) is only known bridge-side: the bridge answers EDITOR_DIRTY and the CLI
+        // deliberately never pre-requires --force (PatchContainsDestructiveOperation returns
+        // false for EditorStop). This generic loop expects OnDestructiveOp commands to gate
+        // CLI-side, so "editor stop" stays excluded; its bridge-gated contract is asserted
+        // by ForceRequiredByCatalog_EditorStop_IsBridgeGated below.
         string[] bridgeGatedCommands = ["editor stop"];
 
         CliCommandDescriptor[] forceCommands = CliCommandCatalog.GetCommands()
@@ -39,6 +41,25 @@ public sealed class ForceGateTests
             parsed.Force = true;
             Assert.False(CliArgumentParser.ForceRequiredByCatalog(parsed), command.Command);
         }
+    }
+
+    [Fact]
+    public void ForceRequiredByCatalog_EditorStop_IsBridgeGated()
+    {
+        // The CLI cannot see unsaved editor state, so `editor stop` must parse and dispatch
+        // without --force; the bridge is the sole gate (EDITOR_DIRTY). --force still has to
+        // reach the wire so the bridge can discard unsaved changes when asked.
+        ParsedCommand withoutForce = CliArgumentParser.Parse(["editor", "stop"]);
+        Assert.False(CliArgumentParser.ForceRequiredByCatalog(withoutForce));
+
+        ParsedCommand withForce = CliArgumentParser.Parse(["editor", "stop", "--force"]);
+        Assert.False(CliArgumentParser.ForceRequiredByCatalog(withForce));
+
+        CommandEnvelope envelope = withForce.ToEnvelope();
+        using JsonDocument arguments = JsonDocument.Parse(envelope.argumentsJson);
+
+        Assert.Equal(ProtocolConstants.CommandEditorQuit, envelope.command);
+        Assert.True(arguments.RootElement.GetProperty("force").GetBoolean());
     }
 
     [Fact]
