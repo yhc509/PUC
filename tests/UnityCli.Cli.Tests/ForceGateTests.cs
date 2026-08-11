@@ -18,8 +18,15 @@ public sealed class ForceGateTests
     [Fact]
     public void ForceRequiredByCatalog_HonorsCatalogForceRules()
     {
+        // "editor stop" has ForceRule.OnDestructiveOp but its destructiveness (unsaved
+        // changes) is only known bridge-side (EDITOR_DIRTY); the CLI-side CommandKind
+        // wiring lands with the `editor` command group. Until then there is no
+        // ParsedCommand to construct for it.
+        string[] bridgeGatedCommands = ["editor stop"];
+
         CliCommandDescriptor[] forceCommands = CliCommandCatalog.GetCommands()
             .Where(command => command.ForceRule != ForceRule.None)
+            .Where(command => !bridgeGatedCommands.Contains(command.Command))
             .ToArray();
         Assert.NotEmpty(forceCommands);
 
