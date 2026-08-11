@@ -41,6 +41,26 @@ public sealed class EditorLauncherTests
     }
 
     [Fact]
+    public void BuildStartInfo_OnUnix_DetachesStdioViaShExec()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var startInfo = EditorLauncher.BuildStartInfo("/Applications/Unity/Unity", new[] { "-projectPath", "/proj/root", "-batchmode" });
+
+        Assert.Equal("/bin/sh", startInfo.FileName);
+        Assert.Equal("-c", startInfo.ArgumentList[0]);
+        Assert.Contains(">/dev/null", startInfo.ArgumentList[1]);
+        Assert.Contains("exec", startInfo.ArgumentList[1]);
+        Assert.Equal("/Applications/Unity/Unity", startInfo.ArgumentList[2]);
+        Assert.Equal("-projectPath", startInfo.ArgumentList[3]);
+        Assert.Equal("/proj/root", startInfo.ArgumentList[4]);
+        Assert.Equal("-batchmode", startInfo.ArgumentList[5]);
+    }
+
+    [Fact]
     public void RequestedModeLabel_MapsFlags()
     {
         Assert.Equal("gui", EditorLauncher.RequestedModeLabel(new ParsedCommand(CommandKind.EditorLaunch) { EditorGui = true }));

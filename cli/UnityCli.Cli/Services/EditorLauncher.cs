@@ -94,17 +94,7 @@ public static class EditorLauncher
         Directory.CreateDirectory(logDirectory);
         string logFile = Path.Combine(logDirectory, "editor-launch.log");
 
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = editorBinary,
-            UseShellExecute = false,
-            RedirectStandardOutput = false,
-            RedirectStandardError = false,
-        };
-        foreach (string argument in BuildLaunchArguments(parsed, canonicalRoot, logFile))
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
+        ProcessStartInfo startInfo = BuildStartInfo(editorBinary, BuildLaunchArguments(parsed, canonicalRoot, logFile));
 
         Process editorProcess;
         try
@@ -177,6 +167,46 @@ public static class EditorLauncher
             + $"첫 임포트가 긴 프로젝트면 --timeout을 늘리세요. 로그: {logFile}",
             retryable: true,
             stopwatch);
+    }
+
+    /// <summary>
+    /// stdio를 분리해 에디터를 낳는다. 그냥 상속시키면 스폰된 에디터가 CLI의
+    /// stdout/stderr 파이프 write-end를 쥐고 있어, `unity-cli editor launch | grep …`
+    /// 같은 파이프라인이 CLI 종료 후에도 EOF를 못 받고 영원히 매달린다 (실측).
+    /// Unix에서는 `sh -c 'exec …'`로 감싸 /dev/null에 연결한다 — exec이 셸을
+    /// 대체하므로 Process.Id는 그대로 에디터 PID다. 에디터 출력은 -logFile이 담당.
+    /// </summary>
+    public static ProcessStartInfo BuildStartInfo(string editorBinary, string[] arguments)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var windowsStartInfo = new ProcessStartInfo
+            {
+                FileName = editorBinary,
+                UseShellExecute = false,
+            };
+            foreach (string argument in arguments)
+            {
+                windowsStartInfo.ArgumentList.Add(argument);
+            }
+
+            return windowsStartInfo;
+        }
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "/bin/sh",
+            UseShellExecute = false,
+        };
+        startInfo.ArgumentList.Add("-c");
+        startInfo.ArgumentList.Add("exec \"$0\" \"$@\" </dev/null >/dev/null 2>&1");
+        startInfo.ArgumentList.Add(editorBinary);
+        foreach (string argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        return startInfo;
     }
 
     public static string[] BuildLaunchArguments(ParsedCommand parsed, string projectRoot, string logFile)
