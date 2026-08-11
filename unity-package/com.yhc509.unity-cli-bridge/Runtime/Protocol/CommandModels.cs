@@ -34,6 +34,19 @@ namespace UnityCli.Protocol
     }
 
     [Serializable]
+    public sealed class EditorQuitArgs
+    {
+        public bool force;
+    }
+
+    [Serializable]
+    public sealed class EditorQuitPayload
+    {
+        public bool stopping;
+        public int editorProcessId;
+    }
+
+    [Serializable]
     public sealed class PlayStatePayload
     {
         public bool isPlaying;
