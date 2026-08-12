@@ -182,5 +182,158 @@ namespace UnityCliBridge.Bridge.Editor
             AtomicFileUtility.WriteAllText(path, ProtocolJson.Serialize(sidecar));
             AtomicFileUtility.CleanupTempFiles(Path.GetDirectoryName(path)!);
         }
+
+        // Guarded by _captureLock (defined in ProfileCommandHandler.Capture.cs) so that snapshot and
+        // capture reject each other instead of both driving the profiler at once.
+        private static bool _snapshotInFlight;
+
+        private void StartSnapshotDeferred(
+            TaskCompletionSource<ResponseEnvelope> completion,
+            string projectHash,
+            string requestId)
+        {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath(
+                        "Packages/com.unity.memoryprofiler/package.json") is null)
+                {
+                    throw new CommandFailureException(
+                        ProtocolConstants.ErrorProfileFailed,
+                        "Memory Profiler 패키지가 설치되어 있지 않습니다. `unity-cli package add com.unity.memoryprofiler`로 설치한 뒤 다시 실행하세요.");
+                }
+
+                lock (_captureLock)
+                {
+                    if (_phase != CapturePhase.Idle)
+                    {
+                        throw new CommandFailureException(
+                            ProtocolConstants.ErrorProfileInProgress,
+                            "profile capture가 진행 중입니다. 캡처를 끝낸 뒤 snapshot을 실행하세요.");
+                    }
+
+                    if (_snapshotInFlight)
+                    {
+                        throw new CommandFailureException(
+                            ProtocolConstants.ErrorProfileInProgress,
+                            "다른 memory snapshot이 진행 중입니다.");
+                    }
+
+                    _snapshotInFlight = true;
+                }
+            }
+            catch (Exception exception)
+            {
+                completion.TrySetResult(CreateFailureResponse(requestId, projectHash, exception, stopwatch.ElapsedMilliseconds));
+                return;
+            }
+
+            string snapshotId = Guid.NewGuid().ToString("N");
+            string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            string directory = Path.Combine(
+                projectRoot,
+                ProtocolConstants.SnapshotsDirectoryRelative.Replace('/', Path.DirectorySeparatorChar));
+            string snapshotPath = Path.Combine(directory, snapshotId + ".snap");
+
+            const Unity.Profiling.Memory.CaptureFlags flags =
+                Unity.Profiling.Memory.CaptureFlags.ManagedObjects
+                | Unity.Profiling.Memory.CaptureFlags.NativeObjects
+                | Unity.Profiling.Memory.CaptureFlags.NativeAllocations;
+
+            bool finished = false;
+
+            void Finish(Func<ResponseEnvelope> build)
+            {
+                if (finished)
+                {
+                    return;
+                }
+
+                finished = true;
+                lock (_captureLock)
+                {
+                    _snapshotInFlight = false;
+                }
+
+                completion.TrySetResult(build());
+            }
+
+            // TakeSnapshot 콜백이 영영 오지 않는 경우를 대비한 워치독.
+            void Watchdog()
+            {
+                if (finished)
+                {
+                    EditorApplication.update -= Watchdog;
+                    return;
+                }
+
+                if (stopwatch.Elapsed.TotalSeconds < ProtocolConstants.ProfileMemorySnapshotTimeoutSeconds)
+                {
+                    return;
+                }
+
+                EditorApplication.update -= Watchdog;
+                Finish(() => ResponseEnvelope.Failure(
+                    requestId,
+                    projectHash,
+                    ProtocolConstants.ErrorProfileTimeout,
+                    $"memory snapshot이 {ProtocolConstants.ProfileMemorySnapshotTimeoutSeconds}초 안에 끝나지 않았습니다.",
+                    true,
+                    stopwatch.ElapsedMilliseconds,
+                    ProtocolConstants.TransportLive));
+            }
+
+            EditorApplication.update += Watchdog;
+
+            try
+            {
+                Directory.CreateDirectory(directory);
+                Unity.Profiling.Memory.MemoryProfiler.TakeSnapshot(
+                    snapshotPath,
+                    (resultPath, success) =>
+                    {
+                        EditorApplication.update -= Watchdog;
+                        if (!success)
+                        {
+                            Finish(() => ResponseEnvelope.Failure(
+                                requestId,
+                                projectHash,
+                                ProtocolConstants.ErrorProfileFailed,
+                                "MemoryProfiler.TakeSnapshot이 실패를 보고했습니다.",
+                                false,
+                                stopwatch.ElapsedMilliseconds,
+                                ProtocolConstants.TransportLive));
+                            return;
+                        }
+
+                        long sizeBytes = 0;
+                        try
+                        {
+                            sizeBytes = new FileInfo(resultPath).Length;
+                        }
+                        catch (Exception)
+                        {
+                            // 메타 수집 실패는 스냅샷 성공을 뒤집지 않는다.
+                        }
+
+                        var payload = new ProfileMemorySnapshotPayload
+                        {
+                            snapshotId = snapshotId,
+                            path = resultPath,
+                            sizeBytes = sizeBytes,
+                            captureFlags = flags.ToString(),
+                            elapsedMs = stopwatch.ElapsedMilliseconds,
+                            guidance = "Memory Profiler 패키지(Window > Analysis > Memory Profiler)에서 이 .snap 파일을 여세요.",
+                        };
+                        Finish(() => CreateSuccessResponse(requestId, projectHash, payload, stopwatch.ElapsedMilliseconds));
+                    },
+                    flags);
+            }
+            catch (Exception exception)
+            {
+                EditorApplication.update -= Watchdog;
+                Finish(() => CreateFailureResponse(requestId, projectHash, exception, stopwatch.ElapsedMilliseconds));
+            }
+        }
     }
 }

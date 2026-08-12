@@ -17,20 +17,24 @@ namespace UnityCliBridge.Bridge.Editor
                 || string.Equals(command, ProtocolConstants.CommandProfileCaptureStart, StringComparison.Ordinal)
                 || string.Equals(command, ProtocolConstants.CommandProfileCaptureStop, StringComparison.Ordinal)
                 || string.Equals(command, ProtocolConstants.CommandProfileStatus, StringComparison.Ordinal)
-                || string.Equals(command, ProtocolConstants.CommandProfileMemory, StringComparison.Ordinal);
+                || string.Equals(command, ProtocolConstants.CommandProfileMemory, StringComparison.Ordinal)
+                || string.Equals(command, ProtocolConstants.CommandProfileMemorySnapshot, StringComparison.Ordinal);
         }
 
-        // stats/memory wait N editor frames, so they must run deferred like qa wait-until.
+        // stats/memory wait N editor frames and snapshot runs on a TakeSnapshot callback, so they
+        // must run deferred like qa wait-until.
         public bool IsDeferred(string command, string? argumentsJson = null)
         {
             return string.Equals(command, ProtocolConstants.CommandProfileStats, StringComparison.Ordinal)
-                || string.Equals(command, ProtocolConstants.CommandProfileMemory, StringComparison.Ordinal);
+                || string.Equals(command, ProtocolConstants.CommandProfileMemory, StringComparison.Ordinal)
+                || string.Equals(command, ProtocolConstants.CommandProfileMemorySnapshot, StringComparison.Ordinal);
         }
 
         public string Handle(string command, string argumentsJson)
         {
             if (string.Equals(command, ProtocolConstants.CommandProfileStats, StringComparison.Ordinal)
-                || string.Equals(command, ProtocolConstants.CommandProfileMemory, StringComparison.Ordinal))
+                || string.Equals(command, ProtocolConstants.CommandProfileMemory, StringComparison.Ordinal)
+                || string.Equals(command, ProtocolConstants.CommandProfileMemorySnapshot, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException("Deferred profile command must be started through StartDeferred: " + command);
             }
@@ -80,6 +84,12 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 ProfileMemoryArgs args = ProtocolJson.Deserialize<ProfileMemoryArgs>(argumentsJson) ?? new ProfileMemoryArgs();
                 StartMemoryDeferred(args, completion, projectHash, requestId);
+                return;
+            }
+
+            if (string.Equals(command, ProtocolConstants.CommandProfileMemorySnapshot, StringComparison.Ordinal))
+            {
+                StartSnapshotDeferred(completion, projectHash, requestId);
                 return;
             }
 
