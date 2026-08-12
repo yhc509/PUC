@@ -38,6 +38,7 @@ public static class CliApp
                 CommandKind.QaWait => await RunQaWait(parsed),
                 CommandKind.ProfileAnalyze => ProfileAnalyzer.Run(parsed, projectRoot),
                 CommandKind.ProfileCompare => ProfileComparer.Run(parsed, projectRoot),
+                CommandKind.ProfileMemoryCompare => ProfileMemoryComparer.Run(parsed, projectRoot),
                 CommandKind.EditorLaunch => await EditorLauncher.LaunchAsync(parsed, registryStore, projectRoot),
                 CommandKind.EditorStop => await RunEditorStopAsync(parsed, registryStore, projectRoot),
                 _ => await ExecuteUnityCommandAsync(parsed, registryStore, projectRoot),
@@ -704,13 +705,15 @@ public static class CliApp
             return Math.Max(parsed.TimeoutMs, executeTimeoutMs + ProtocolConstants.DefaultLiveTimeoutMs);
         }
 
-        if (parsed.Kind == CommandKind.ProfileStats)
+        if (parsed.Kind is CommandKind.ProfileStats or CommandKind.ProfileMemory)
         {
-            // stats waits N editor frames before the bridge responds; an unfocused editor
+            // stats/memory wait N editor frames before the bridge responds; an unfocused editor
             // can tick as slow as ~4fps, so budget 250ms per frame. Floor it at the editor's
             // own stats timeout (+base) so the CLI always outlives the bridge's PROFILE_TIMEOUT
             // instead of giving up first and reporting a generic transport error.
-            int frames = parsed.ProfileFrames ?? ProtocolConstants.DefaultProfileStatsFrames;
+            int frames = parsed.ProfileFrames ?? (parsed.Kind == CommandKind.ProfileMemory
+                ? ProtocolConstants.DefaultProfileMemoryFrames
+                : ProtocolConstants.DefaultProfileStatsFrames);
             int frameBudgetMs = frames * 250 + ProtocolConstants.DefaultLiveTimeoutMs;
             int editorFloorMs = ProtocolConstants.ProfileStatsTimeoutSeconds * 1000 + ProtocolConstants.DefaultLiveTimeoutMs;
             return Math.Max(parsed.TimeoutMs, Math.Max(frameBudgetMs, editorFloorMs));

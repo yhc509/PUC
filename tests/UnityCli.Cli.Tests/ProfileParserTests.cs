@@ -160,4 +160,41 @@ public class ProfileParserTests
     {
         Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["profile"]));
     }
+
+    [Fact]
+    public void Parse_ProfileMemory_DefaultsAndFrames()
+    {
+        var parsed = CliArgumentParser.Parse(["profile", "memory"]);
+        Assert.Equal(CommandKind.ProfileMemory, parsed.Kind);
+        Assert.Null(parsed.ProfileFrames);
+
+        var withFrames = CliArgumentParser.Parse(["profile", "memory", "--frames", "10"]);
+        Assert.Equal(CommandKind.ProfileMemory, withFrames.Kind);
+        Assert.Equal(10, withFrames.ProfileFrames);
+    }
+
+    [Fact]
+    public void Parse_ProfileMemoryCompare_ParsesIdsAndOptions()
+    {
+        var parsed = CliArgumentParser.Parse(
+            ["profile", "memory", "compare", "aaa", "bbb", "--threshold", "10", "--limit", "3"]);
+        Assert.Equal(CommandKind.ProfileMemoryCompare, parsed.Kind);
+        Assert.Equal("aaa", parsed.ProfileCompareBaseId);
+        Assert.Equal("bbb", parsed.ProfileCompareHeadId);
+        Assert.Equal(10.0, parsed.ProfileThresholdPercent!.Value, precision: 6);
+        Assert.Equal(3, parsed.ProfileLimit);
+    }
+
+    [Fact]
+    public void Parse_ProfileMemoryCompare_RequiresBothIds()
+    {
+        Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["profile", "memory", "compare"]));
+        Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["profile", "memory", "compare", "aaa"]));
+    }
+
+    [Fact]
+    public void Parse_ProfileMemory_UnknownSub_Throws()
+    {
+        Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["profile", "memory", "bogus"]));
+    }
 }
