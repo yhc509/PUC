@@ -135,6 +135,7 @@ namespace UnityCli.Protocol
         public const string CommandProfileCaptureStop = "profile-capture-stop";
         public const string CommandProfileStatus = "profile-status";
         public const string CommandProfileMemory = "profile-memory";
+        public const string CommandProfileMemorySnapshot = "profile-memory-snapshot";
         public const string CommandEditorQuit = "editor-quit";
         public const int DefaultQaWaitUntilTimeoutMs = 10_000;
         public const int DefaultQaSwipeDurationMs = 300;
@@ -170,6 +171,8 @@ namespace UnityCli.Protocol
         public const string RecordSessionKeyDurationSeconds = "UCB.Record.durationSeconds";
         public const string ProfilesDirectoryRelative = "Library/com.yhc509.unity-cli-bridge/profiles";
         public const string MemoryReportsDirectoryRelative = "Library/com.yhc509.unity-cli-bridge/memory";
+        public const string SnapshotsDirectoryRelative = "Library/com.yhc509.unity-cli-bridge/snapshots";
+        public const int ProfileMemorySnapshotTimeoutSeconds = 300;
         public const int DefaultProfileMemoryFrames = 30;
         public const double DefaultProfileMemoryThresholdPercent = 5.0;
         public const int DefaultProfileMemoryCompareLimit = 10;

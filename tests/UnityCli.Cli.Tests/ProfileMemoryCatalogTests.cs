@@ -29,6 +29,18 @@ public class ProfileMemoryCatalogTests
     }
 
     [Fact]
+    public void ProfileMemorySnapshot_IsLiveWireCommand_NoForce_NoGraphics()
+    {
+        var descriptor = CliCommandCatalog.FindByCommand("profile memory snapshot");
+        Assert.NotNull(descriptor);
+        Assert.Equal(ProtocolConstants.CommandProfileMemorySnapshot, descriptor!.ProtocolCommand);
+        Assert.Equal(ForceRule.None, descriptor.ForceRule);
+        Assert.True(descriptor.CanUseLive);
+        Assert.False(descriptor.CanUseLocal);
+        Assert.False(CliCommandCatalog.RequiresGraphics(ProtocolConstants.CommandProfileMemorySnapshot));
+    }
+
+    [Fact]
     public void ProfileMemory_IsInSupportedProtocolCommands()
     {
         Assert.Contains(ProtocolConstants.CommandProfileMemory, CliCommandCatalog.GetSupportedProtocolCommands());
