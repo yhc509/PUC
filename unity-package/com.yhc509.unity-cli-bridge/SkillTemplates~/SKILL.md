@@ -104,6 +104,16 @@ unity-cli does not have dedicated script create/delete commands. Use this combin
    - budget/Unity 버전/프레임 수가 다르면 `notes`에 경고가 붙으므로 그 경우 결과를 그대로 신뢰하지 않는다.
 6. Edit Mode에서 카운터만 빠르게 보고 싶으면 `unity-cli profile stats --frames 30 --preset memory`처럼 프리셋(`frame`/`render`/`gc`/`memory`/`all`)을 사용한다.
 
+메모리 릭이 의심되면 프레임 시간 루프 대신 메모리 루프를 쓴다:
+
+1. `unity-cli profile memory`로 baseline reportId를 만든다. 의심 플로우를 재현한 뒤 다시 실행해 head reportId를 만든다. 반드시 **같은 모드끼리**(둘 다 playmode 또는 둘 다 editmode) 만든다.
+2. `unity-cli profile memory compare <baseReportId> <headReportId>`로 비교한다. verdict는 `Total Used Memory` median 기준이고(`--threshold`, 기본 5%), `increases`가 어떤 카운터가 늘었는지 알려준다. Editor가 꺼져 있어도 동작한다.
+3. Count와 Memory가 함께 오르는 asset-type(예: `Texture Count` + `Texture Memory`)이 릭의 1차 후보다. `GC Used Memory` 상승은 managed 객체 잔존, `GC Reserved Memory`만 상승은 힙 확장이므로 구분한다. `Total Reserved`/`System Used`는 릭 판정에 쓰지 않는다.
+4. 추세가 나쁠 때만 `unity-cli profile memory snapshot`으로 `.snap`을 뜬다. `com.unity.memoryprofiler`가 필요하고(없으면 설치 안내와 함께 거부), profile capture와 동시 실행되지 않으며, 분석은 Unity의 Memory Profiler GUI에서 한다 — CLI는 `.snap`을 파싱하지 않는다. 파일이 1GB를 넘고 자동 삭제되지 않으니 다 쓰면 지운다.
+5. `notes`에 mode/Unity 버전/프레임 수 불일치 경고가 있으면 결과를 그대로 신뢰하지 않는다. `deltaPercentAvailable`이 false면 퍼센트를 무시하고 절대 `delta`만 본다.
+
+에디터를 직접 띄워 무인으로 회귀를 돌리려면 `editor launch`(기본 headless) → `play` → 캡처/메모리 → `stop` → `editor stop` → 로컬 `compare` 순서를 쓴다. 전체 파이프라인과 도메인 리로드 시 `LIVE_UNAVAILABLE` 재시도 규칙은 [references/profiling.md](references/profiling.md)의 `headless 회귀 파이프라인` 절에 있다.
+
 **수치를 해석하기 전에 [references/profiling.md](references/profiling.md)를 읽는다.** 특히:
 - 이 수치는 Editor 안에서 잰 것이라 절대값을 출시 성능으로 보고하면 안 된다 — 상대 비교 전용이다.
 - hotspot 1위가 `Semaphore.WaitForSignal` / `WaitForTargetFPS` / `EditorLoop` / `Gfx.WaitFor*`면 그건 원인이 아니라 대기이거나 Editor 오버헤드다. 흔한 정상 상황이다.

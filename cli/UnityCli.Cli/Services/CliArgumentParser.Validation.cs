@@ -405,7 +405,7 @@ public static partial class CliArgumentParser
 
         // double.TryParse accepts NaN/Infinity and overflows 1e400 to +Infinity; a non-finite value would
         // otherwise reach the JSON serializer (which refuses to write it) instead of failing as a usage error.
-        if (parsed.Kind == CommandKind.ProfileCompare
+        if ((parsed.Kind is CommandKind.ProfileCompare or CommandKind.ProfileMemoryCompare)
             && parsed.ProfileThresholdPercent.HasValue
             && (!double.IsFinite(parsed.ProfileThresholdPercent.Value) || parsed.ProfileThresholdPercent.Value < 0))
         {
@@ -674,6 +674,9 @@ public static partial class CliArgumentParser
             CommandKind.ProfileStatus => "profile status",
             CommandKind.ProfileAnalyze => "profile analyze",
             CommandKind.ProfileCompare => "profile compare",
+            CommandKind.ProfileMemory => "profile memory",
+            CommandKind.ProfileMemoryCompare => "profile memory compare",
+            CommandKind.ProfileMemorySnapshot => "profile memory snapshot",
             CommandKind.EditorLaunch => "editor launch",
             CommandKind.EditorStop => "editor stop",
             CommandKind.PackageList => "package list",

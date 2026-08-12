@@ -210,7 +210,58 @@ Editor 캡처에서만 존재하는 카운터: Texture/Mesh/Material/AnimationCl
 
 반대로 **여전히 유효한** 할당 원인: 문자열 연결/보간, boxing(Unity GC는 generational이 아니라 더 아프다), hot path의 LINQ, 상태를 캡처하는 클로저/람다, Unity API가 반환하는 배열(매번 새 복사본), `new WaitForSeconds`, `params` 배열.
 
-## 11. 출처
+## 11. 메모리 릭 추세 감시 (`profile memory`)
+
+프레임 시간이 아니라 **메모리**를 볼 때 쓴다. 스냅샷 없이 카운터 median만으로 추세를 잡는 경량 경로이고, Unity 스태프가 권하는 순서(카운터 추세 → 필요할 때만 스냅샷)를 그대로 따른다.
+
+```bash
+unity-cli profile memory                          # baseline reportId
+# 의심 플로우 재현 (플레이, 씬 전환 반복, 시간 경과)
+unity-cli profile memory                          # head reportId
+unity-cli profile memory compare <base> <head>
+```
+
+읽는 법:
+
+- **verdict는 `Total Used Memory` median 하나로 정해진다.** `--threshold`(기본 5%)를 넘게 늘면 `regression`, 그만큼 줄면 `improvement`. 나머지 카운터는 *왜* 그런지 설명하는 재료다.
+- `increases`에서 **Count와 Memory가 같이 오르는 asset-type**을 먼저 봐라. `Texture Count` + `Texture Memory` 동반 상승 = 텍스처가 해제되지 않는다는 뜻이다. Memory만 오르고 Count가 그대로면 개별 에셋이 커진 것(해상도·포맷 변경)이다.
+- `GC Used Memory` 상승은 managed 객체가 남아 있다는 뜻이고, `GC Reserved Memory`만 오르는 건 힙이 확장된 것으로 릭이 아닐 수 있다. 둘을 구분해라.
+- **`Total Reserved`/`System Used`는 릭 판정에 쓰지 마라.** 예약 메모리는 반환되지 않은 채 유지되는 게 정상이다.
+- 같은 모드끼리 비교해라. editmode ↔ playmode 비교는 Play 진입 자체가 수백 MB를 움직이므로 의미가 없고, 그 경우 `notes`에 mode 불일치 경고가 붙는다 — 경고가 보이면 결과를 신뢰하지 마라.
+- `deltaPercentAvailable`이 false면 퍼센트는 무시하고 절대 `delta`만 봐라. verdict도 그때는 `unchanged`로 고정된다.
+- `unavailable` 배열은 그 Unity 버전에 없는 카운터일 뿐 실패가 아니다. 다만 **`Total Used Memory`가 거기 있으면 verdict가 무의미**하므로 그때는 개별 카운터로만 판단해라.
+- Editor 수치라는 §0의 한계가 여기에도 그대로 적용된다. 특히 Editor는 텍스처를 강제 read/write하므로 텍스처 메모리는 부풀려져 있다 — 절대값이 아니라 변화량만 봐라.
+
+추세가 나쁠 때만 정밀 단계로 간다:
+
+```bash
+unity-cli profile memory snapshot     # → .snap 경로
+```
+
+`com.unity.memoryprofiler`가 필요하고(없으면 설치 안내와 함께 거부), profile capture와 동시에 실행되지 않는다. 분석은 **Window > Analysis > Memory Profiler**에서 하고, CLI는 `.snap`을 파싱하지 않는다. 파일은 에디터 메모리만큼 커지며(1GB 초과가 흔하다) 자동 삭제되지 않으니 다 쓰면 지워라.
+
+## 12. headless 회귀 파이프라인
+
+아래는 전부 사람 개입 없이 돈다 — GUI 에디터도, 포커스도 필요 없다.
+
+```bash
+unity-cli editor launch --project <path>     # 기본 headless (GPU는 살아 있음)
+unity-cli play
+unity-cli profile capture start --duration 10
+unity-cli profile capture stop --wait        # → head captureId
+unity-cli profile memory                     # → head reportId
+unity-cli stop
+unity-cli editor stop
+# 여기서부터는 Editor 없이 로컬 연산:
+unity-cli profile compare <baseCapture> <headCapture>
+unity-cli profile memory compare <baseReport> <headReport>
+```
+
+known-good 실행의 captureId/reportId를 baseline으로 보관해라. sidecar는 `Library/com.yhc509.unity-cli-bridge/` 아래에 남아 에디터를 껐다 켜도 유지된다.
+
+주의: Play Mode 진입과 패키지 설치는 도메인 리로드를 일으켜 IPC 소켓을 잠깐 끊는다. 그 직후 명령이 `LIVE_UNAVAILABLE`(retryable)로 실패하면 몇 초 뒤 재시도해라 — 실패가 아니라 리로드 중이라는 뜻이다.
+
+## 13. 출처
 
 전부 Unity 공식(primary):
 

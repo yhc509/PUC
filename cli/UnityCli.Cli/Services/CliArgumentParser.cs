@@ -377,7 +377,7 @@ public static partial class CliArgumentParser
     {
         if (tokens.Count == 0)
         {
-            throw new CliUsageException("`profile` 다음에는 `stats`, `capture`, `status`, `analyze`, `compare` 중 하나가 필요합니다.");
+            throw new CliUsageException("`profile` 다음에는 `stats`, `capture`, `status`, `analyze`, `compare`, `memory` 중 하나가 필요합니다.");
         }
 
         var subCommand = tokens.Dequeue().ToLowerInvariant();
@@ -442,6 +442,44 @@ public static partial class CliArgumentParser
                 parsed.ProfileCompareHeadId = tokens.Dequeue();
                 return parsed;
             }
+            case "memory":
+            {
+                if (tokens.Count > 0 && !tokens.Peek().StartsWith("--", StringComparison.Ordinal))
+                {
+                    var memorySub = tokens.Dequeue().ToLowerInvariant();
+                    switch (memorySub)
+                    {
+                        case "compare":
+                        {
+                            if (tokens.Count == 0 || tokens.Peek().StartsWith("--", StringComparison.Ordinal))
+                            {
+                                throw new CliUsageException("`profile memory compare`에는 <baseReportId>와 <headReportId>가 필요합니다.");
+                            }
+
+                            var parsed = new ParsedCommand(CommandKind.ProfileMemoryCompare)
+                            {
+                                ProfileCompareBaseId = tokens.Dequeue(),
+                            };
+                            if (tokens.Count == 0 || tokens.Peek().StartsWith("--", StringComparison.Ordinal))
+                            {
+                                throw new CliUsageException("`profile memory compare`에는 비교 대상인 <headReportId>도 필요합니다.");
+                            }
+
+                            parsed.ProfileCompareHeadId = tokens.Dequeue();
+                            return parsed;
+                        }
+
+                        case "snapshot":
+                            return new ParsedCommand(CommandKind.ProfileMemorySnapshot);
+
+                        default:
+                            throw new CliUsageException($"알 수 없는 profile memory 하위 명령입니다: {memorySub}");
+                    }
+                }
+
+                return new ParsedCommand(CommandKind.ProfileMemory);
+            }
+
             default:
                 throw new CliUsageException($"알 수 없는 profile 하위 명령입니다: {subCommand}");
         }
@@ -811,6 +849,7 @@ public static partial class CliArgumentParser
                 case CommandKind.QaRunSequence when token == "--profile":
                     parsed.QaSequenceProfile = true;
                     break;
+                case CommandKind.ProfileMemory when token == "--frames":
                 case CommandKind.ProfileStats when token == "--frames":
                     parsed.ProfileFrames = RequireInt(RequireValue(tokens, "--frames"), "--frames");
                     break;
@@ -860,6 +899,7 @@ public static partial class CliArgumentParser
                 case CommandKind.ProfileAnalyze when token == "--limit":
                     parsed.ProfileLimit = RequireInt(RequireValue(tokens, "--limit"), "--limit");
                     break;
+                case CommandKind.ProfileMemoryCompare when token == "--threshold":
                 case CommandKind.ProfileCompare when token == "--threshold":
                 {
                     string rawThreshold = RequireValue(tokens, "--threshold");
@@ -871,6 +911,7 @@ public static partial class CliArgumentParser
                     parsed.ProfileThresholdPercent = threshold;
                     break;
                 }
+                case CommandKind.ProfileMemoryCompare when token == "--limit":
                 case CommandKind.ProfileCompare when token == "--limit":
                     parsed.ProfileLimit = RequireInt(RequireValue(tokens, "--limit"), "--limit");
                     break;

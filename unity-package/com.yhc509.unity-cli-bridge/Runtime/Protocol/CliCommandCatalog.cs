@@ -331,6 +331,53 @@ namespace UnityCli.Protocol
                     "`deltaPercent` is only meaningful when the matching `deltaPercentAvailable` is true; a zero base leaves the percentage undefined.",
                 }),
             new CliCommandDescriptor(
+                "profile memory",
+                "profile memory [--frames <n> (default: 30)]",
+                "Samples memory profiler counters (total/GC/graphics plus per-asset-type count and memory) over N frames and writes the report to a local sidecar for later comparison. Works in Edit Mode and Play Mode.",
+                CliCommandGroup.Diagnostics,
+                ProtocolConstants.CommandProfileMemory,
+                canUseLocal: false,
+                canUseLive: true,
+                isAllowedWhileBusy: true,
+                notes: new[]
+                {
+                    "Returns a reportId and persists the report to Library/com.yhc509.unity-cli-bridge/memory/<reportId>.json.",
+                    "Counters not available on the current Unity version/platform are listed in `unavailable` instead of failing.",
+                    "Memory and GC values are bytes; count counters are object counts.",
+                }),
+            new CliCommandDescriptor(
+                "profile memory compare",
+                "profile memory compare <baseReportId> <headReportId> [--threshold <percent> (default: 5.0)] [--limit <n> (default: 10)]",
+                "Diffs two memory reports by reading both sidecar JSON files locally — no Editor round-trip. Returns a regression/improvement/unchanged verdict plus the per-counter byte/count deltas that explain it.",
+                CliCommandGroup.Diagnostics,
+                null,
+                canUseLocal: true,
+                canUseLive: false,
+                isAllowedWhileBusy: true,
+                notes: new[]
+                {
+                    "Local-only. Both reports must have a sidecar under the same project root.",
+                    "--threshold is the Total Used Memory median change (in percent) below which the verdict stays `unchanged`.",
+                    "Reports taken in different modes (editmode vs playmode), Unity versions, or frame counts are still compared; the mismatch is reported in `notes`.",
+                    "`deltaPercent` is only meaningful when the matching `deltaPercentAvailable` is true; a zero base leaves the percentage undefined.",
+                }),
+            new CliCommandDescriptor(
+                "profile memory snapshot",
+                "profile memory snapshot",
+                "Takes a full memory snapshot via MemoryProfiler.TakeSnapshot and saves it under Library/com.yhc509.unity-cli-bridge/snapshots/<id>.snap, returning only the path and metadata. Analyze the .snap in the Memory Profiler package GUI.",
+                CliCommandGroup.Diagnostics,
+                ProtocolConstants.CommandProfileMemorySnapshot,
+                canUseLocal: false,
+                canUseLive: true,
+                isAllowedWhileBusy: true,
+                notes: new[]
+                {
+                    "Requires the com.unity.memoryprofiler package; without it the command fails with install guidance instead of taking a snapshot.",
+                    "Snapshots can be hundreds of MB; the file is never transferred or parsed — only its path is returned. Old snapshots are not garbage-collected.",
+                    "Rejected with PROFILE_IN_PROGRESS while a profile capture or another snapshot is running (and capture start is rejected while a snapshot runs).",
+                    "The editor main thread blocks while the snapshot is being captured; expect the command to take seconds on large projects.",
+                }),
+            new CliCommandDescriptor(
                 "execute",
                 "execute (--code <csharp> | --file <path>) [--args <json>] [--timeout <초>] --force",
                 "Executes arbitrary C# code in the running editor context with optional JSON arguments, structured __pucResult return values, and an optional cooperative timeout; always requires --force.",
