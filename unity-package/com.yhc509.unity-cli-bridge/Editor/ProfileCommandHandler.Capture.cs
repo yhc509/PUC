@@ -90,6 +90,13 @@ namespace UnityCliBridge.Bridge.Editor
                         "A profile capture is already in progress. Stop it with `profile capture stop` first.");
                 }
 
+                if (_snapshotInFlight)
+                {
+                    throw new CommandFailureException(
+                        ProtocolConstants.ErrorProfileInProgress,
+                        "memory snapshot이 진행 중입니다. 끝난 뒤 capture를 시작하세요.");
+                }
+
                 _phase = CapturePhase.Capturing;
             }
 

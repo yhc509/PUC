@@ -10,7 +10,7 @@ namespace UnityCli.Protocol
     public static class ProtocolConstants
     {
         public const string AppName = "unity-cli";
-        public const string ProtocolVersion = "6";
+        public const string ProtocolVersion = "7";
         public const int DefaultLiveTimeoutMs = 30_000;
         public const int DefaultTimeoutMs = DefaultLiveTimeoutMs;
         public const int DefaultExecuteTimeoutMs = 30_000;
@@ -58,6 +58,12 @@ namespace UnityCli.Protocol
         public const string ErrorProfileFailed = "PROFILE_FAILED";
         public const string ErrorProfileInterrupted = "PROFILE_INTERRUPTED";
         public const string ErrorProfileTimeout = "PROFILE_TIMEOUT";
+        public const string ErrorEditorDirty = "EDITOR_DIRTY";
+        public const string ErrorHeadlessNoGraphics = "HEADLESS_NO_GRAPHICS";
+        public const string ErrorEditorLaunchFailed = "EDITOR_LAUNCH_FAILED";
+        public const string ErrorEditorWaitTimeout = "EDITOR_WAIT_TIMEOUT";
+        public const string ErrorEditorStopTimeout = "EDITOR_STOP_TIMEOUT";
+        public const string ErrorEditorAlreadyRunning = "EDITOR_ALREADY_RUNNING_CONFLICT";
         public const string ErrorCompileWaitTimeout = "COMPILE_WAIT_TIMEOUT";
         public const string ErrorRefreshWaitTimeout = "REFRESH_WAIT_TIMEOUT";
         public const string ErrorSceneForceRequired = "SCENE_FORCE_REQUIRED";
@@ -128,6 +134,9 @@ namespace UnityCli.Protocol
         public const string CommandProfileCaptureStart = "profile-capture-start";
         public const string CommandProfileCaptureStop = "profile-capture-stop";
         public const string CommandProfileStatus = "profile-status";
+        public const string CommandProfileMemory = "profile-memory";
+        public const string CommandProfileMemorySnapshot = "profile-memory-snapshot";
+        public const string CommandEditorQuit = "editor-quit";
         public const int DefaultQaWaitUntilTimeoutMs = 10_000;
         public const int DefaultQaSwipeDurationMs = 300;
         public const int DefaultQaRunSequenceTimeoutMs = 60_000;
@@ -161,6 +170,12 @@ namespace UnityCli.Protocol
         public const string RecordSessionKeyStartedAt = "UCB.Record.startedAt";
         public const string RecordSessionKeyDurationSeconds = "UCB.Record.durationSeconds";
         public const string ProfilesDirectoryRelative = "Library/com.yhc509.unity-cli-bridge/profiles";
+        public const string MemoryReportsDirectoryRelative = "Library/com.yhc509.unity-cli-bridge/memory";
+        public const string SnapshotsDirectoryRelative = "Library/com.yhc509.unity-cli-bridge/snapshots";
+        public const int ProfileMemorySnapshotTimeoutSeconds = 300;
+        public const int DefaultProfileMemoryFrames = 30;
+        public const double DefaultProfileMemoryThresholdPercent = 5.0;
+        public const int DefaultProfileMemoryCompareLimit = 10;
         public const int DefaultProfileStatsFrames = 60;
         public const int MaxProfileStatsFrames = 1000;
         public const int ProfileStatsTimeoutSeconds = 120;

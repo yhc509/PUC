@@ -39,7 +39,8 @@ namespace UnityCli.Protocol
             bool isAllowedWhileBusy,
             string[]? notes = null,
             ForceRule forceRule = ForceRule.None,
-            int? defaultLiveTimeoutMs = null)
+            int? defaultLiveTimeoutMs = null,
+            bool requiresGraphics = false)
         {
             Command = command;
             Synopsis = synopsis;
@@ -52,6 +53,7 @@ namespace UnityCli.Protocol
             Notes = notes ?? Array.Empty<string>();
             ForceRule = forceRule;
             DefaultLiveTimeoutMs = defaultLiveTimeoutMs;
+            RequiresGraphics = requiresGraphics;
         }
 
         public string Command { get; }
@@ -70,6 +72,7 @@ namespace UnityCli.Protocol
         public bool IsAllowedWhileBusy { get; }
         public ForceRule ForceRule { get; }
         public int? DefaultLiveTimeoutMs { get; }
+        public bool RequiresGraphics { get; }
 
         [Obsolete("Use ForceRule instead.")]
         public bool RequiresForce => ForceRule != ForceRule.None;
@@ -148,6 +151,36 @@ namespace UnityCli.Protocol
                 canUseLive: true,
                 isAllowedWhileBusy: false),
             new CliCommandDescriptor(
+                "editor launch",
+                "editor launch [--gui] [--nographics] [--no-wait] [--timeout <sec>] [--editor-path <path>]",
+                "Launches the Unity Editor for the selected project (headless -batchmode by default, GPU kept for rendering commands). Idempotent: reuses a live instance when one is already running. Waits for bridge readiness unless --no-wait.",
+                CliCommandGroup.EditorControl,
+                protocolCommand: null,
+                canUseLocal: true,
+                canUseLive: false,
+                isAllowedWhileBusy: true,
+                notes: new[]
+                {
+                    "Default headless mode passes -batchmode only; the GPU stays initialized so screenshot/record/qa keep working without a window.",
+                    "--nographics disables the GPU entirely; rendering commands then fail with HEADLESS_NO_GRAPHICS.",
+                    "Pre-flight refuses to double-launch: a live registry match is reused, and an editor process outside the registry fails with EDITOR_ALREADY_RUNNING_CONFLICT.",
+                }),
+            new CliCommandDescriptor(
+                "editor stop",
+                "editor stop [--force] [--no-wait] [--timeout <sec>]",
+                "Gracefully quits the running editor for the selected project. Refuses with EDITOR_DIRTY when unsaved scene/prefab-stage changes exist; --force discards them. Waits for process exit unless --no-wait.",
+                CliCommandGroup.EditorControl,
+                ProtocolConstants.CommandEditorQuit,
+                canUseLocal: false,
+                canUseLive: true,
+                isAllowedWhileBusy: false,
+                forceRule: ForceRule.OnDestructiveOp,
+                notes: new[]
+                {
+                    "The bridge replies first and exits on the next editor tick, so the CLI receives a normal success response.",
+                    "A graceful quit removes the instance registry entry and the auth-token sidecar.",
+                }),
+            new CliCommandDescriptor(
                 "execute-menu",
                 "execute-menu (--path \"Menu/Item\" | --list \"Prefix\")",
                 "Executes a Unity menu item or lists registered menu items matching a prefix in a running editor.",
@@ -172,7 +205,8 @@ namespace UnityCli.Protocol
                     "--format controls encoding regardless of --path extension; temporary paths use .png or .jpg to match the selected format.",
                     "--max-width is ignored when --width or --height is specified.",
                     "Play Mode --view game captures at the native Game View size first; larger --width/--height requests warn and save at native resolution instead of upscaling.",
-                }),
+                },
+                requiresGraphics: true),
             new CliCommandDescriptor(
                 "record start",
                 "record start [--path <output.mp4>] [--fps <n> (default: 30)] [--max-width <n>] [--duration <seconds>] [--wait]",
@@ -188,7 +222,8 @@ namespace UnityCli.Protocol
                     "--duration auto-stops after N seconds; without it, recording runs until `record stop` or the 600s safety cap.",
                     "--wait polls until the recording is finalized and requires --duration.",
                     "--max-width scales the captured frame width; unset keeps the native Game View size.",
-                }),
+                },
+                requiresGraphics: true),
             new CliCommandDescriptor(
                 "record stop",
                 "record stop",
@@ -294,6 +329,53 @@ namespace UnityCli.Protocol
                     "A capture that did not finish (any status other than Completed, or zero captured frames) is rejected with PROFILE_FAILED instead of being compared.",
                     "Captures recorded with different budgets, Unity versions, or frame counts are still compared; the mismatch is reported in `notes`.",
                     "`deltaPercent` is only meaningful when the matching `deltaPercentAvailable` is true; a zero base leaves the percentage undefined.",
+                }),
+            new CliCommandDescriptor(
+                "profile memory",
+                "profile memory [--frames <n> (default: 30)]",
+                "Samples memory profiler counters (total/GC/graphics plus per-asset-type count and memory) over N frames and writes the report to a local sidecar for later comparison. Works in Edit Mode and Play Mode.",
+                CliCommandGroup.Diagnostics,
+                ProtocolConstants.CommandProfileMemory,
+                canUseLocal: false,
+                canUseLive: true,
+                isAllowedWhileBusy: true,
+                notes: new[]
+                {
+                    "Returns a reportId and persists the report to Library/com.yhc509.unity-cli-bridge/memory/<reportId>.json.",
+                    "Counters not available on the current Unity version/platform are listed in `unavailable` instead of failing.",
+                    "Memory and GC values are bytes; count counters are object counts.",
+                }),
+            new CliCommandDescriptor(
+                "profile memory compare",
+                "profile memory compare <baseReportId> <headReportId> [--threshold <percent> (default: 5.0)] [--limit <n> (default: 10)]",
+                "Diffs two memory reports by reading both sidecar JSON files locally — no Editor round-trip. Returns a regression/improvement/unchanged verdict plus the per-counter byte/count deltas that explain it.",
+                CliCommandGroup.Diagnostics,
+                null,
+                canUseLocal: true,
+                canUseLive: false,
+                isAllowedWhileBusy: true,
+                notes: new[]
+                {
+                    "Local-only. Both reports must have a sidecar under the same project root.",
+                    "--threshold is the Total Used Memory median change (in percent) below which the verdict stays `unchanged`.",
+                    "Reports taken in different modes (editmode vs playmode), Unity versions, or frame counts are still compared; the mismatch is reported in `notes`.",
+                    "`deltaPercent` is only meaningful when the matching `deltaPercentAvailable` is true; a zero base leaves the percentage undefined.",
+                }),
+            new CliCommandDescriptor(
+                "profile memory snapshot",
+                "profile memory snapshot",
+                "Takes a full memory snapshot via MemoryProfiler.TakeSnapshot and saves it under Library/com.yhc509.unity-cli-bridge/snapshots/<id>.snap, returning only the path and metadata. Analyze the .snap in the Memory Profiler package GUI.",
+                CliCommandGroup.Diagnostics,
+                ProtocolConstants.CommandProfileMemorySnapshot,
+                canUseLocal: false,
+                canUseLive: true,
+                isAllowedWhileBusy: true,
+                notes: new[]
+                {
+                    "Requires the com.unity.memoryprofiler package; without it the command fails with install guidance instead of taking a snapshot.",
+                    "Snapshots can be hundreds of MB; the file is never transferred or parsed — only its path is returned. Old snapshots are not garbage-collected.",
+                    "Rejected with PROFILE_IN_PROGRESS while a profile capture or another snapshot is running (and capture start is rejected while a snapshot runs).",
+                    "The editor main thread blocks while the snapshot is being captured; expect the command to take seconds on large projects.",
                 }),
             new CliCommandDescriptor(
                 "execute",
@@ -696,7 +778,8 @@ namespace UnityCli.Protocol
                 ProtocolConstants.CommandQaClick,
                 canUseLocal: false,
                 canUseLive: true,
-                isAllowedWhileBusy: false),
+                isAllowedWhileBusy: false,
+                requiresGraphics: true),
             new CliCommandDescriptor(
                 "qa tap",
                 "qa tap (--x <int> --y <int> | --target <path>) [--button left|right] [--screenshot-width <int> --screenshot-height <int>]",
@@ -705,7 +788,8 @@ namespace UnityCli.Protocol
                 ProtocolConstants.CommandQaTap,
                 canUseLocal: false,
                 canUseLive: true,
-                isAllowedWhileBusy: false),
+                isAllowedWhileBusy: false,
+                requiresGraphics: true),
             new CliCommandDescriptor(
                 "qa swipe",
                 "qa swipe [--target <path>] --from <x,y> --to <x,y> [--duration <ms>] [--button left|right] [--screenshot-width <int> --screenshot-height <int>]",
@@ -714,7 +798,8 @@ namespace UnityCli.Protocol
                 ProtocolConstants.CommandQaSwipe,
                 canUseLocal: false,
                 canUseLive: true,
-                isAllowedWhileBusy: false),
+                isAllowedWhileBusy: false,
+                requiresGraphics: true),
             new CliCommandDescriptor(
                 "qa key",
                 "qa key --key <keyName>",
@@ -732,7 +817,8 @@ namespace UnityCli.Protocol
                 ProtocolConstants.CommandQaUiDump,
                 canUseLocal: false,
                 canUseLive: true,
-                isAllowedWhileBusy: false),
+                isAllowedWhileBusy: false,
+                requiresGraphics: true),
             new CliCommandDescriptor(
                 "qa world-dump",
                 "qa world-dump [--include-offscreen] [--limit N] [--text <substring>] [--screenshot-width <int> --screenshot-height <int>]",
@@ -741,7 +827,8 @@ namespace UnityCli.Protocol
                 ProtocolConstants.CommandQaWorldDump,
                 canUseLocal: false,
                 canUseLive: true,
-                isAllowedWhileBusy: false),
+                isAllowedWhileBusy: false,
+                requiresGraphics: true),
             new CliCommandDescriptor(
                 "qa run-sequence",
                 "qa run-sequence --spec-json <json|@file> [--timeout <ms>] [--record] [--record-path <out.mp4>]",
@@ -902,6 +989,12 @@ namespace UnityCli.Protocol
             }
 
             return null;
+        }
+
+        public static bool RequiresGraphics(string protocolCommand)
+        {
+            CliCommandDescriptor? descriptor = FindByProtocolCommand(protocolCommand);
+            return descriptor != null && descriptor.RequiresGraphics;
         }
     }
 }

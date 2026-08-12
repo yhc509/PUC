@@ -2136,4 +2136,49 @@ public sealed class CliArgumentParserTests
 
         Assert.Contains("upgrade", ex.Message);
     }
+
+    [Fact]
+    public void Parse_EditorLaunch_Defaults()
+    {
+        var parsed = CliArgumentParser.Parse(["editor", "launch"]);
+
+        Assert.Equal(CommandKind.EditorLaunch, parsed.Kind);
+        Assert.False(parsed.EditorGui);
+        Assert.False(parsed.EditorNoGraphics);
+        Assert.False(parsed.EditorNoWait);
+        Assert.Null(parsed.EditorWaitTimeoutSeconds);
+        Assert.Null(parsed.EditorPathOverride);
+    }
+
+    [Fact]
+    public void Parse_EditorLaunch_AllOptions()
+    {
+        var parsed = CliArgumentParser.Parse([
+            "editor", "launch", "--gui", "--nographics", "--no-wait",
+            "--timeout", "120", "--editor-path", "/tmp/Unity",
+        ]);
+
+        Assert.Equal(CommandKind.EditorLaunch, parsed.Kind);
+        Assert.True(parsed.EditorGui);
+        Assert.True(parsed.EditorNoGraphics);
+        Assert.True(parsed.EditorNoWait);
+        Assert.Equal(120, parsed.EditorWaitTimeoutSeconds);
+        Assert.Equal("/tmp/Unity", parsed.EditorPathOverride);
+    }
+
+    [Fact]
+    public void Parse_EditorStop_ForceAndTimeout()
+    {
+        var parsed = CliArgumentParser.Parse(["editor", "stop", "--force", "--timeout", "10"]);
+
+        Assert.Equal(CommandKind.EditorStop, parsed.Kind);
+        Assert.True(parsed.Force);
+        Assert.Equal(10, parsed.EditorWaitTimeoutSeconds);
+    }
+
+    [Fact]
+    public void Parse_EditorUnknownSubcommand_Throws()
+    {
+        Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["editor", "restart"]));
+    }
 }

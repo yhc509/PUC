@@ -117,6 +117,33 @@ When `--project` is omitted, the CLI first uses the current Unity project direct
 
 ## What You Can Do
 
+### Editor Lifecycle (headless support)
+
+```bash
+# Launch the editor headless (-batchmode, GPU kept — screenshot/record still work)
+unity-cli editor launch --project /path/to/Project
+
+# Launch with a visible window instead
+unity-cli editor launch --project /path/to/Project --gui
+
+# Idempotent: if the editor is already running, the live instance is reused
+unity-cli editor launch --project /path/to/Project   # → "reused": true
+
+# Gracefully quit (refuses on unsaved changes; --force discards them)
+unity-cli editor stop --project /path/to/Project
+```
+
+`editor launch` is a local command: it finds the matching Unity version for the project, spawns the editor, and waits until the bridge is reachable (default 300 s; tune with `--timeout`, or skip waiting with `--no-wait`). If an editor process already holds the project but never registered a bridge instance, the launch fails with `EDITOR_ALREADY_RUNNING_CONFLICT` instead of tripping Unity's own project lock. The spawned editor's log goes to `Library/com.yhc509.unity-cli-bridge/editor-launch.log`, and its output streams are detached from the CLI, so shell pipelines like `unity-cli editor launch | grep reused` terminate normally.
+
+`editor stop` asks the running editor to quit gracefully. It refuses with `EDITOR_DIRTY` while unsaved scene or prefab changes exist (`--force` discards them), waits for the process to exit (default 30 s), and cleans up the instance registry entry on the way out. It works whether the editor is headless, focused, or sitting unfocused in the background.
+
+Headless notes:
+- The default headless mode passes `-batchmode` **without** `-nographics`, so the GPU stays
+  initialized and rendering commands (`screenshot`, `record`, `qa`) keep working without a window.
+- With `--nographics`, rendering commands fail fast with `HEADLESS_NO_GRAPHICS` instead of
+  silently returning blank images. `instances list` reports each editor's mode
+  (`gui` / `headless` / `headless-nographics`).
+
 ### Editor Control
 
 ```bash
@@ -316,9 +343,20 @@ unity-cli profile capture stop --wait
 unity-cli profile analyze <captureId> --gc
 unity-cli profile compare <baseCaptureId> <headCaptureId> --threshold 5 --limit 5
 unity-cli qa run-sequence --spec-json '{"steps":[{"actions":[{"wait":3000}]}]}' --profile
+
+# Memory leak trend watch — no snapshot needed
+unity-cli profile memory                                    # → baseline reportId
+# ... play the suspect flow, let time pass ...
+unity-cli profile memory                                    # → head reportId
+unity-cli profile memory compare <baseReportId> <headReportId> --threshold 5
+
+# Precision follow-up once the trend looks bad
+unity-cli profile memory snapshot                           # → .snap path for the Memory Profiler GUI
 ```
 
 `profile stats` samples built-in `ProfilerRecorder` counters over N frames and returns min/median/p95/max per counter; it works in both Edit Mode and Play Mode. `profile capture start` records Play Mode frames and returns a `captureId` immediately; `profile capture stop --wait` polls until the summary — frame-time percentiles, spike frames, hotspots, per-marker GC bytes, and a CPU/GPU-bound verdict — is ready. `profile analyze <captureId>` drills into the finished capture's sidecar locally with `--marker <name>`, `--frame <n>`, `--gc`, or `--spikes`, with no Editor round-trip required. `profile compare <baseCaptureId> <headCaptureId>` diffs two finished captures the same way — locally, from both sidecars — and returns a `regression` / `improvement` / `unchanged` verdict plus the frame-time, over-budget, GC, and per-marker deltas behind it; `--threshold <percent>` (default 5) sets how much the median frame time may move before the result stops counting as unchanged, and mismatched budgets, Unity versions, or frame counts are called out in `notes`. A capture that never finished — for example one cut short by a script recompile — is rejected instead of being compared, so a dead capture can never read as a 100% improvement. Each percentage carries a `deltaPercentAvailable` flag; when the baseline value is zero there is no percentage to report, and only the absolute `delta` is meaningful. Add `--profile` to `qa run-sequence` to capture the sequence run and merge its summary into the response as `profileSummary`.
+
+`profile memory` covers the other half of profiling — memory rather than frame time. It samples memory counters (total, reserved, GC, graphics, audio/video, plus per-asset-type counts and bytes) over N frames, returns them as min/median/p95/max, and persists the report to a sidecar so it stays comparable later. Counters that the running Unity version does not expose are listed in `unavailable` instead of failing the command. `profile memory compare <baseReportId> <headReportId>` diffs two reports locally — no Editor needed — and judges `regression` / `improvement` / `unchanged` on the median `Total Used Memory` against `--threshold` (default 5%), listing the counters that grew or shrank the most so a leak points at its own cause: a climbing `Texture Count` and `Texture Memory` pair means textures are not being released, climbing `GC Used Memory` means managed churn. Reports taken in different modes, Unity versions, or frame counts are still compared, with the mismatch reported in `notes`. When the trend does look bad, `profile memory snapshot` captures a full `.snap` via the Memory Profiler package and returns only its path and size — the CLI never parses snapshots, so open the file in `Window > Analysis > Memory Profiler`. It needs `com.unity.memoryprofiler` installed, refuses to run while a profile capture is in flight (and blocks a capture from starting while it runs), and can produce files well over a gigabyte that are never cleaned up automatically.
 
 `screenshot` responses include both image size (`width`/`height`) and live input metadata (`screenWidth`/`screenHeight`, `imageOrigin=top-left`, `coordinateOrigin=bottom-left`). `qa tap` takes screenshot image coordinates as-is, reuses the last successful `screenshot` dimensions when `--screenshot-width`/`--screenshot-height` are omitted, and lets the bridge handle Y-flip plus resolution scaling into Unity screen space. See [qa-testing.md](tools/skills/unity-cli-operator/references/qa-testing.md) for the coordinate workflow.
 
@@ -400,6 +438,6 @@ dotnet run --project cli/UnityCli.DocGen -- --check   # Verify docs match code
 ## Current Limits
 
 - macOS arm64 and Windows x64 supported
-- Live IPC required — commands fail fast when no Editor is running
+- Live IPC required — Unity commands fail fast when no Editor is running (`editor launch` can start one for you)
 - Scene patching targets saved `Assets/...unity` scenes; multi-scene orchestration is out of scope
 - Prefab-internal object references and nested variants are not yet supported

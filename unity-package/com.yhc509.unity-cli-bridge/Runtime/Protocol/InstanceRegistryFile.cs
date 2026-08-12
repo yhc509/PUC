@@ -199,6 +199,23 @@ namespace UnityCli.Protocol
             }
         }
 
+        /// <summary>
+        /// Writes the sidecar only when its content differs from <paramref name="token"/>.
+        /// A crashed/killed editor leaves a stale sidecar behind (normal exit deletes it);
+        /// the next session owns the listener, so its live token must win or every CLI
+        /// call fails UNAUTHORIZED until manual cleanup.
+        /// </summary>
+        public static void EnsureTokenSidecar(string registryFilePath, string projectHash, string token)
+        {
+            string existing = ReadTokenSidecar(registryFilePath, projectHash);
+            if (string.Equals(existing, token, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            WriteTokenSidecar(registryFilePath, projectHash, token);
+        }
+
         public static string ReadTokenSidecar(string registryFilePath, string projectHash)
         {
             string fullPath = GetTokenSidecarPath(registryFilePath, projectHash);

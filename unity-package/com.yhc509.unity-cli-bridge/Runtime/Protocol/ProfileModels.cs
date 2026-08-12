@@ -266,4 +266,86 @@ namespace UnityCli.Protocol
         public bool truncated;
         public string[] notes = Array.Empty<string>();
     }
+
+    [Serializable]
+    public sealed class ProfileMemoryArgs
+    {
+        public int frames; // 0 = DefaultProfileMemoryFrames
+    }
+
+    [Serializable]
+    public sealed class ProfileMemoryPayload
+    {
+        public string reportId = string.Empty;
+        public string mode = string.Empty; // "editmode" | "playmode"
+        public int frames;
+        public string unityVersion = string.Empty;
+        public string capturedAtUtc = string.Empty; // ISO-8601 ("O")
+        public ProfileCounterStat[] counters = Array.Empty<ProfileCounterStat>();
+        public string[] unavailable = Array.Empty<string>();
+    }
+
+    [Serializable]
+    public sealed class ProfileMemorySidecarFile
+    {
+        public int schemaVersion = 1;
+        public string reportId = string.Empty;
+        public ProfileMemoryPayload report = new ProfileMemoryPayload();
+    }
+
+    [Serializable]
+    public sealed class ProfileMemoryCounterDelta
+    {
+        public string name = string.Empty;
+        public string unit = string.Empty; // "bytes" | "count"
+        public double baseMedian;
+        public double headMedian;
+        public double delta;
+        public double deltaPercent;
+
+        /// <summary>False when the base median is zero or negative, which leaves the percentage undefined; deltaPercent is 0 then and must be ignored.</summary>
+        public bool deltaPercentAvailable = true;
+    }
+
+    [Serializable]
+    public sealed class ProfileMemoryCompareSide
+    {
+        public string reportId = string.Empty;
+        public int frames;
+        public string mode = string.Empty;
+        public string unityVersion = string.Empty;
+        public string capturedAtUtc = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class ProfileMemoryComparePayload
+    {
+        public ProfileMemoryCompareSide baseReport = new ProfileMemoryCompareSide();
+        public ProfileMemoryCompareSide headReport = new ProfileMemoryCompareSide();
+        public double thresholdPercent;
+        public string verdict = "unchanged"; // regression | improvement | unchanged
+        public ProfileCompareDelta totalUsedBytes = new ProfileCompareDelta();
+        public ProfileCompareDelta gcUsedBytes = new ProfileCompareDelta();
+        public ProfileMemoryCounterDelta[] increases = Array.Empty<ProfileMemoryCounterDelta>();
+        public ProfileMemoryCounterDelta[] decreases = Array.Empty<ProfileMemoryCounterDelta>();
+        public bool truncated;
+        public string[] notes = Array.Empty<string>();
+    }
+
+    [Serializable]
+    public sealed class ProfileMemorySnapshotArgs
+    {
+        // 옵션 예약. CaptureFlags는 브릿지 고정값을 쓴다.
+    }
+
+    [Serializable]
+    public sealed class ProfileMemorySnapshotPayload
+    {
+        public string snapshotId = string.Empty;
+        public string path = string.Empty; // 절대 경로. 파일은 전송하지 않는다.
+        public long sizeBytes;
+        public string captureFlags = string.Empty;
+        public long elapsedMs;
+        public string guidance = string.Empty;
+    }
 }

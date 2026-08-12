@@ -75,6 +75,7 @@ public static partial class CliArgumentParser
             "material" => ParseMaterial(tokens),
             "qa" => ParseQa(tokens),
             "record" => ParseRecordCommand(tokens),
+            "editor" => ParseEditorCommand(tokens),
             "profile" => ParseProfile(tokens),
             "instances" => ParseInstances(tokens),
             "doctor" => new ParsedCommand(CommandKind.Doctor),
@@ -356,11 +357,27 @@ public static partial class CliArgumentParser
         };
     }
 
+    private static ParsedCommand ParseEditorCommand(Queue<string> tokens)
+    {
+        if (tokens.Count == 0)
+        {
+            throw new CliUsageException("`editor` 다음에는 `launch` 또는 `stop`이 필요합니다.");
+        }
+
+        var subCommand = tokens.Dequeue().ToLowerInvariant();
+        return subCommand switch
+        {
+            "launch" => new ParsedCommand(CommandKind.EditorLaunch),
+            "stop" => new ParsedCommand(CommandKind.EditorStop),
+            _ => throw new CliUsageException($"알 수 없는 editor 하위 명령입니다: {subCommand}"),
+        };
+    }
+
     private static ParsedCommand ParseProfile(Queue<string> tokens)
     {
         if (tokens.Count == 0)
         {
-            throw new CliUsageException("`profile` 다음에는 `stats`, `capture`, `status`, `analyze`, `compare` 중 하나가 필요합니다.");
+            throw new CliUsageException("`profile` 다음에는 `stats`, `capture`, `status`, `analyze`, `compare`, `memory` 중 하나가 필요합니다.");
         }
 
         var subCommand = tokens.Dequeue().ToLowerInvariant();
@@ -425,6 +442,44 @@ public static partial class CliArgumentParser
                 parsed.ProfileCompareHeadId = tokens.Dequeue();
                 return parsed;
             }
+            case "memory":
+            {
+                if (tokens.Count > 0 && !tokens.Peek().StartsWith("--", StringComparison.Ordinal))
+                {
+                    var memorySub = tokens.Dequeue().ToLowerInvariant();
+                    switch (memorySub)
+                    {
+                        case "compare":
+                        {
+                            if (tokens.Count == 0 || tokens.Peek().StartsWith("--", StringComparison.Ordinal))
+                            {
+                                throw new CliUsageException("`profile memory compare`에는 <baseReportId>와 <headReportId>가 필요합니다.");
+                            }
+
+                            var parsed = new ParsedCommand(CommandKind.ProfileMemoryCompare)
+                            {
+                                ProfileCompareBaseId = tokens.Dequeue(),
+                            };
+                            if (tokens.Count == 0 || tokens.Peek().StartsWith("--", StringComparison.Ordinal))
+                            {
+                                throw new CliUsageException("`profile memory compare`에는 비교 대상인 <headReportId>도 필요합니다.");
+                            }
+
+                            parsed.ProfileCompareHeadId = tokens.Dequeue();
+                            return parsed;
+                        }
+
+                        case "snapshot":
+                            return new ParsedCommand(CommandKind.ProfileMemorySnapshot);
+
+                        default:
+                            throw new CliUsageException($"알 수 없는 profile memory 하위 명령입니다: {memorySub}");
+                    }
+                }
+
+                return new ParsedCommand(CommandKind.ProfileMemory);
+            }
+
             default:
                 throw new CliUsageException($"알 수 없는 profile 하위 명령입니다: {subCommand}");
         }
@@ -653,6 +708,24 @@ public static partial class CliArgumentParser
                 case CommandKind.RecordStatus when token == "--recording-id":
                     parsed.RecordRunId = RequireValue(tokens, "--recording-id");
                     break;
+                case CommandKind.EditorLaunch when token == "--gui":
+                    parsed.EditorGui = true;
+                    break;
+                case CommandKind.EditorLaunch when token == "--nographics":
+                    parsed.EditorNoGraphics = true;
+                    break;
+                case CommandKind.EditorLaunch when token == "--editor-path":
+                    parsed.EditorPathOverride = RequireValue(tokens, "--editor-path");
+                    break;
+                case CommandKind.EditorLaunch or CommandKind.EditorStop when token == "--no-wait":
+                    parsed.EditorNoWait = true;
+                    break;
+                case CommandKind.EditorLaunch or CommandKind.EditorStop when token == "--timeout":
+                    parsed.EditorWaitTimeoutSeconds = RequireInt(RequireValue(tokens, "--timeout"), "--timeout");
+                    break;
+                case CommandKind.EditorStop when token == "--force":
+                    parsed.Force = true;
+                    break;
                 case CommandKind.MaterialInfo when token == "--path":
                 case CommandKind.MaterialSet when token == "--path":
                     parsed.MaterialPath = RequireAssetPath(RequireValue(tokens, "--path"), "--path");
@@ -776,6 +849,7 @@ public static partial class CliArgumentParser
                 case CommandKind.QaRunSequence when token == "--profile":
                     parsed.QaSequenceProfile = true;
                     break;
+                case CommandKind.ProfileMemory when token == "--frames":
                 case CommandKind.ProfileStats when token == "--frames":
                     parsed.ProfileFrames = RequireInt(RequireValue(tokens, "--frames"), "--frames");
                     break;
@@ -825,6 +899,7 @@ public static partial class CliArgumentParser
                 case CommandKind.ProfileAnalyze when token == "--limit":
                     parsed.ProfileLimit = RequireInt(RequireValue(tokens, "--limit"), "--limit");
                     break;
+                case CommandKind.ProfileMemoryCompare when token == "--threshold":
                 case CommandKind.ProfileCompare when token == "--threshold":
                 {
                     string rawThreshold = RequireValue(tokens, "--threshold");
@@ -836,6 +911,7 @@ public static partial class CliArgumentParser
                     parsed.ProfileThresholdPercent = threshold;
                     break;
                 }
+                case CommandKind.ProfileMemoryCompare when token == "--limit":
                 case CommandKind.ProfileCompare when token == "--limit":
                     parsed.ProfileLimit = RequireInt(RequireValue(tokens, "--limit"), "--limit");
                     break;

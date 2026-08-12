@@ -22,6 +22,7 @@ description: "Use when the user wants to operate Unity through Unity CLI Bridge 
 3. 쓰기 작업 전에는 상태를 본다.
 - 먼저 `status --json --project <name>`으로 live 연결, busy 상태, 현재 프로젝트가 맞는지 확인한다.
 - 응답의 `projectName`이 의도한 프로젝트가 맞는지 반드시 확인한다.
+- live 인스턴스가 없으면 사용자에게 요청하지 말고 `editor launch`로 직접 기동한다 (아래 Editor Lifecycle).
 
 4. 작업 종류에 맞는 흐름을 고른다.
 - 일반 명령, 에셋 작업, scene inspect/patch는 `references/command-flows.md`
@@ -30,6 +31,20 @@ description: "Use when the user wants to operate Unity through Unity CLI Bridge 
 
 5. 작업 뒤에는 반드시 검증한다.
 - live 작업 뒤 검증 루틴과 `read-console --no-stacktrace --output compact` 패턴은 [references/command-flows.md](references/command-flows.md)의 `검증 루틴`을 따른다.
+
+## Editor Lifecycle
+
+대상 프로젝트의 에디터가 안 떠 있으면 사용자에게 요청하지 말고 직접 헤드리스로 기동한다:
+
+```bash
+unity-cli editor launch --project <path>        # 헤드리스(-batchmode) 기동, 브릿지 준비까지 대기
+unity-cli editor stop --project <path>          # graceful 종료 (미저장 변경 있으면 EDITOR_DIRTY; --force로 폐기)
+```
+
+- `editor launch`는 멱등이다 — live 인스턴스가 있으면 재사용하고 `"reused": true`를 반환하므로, 워크플로우 시작 전에 호출해도 안전하고 이중 기동 모달 행을 예방한다.
+- 기본 헤드리스는 GPU를 유지한다: 창 없이도 screenshot/record/qa가 동작한다. `--nographics`를 줄 때만 렌더링 명령이 `HEADLESS_NO_GRAPHICS`로 거부된다. 창이 필요하면 `--gui`.
+- 등록 안 된 에디터 프로세스가 프로젝트를 이미 열고 있으면 `EDITOR_ALREADY_RUNNING_CONFLICT`로 거부된다(재시도 가능 — 부팅/컴파일 중일 수 있다). 기동 로그는 `Library/com.yhc509.unity-cli-bridge/editor-launch.log`.
+- 첫 임포트가 긴 프로젝트에서 `EDITOR_WAIT_TIMEOUT`이 나오면 `--timeout <초>`를 늘려 재시도한다(기본 300초).
 
 ## Operating Rules
 
@@ -88,6 +103,16 @@ unity-cli does not have dedicated script create/delete commands. Use this combin
    - 자기 시간(`deltaMs`)이 그대로여도 GC 할당이 늘어난 마커는 `regressions`에, 줄어든 마커는 `improvements`에 들어간다.
    - budget/Unity 버전/프레임 수가 다르면 `notes`에 경고가 붙으므로 그 경우 결과를 그대로 신뢰하지 않는다.
 6. Edit Mode에서 카운터만 빠르게 보고 싶으면 `unity-cli profile stats --frames 30 --preset memory`처럼 프리셋(`frame`/`render`/`gc`/`memory`/`all`)을 사용한다.
+
+메모리 릭이 의심되면 프레임 시간 루프 대신 메모리 루프를 쓴다:
+
+1. `unity-cli profile memory`로 baseline reportId를 만든다. 의심 플로우를 재현한 뒤 다시 실행해 head reportId를 만든다. 반드시 **같은 모드끼리**(둘 다 playmode 또는 둘 다 editmode) 만든다.
+2. `unity-cli profile memory compare <baseReportId> <headReportId>`로 비교한다. verdict는 `Total Used Memory` median 기준이고(`--threshold`, 기본 5%), `increases`가 어떤 카운터가 늘었는지 알려준다. Editor가 꺼져 있어도 동작한다.
+3. Count와 Memory가 함께 오르는 asset-type(예: `Texture Count` + `Texture Memory`)이 릭의 1차 후보다. `GC Used Memory` 상승은 managed 객체 잔존, `GC Reserved Memory`만 상승은 힙 확장이므로 구분한다. `Total Reserved`/`System Used`는 릭 판정에 쓰지 않는다.
+4. 추세가 나쁠 때만 `unity-cli profile memory snapshot`으로 `.snap`을 뜬다. `com.unity.memoryprofiler`가 필요하고(없으면 설치 안내와 함께 거부), profile capture와 동시 실행되지 않으며, 분석은 Unity의 Memory Profiler GUI에서 한다 — CLI는 `.snap`을 파싱하지 않는다. 파일이 1GB를 넘고 자동 삭제되지 않으니 다 쓰면 지운다.
+5. `notes`에 mode/Unity 버전/프레임 수 불일치 경고가 있으면 결과를 그대로 신뢰하지 않는다. `deltaPercentAvailable`이 false면 퍼센트를 무시하고 절대 `delta`만 본다.
+
+에디터를 직접 띄워 무인으로 회귀를 돌리려면 `editor launch`(기본 headless) → `play` → 캡처/메모리 → `stop` → `editor stop` → 로컬 `compare` 순서를 쓴다. 전체 파이프라인과 도메인 리로드 시 `LIVE_UNAVAILABLE` 재시도 규칙은 [references/profiling.md](references/profiling.md)의 `headless 회귀 파이프라인` 절에 있다.
 
 **수치를 해석하기 전에 [references/profiling.md](references/profiling.md)를 읽는다.** 특히:
 - 이 수치는 Editor 안에서 잰 것이라 절대값을 출시 성능으로 보고하면 안 된다 — 상대 비교 전용이다.

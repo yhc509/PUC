@@ -288,6 +288,7 @@ public sealed class InstanceRegistryStore
                 state = instance.state ?? "offline",
                 lastSeenUtc = instance.lastSeenUtc ?? string.Empty,
                 capabilities = instance.capabilities ?? Array.Empty<string>(),
+                editorMode = instance.editorMode ?? string.Empty,
             };
 
             if (IsStale(normalized))
