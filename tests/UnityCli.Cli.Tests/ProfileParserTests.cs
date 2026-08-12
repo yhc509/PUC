@@ -197,4 +197,11 @@ public class ProfileParserTests
     {
         Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse(["profile", "memory", "bogus"]));
     }
+
+    [Fact]
+    public void Parse_ProfileMemorySnapshot()
+    {
+        var parsed = CliArgumentParser.Parse(["profile", "memory", "snapshot"]);
+        Assert.Equal(CommandKind.ProfileMemorySnapshot, parsed.Kind);
+    }
 }

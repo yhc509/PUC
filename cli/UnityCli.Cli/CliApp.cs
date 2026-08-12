@@ -719,6 +719,16 @@ public static class CliApp
             return Math.Max(parsed.TimeoutMs, Math.Max(frameBudgetMs, editorFloorMs));
         }
 
+        if (parsed.Kind == CommandKind.ProfileMemorySnapshot)
+        {
+            // TakeSnapshot blocks the editor main thread, so the CLI must outlive the bridge's own
+            // snapshot watchdog or it gives up first and reports a transport timeout instead of
+            // the bridge's PROFILE_TIMEOUT.
+            int editorFloorMs = ProtocolConstants.ProfileMemorySnapshotTimeoutSeconds * 1000
+                + ProtocolConstants.DefaultLiveTimeoutMs;
+            return Math.Max(parsed.TimeoutMs, editorFloorMs);
+        }
+
         return parsed.TimeoutMs;
     }
 

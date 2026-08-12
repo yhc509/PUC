@@ -469,6 +469,9 @@ public static partial class CliArgumentParser
                             return parsed;
                         }
 
+                        case "snapshot":
+                            return new ParsedCommand(CommandKind.ProfileMemorySnapshot);
+
                         default:
                             throw new CliUsageException($"알 수 없는 profile memory 하위 명령입니다: {memorySub}");
                     }

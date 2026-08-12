@@ -78,6 +78,7 @@ public enum CommandKind
     ProfileCompare,
     ProfileMemory,
     ProfileMemoryCompare,
+    ProfileMemorySnapshot,
     EditorLaunch,
     EditorStop,
 }
@@ -347,6 +348,7 @@ public sealed class ParsedCommand
                 CommandKind.ProfileCaptureStop => ProtocolConstants.CommandProfileCaptureStop,
                 CommandKind.ProfileStatus => ProtocolConstants.CommandProfileStatus,
                 CommandKind.ProfileMemory => ProtocolConstants.CommandProfileMemory,
+                CommandKind.ProfileMemorySnapshot => ProtocolConstants.CommandProfileMemorySnapshot,
                 CommandKind.EditorStop => ProtocolConstants.CommandEditorQuit,
                 _ => throw new CliUsageException($"지원하지 않는 live 명령입니다: {Kind}"),
             },
@@ -454,6 +456,7 @@ public sealed class ParsedCommand
             {
                 frames = ProfileFrames ?? 0,
             },
+            CommandKind.ProfileMemorySnapshot => new ProfileMemorySnapshotArgs(),
             CommandKind.EditorStop => new EditorQuitArgs
             {
                 force = Force,
