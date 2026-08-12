@@ -199,7 +199,7 @@ namespace UnityCliBridge.Bridge.Editor
                 {
                     throw new CommandFailureException(
                         ProtocolConstants.ErrorProfileFailed,
-                        "Memory Profiler 패키지가 설치되어 있지 않습니다. `unity-cli package add com.unity.memoryprofiler`로 설치한 뒤 다시 실행하세요.");
+                        "Memory Profiler 패키지가 설치되어 있지 않습니다. `unity-cli package add --name com.unity.memoryprofiler`로 설치한 뒤 다시 실행하세요.");
                 }
 
                 lock (_captureLock)
