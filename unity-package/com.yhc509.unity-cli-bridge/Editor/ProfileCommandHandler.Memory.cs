@@ -34,7 +34,6 @@ namespace UnityCliBridge.Bridge.Editor
             new ProfileCounterSpec(ProfilerCategory.Memory, "AnimationClip Count", "count"),
             new ProfileCounterSpec(ProfilerCategory.Memory, "AnimationClip Memory", "bytes"),
             new ProfileCounterSpec(ProfilerCategory.Memory, "Asset Count", "count"),
-            new ProfileCounterSpec(ProfilerCategory.Memory, "GameObject Count", "count"),
             new ProfileCounterSpec(ProfilerCategory.Memory, "Scene Object Count", "count"),
             new ProfileCounterSpec(ProfilerCategory.Memory, "Object Count", "count"),
         };
