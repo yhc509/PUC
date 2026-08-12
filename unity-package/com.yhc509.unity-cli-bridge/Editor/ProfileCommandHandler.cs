@@ -16,18 +16,21 @@ namespace UnityCliBridge.Bridge.Editor
             return string.Equals(command, ProtocolConstants.CommandProfileStats, StringComparison.Ordinal)
                 || string.Equals(command, ProtocolConstants.CommandProfileCaptureStart, StringComparison.Ordinal)
                 || string.Equals(command, ProtocolConstants.CommandProfileCaptureStop, StringComparison.Ordinal)
-                || string.Equals(command, ProtocolConstants.CommandProfileStatus, StringComparison.Ordinal);
+                || string.Equals(command, ProtocolConstants.CommandProfileStatus, StringComparison.Ordinal)
+                || string.Equals(command, ProtocolConstants.CommandProfileMemory, StringComparison.Ordinal);
         }
 
-        // stats waits N editor frames, so it must run deferred like qa wait-until.
+        // stats/memory wait N editor frames, so they must run deferred like qa wait-until.
         public bool IsDeferred(string command, string? argumentsJson = null)
         {
-            return string.Equals(command, ProtocolConstants.CommandProfileStats, StringComparison.Ordinal);
+            return string.Equals(command, ProtocolConstants.CommandProfileStats, StringComparison.Ordinal)
+                || string.Equals(command, ProtocolConstants.CommandProfileMemory, StringComparison.Ordinal);
         }
 
         public string Handle(string command, string argumentsJson)
         {
-            if (string.Equals(command, ProtocolConstants.CommandProfileStats, StringComparison.Ordinal))
+            if (string.Equals(command, ProtocolConstants.CommandProfileStats, StringComparison.Ordinal)
+                || string.Equals(command, ProtocolConstants.CommandProfileMemory, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException("Deferred profile command must be started through StartDeferred: " + command);
             }
@@ -65,14 +68,22 @@ namespace UnityCliBridge.Bridge.Editor
                 return;
             }
 
-            if (!string.Equals(command, ProtocolConstants.CommandProfileStats, StringComparison.Ordinal))
+            string requestId = GetRequestId(completion);
+            if (string.Equals(command, ProtocolConstants.CommandProfileStats, StringComparison.Ordinal))
             {
-                throw new InvalidOperationException("Unhandled deferred profile command: " + command);
+                ProfileStatsArgs args = ProtocolJson.Deserialize<ProfileStatsArgs>(argumentsJson) ?? new ProfileStatsArgs();
+                StartStatsDeferred(args, completion, projectHash, requestId);
+                return;
             }
 
-            string requestId = GetRequestId(completion);
-            ProfileStatsArgs args = ProtocolJson.Deserialize<ProfileStatsArgs>(argumentsJson) ?? new ProfileStatsArgs();
-            StartStatsDeferred(args, completion, projectHash, requestId);
+            if (string.Equals(command, ProtocolConstants.CommandProfileMemory, StringComparison.Ordinal))
+            {
+                ProfileMemoryArgs args = ProtocolJson.Deserialize<ProfileMemoryArgs>(argumentsJson) ?? new ProfileMemoryArgs();
+                StartMemoryDeferred(args, completion, projectHash, requestId);
+                return;
+            }
+
+            throw new InvalidOperationException("Unhandled deferred profile command: " + command);
         }
 
         private readonly struct ProfileCounterSpec
