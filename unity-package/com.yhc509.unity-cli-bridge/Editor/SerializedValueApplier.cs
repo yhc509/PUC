@@ -197,6 +197,8 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static void ApplyToken(SerializedProperty property, JToken token, string propertyPath)
         {
+            token = CoerceStringEncodedJson(property, token);
+
             if (property.isArray && property.propertyType != SerializedPropertyType.String)
             {
                 ApplyArray(property, token, propertyPath);
@@ -286,6 +288,71 @@ namespace UnityCliBridge.Bridge.Editor
                     break;
                 default:
                     throw new CommandFailureException("PREFAB_FIELD_INVALID", BuildUnsupportedSerializedPropertyTypeMessage(property, propertyPath));
+            }
+        }
+
+        /// <summary>
+        /// Accept a structured value that arrived as a JSON-encoded string.
+        ///
+        /// Agents routinely send <c>"[1,2,3]"</c> for a Vector3 or <c>"{\"m_Mass\":0.17}"</c> for a
+        /// nested object — the value is right, the quoting is not, and strict token typing rejects
+        /// it with an error that reads like the field itself was wrong. The guard is deliberately
+        /// narrow: only a string token, only where the target cannot hold a raw string, and only
+        /// when the trimmed text opens a JSON object or array. Asset paths, object-reference
+        /// handles, enum names and char values never start with '{' or '[' and so keep taking the
+        /// original path — as does any string that fails to parse, which preserves the existing
+        /// validation message.
+        /// </summary>
+        private static JToken CoerceStringEncodedJson(SerializedProperty property, JToken token)
+        {
+            if (token == null || token.Type != JTokenType.String || AcceptsRawStringToken(property))
+            {
+                return token;
+            }
+
+            string value = token.Value<string>();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return token;
+            }
+
+            string trimmed = value.TrimStart();
+            if (trimmed[0] != '{' && trimmed[0] != '[')
+            {
+                return token;
+            }
+
+            try
+            {
+                return JToken.Parse(value);
+            }
+            catch (Newtonsoft.Json.JsonException)
+            {
+                return token;
+            }
+        }
+
+        private static bool AcceptsRawStringToken(SerializedProperty property)
+        {
+            if (property.isArray && property.propertyType == SerializedPropertyType.String)
+            {
+                return true;
+            }
+
+            switch (property.propertyType)
+            {
+                case SerializedPropertyType.String:
+                case SerializedPropertyType.Character:
+                case SerializedPropertyType.Enum:
+                case SerializedPropertyType.Hash128:
+                case SerializedPropertyType.Integer:
+                case SerializedPropertyType.Boolean:
+                case SerializedPropertyType.Float:
+                case SerializedPropertyType.LayerMask:
+                case SerializedPropertyType.ArraySize:
+                    return true;
+                default:
+                    return false;
             }
         }
 
@@ -777,6 +844,79 @@ namespace UnityCliBridge.Bridge.Editor
             throw new CommandFailureException("PREFAB_FIELD_INVALID", "object 값이 필요합니다: " + propertyPath);
         }
 
+        /// <summary>
+        /// Read a fixed-arity numeric tuple written as a JSON array — <c>[1,2,3]</c> for a Vector3,
+        /// <c>[1,0,0,1]</c> for a Color. The member-object form stays the canonical one (it is what
+        /// inspect emits); this is the shorthand agents reach for, and it is unambiguous for the
+        /// component types below. Entries past <paramref name="requiredCount"/> are optional and
+        /// keep the caller's defaults.
+        /// </summary>
+        private static float[] ReadFloatTuple(
+            JArray array,
+            string propertyPath,
+            int requiredCount,
+            float[] defaults)
+        {
+            if (array.Count < requiredCount || array.Count > defaults.Length)
+            {
+                throw new CommandFailureException(
+                    "PREFAB_FIELD_INVALID",
+                    "배열 값은 숫자 "
+                    + (requiredCount == defaults.Length
+                        ? requiredCount.ToString()
+                        : requiredCount + "~" + defaults.Length)
+                    + "개여야 합니다: " + propertyPath);
+            }
+
+            var values = (float[])defaults.Clone();
+            for (int index = 0; index < array.Count; index++)
+            {
+                JToken element = array[index];
+                if (element.Type != JTokenType.Integer && element.Type != JTokenType.Float)
+                {
+                    throw new CommandFailureException(
+                        "PREFAB_FIELD_INVALID",
+                        "숫자 값이 필요합니다: " + propertyPath + "[" + index + "]");
+                }
+
+                values[index] = element.Value<float>();
+            }
+
+            return values;
+        }
+
+        private static int[] ReadIntTuple(JArray array, string propertyPath, int count)
+        {
+            if (array.Count != count)
+            {
+                throw new CommandFailureException(
+                    "PREFAB_FIELD_INVALID",
+                    "배열 값은 정수 " + count + "개여야 합니다: " + propertyPath);
+            }
+
+            var values = new int[count];
+            for (int index = 0; index < count; index++)
+            {
+                JToken element = array[index];
+                if (element.Type != JTokenType.Integer)
+                {
+                    throw new CommandFailureException(
+                        "PREFAB_FIELD_INVALID",
+                        "정수 값이 필요합니다: " + propertyPath + "[" + index + "]");
+                }
+
+                values[index] = element.Value<int>();
+            }
+
+            return values;
+        }
+
+        private static bool TryReadTupleArray(JToken token, out JArray array)
+        {
+            array = token as JArray;
+            return array != null;
+        }
+
         private static float ReadFloatMember(JObject obj, string memberName, string propertyPath, float fallback = 0f)
         {
             JToken member = obj[memberName];
@@ -811,6 +951,12 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static Color ReadColor(JToken token, string propertyPath)
         {
+            if (TryReadTupleArray(token, out JArray array))
+            {
+                float[] values = ReadFloatTuple(array, propertyPath, 3, new[] { 0f, 0f, 0f, 1f });
+                return new Color(values[0], values[1], values[2], values[3]);
+            }
+
             JObject obj = ReadObject(token, propertyPath);
             return new Color(
                 ReadFloatMember(obj, "r", propertyPath),
@@ -821,6 +967,12 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static Vector2 ReadVector2(JToken token, string propertyPath)
         {
+            if (TryReadTupleArray(token, out JArray array))
+            {
+                float[] values = ReadFloatTuple(array, propertyPath, 2, new[] { 0f, 0f });
+                return new Vector2(values[0], values[1]);
+            }
+
             JObject obj = ReadObject(token, propertyPath);
             return new Vector2(
                 ReadFloatMember(obj, "x", propertyPath),
@@ -829,6 +981,12 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static Vector3 ReadVector3(JToken token, string propertyPath)
         {
+            if (TryReadTupleArray(token, out JArray array))
+            {
+                float[] values = ReadFloatTuple(array, propertyPath, 3, new[] { 0f, 0f, 0f });
+                return new Vector3(values[0], values[1], values[2]);
+            }
+
             JObject obj = ReadObject(token, propertyPath);
             return new Vector3(
                 ReadFloatMember(obj, "x", propertyPath),
@@ -838,6 +996,12 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static Vector4 ReadVector4(JToken token, string propertyPath)
         {
+            if (TryReadTupleArray(token, out JArray array))
+            {
+                float[] values = ReadFloatTuple(array, propertyPath, 4, new[] { 0f, 0f, 0f, 0f });
+                return new Vector4(values[0], values[1], values[2], values[3]);
+            }
+
             JObject obj = ReadObject(token, propertyPath);
             return new Vector4(
                 ReadFloatMember(obj, "x", propertyPath),
@@ -848,6 +1012,12 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static Rect ReadRect(JToken token, string propertyPath)
         {
+            if (TryReadTupleArray(token, out JArray array))
+            {
+                float[] values = ReadFloatTuple(array, propertyPath, 4, new[] { 0f, 0f, 0f, 0f });
+                return new Rect(values[0], values[1], values[2], values[3]);
+            }
+
             JObject obj = ReadObject(token, propertyPath);
             return new Rect(
                 ReadFloatMember(obj, "x", propertyPath),
@@ -866,6 +1036,12 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static Quaternion ReadQuaternion(JToken token, string propertyPath)
         {
+            if (TryReadTupleArray(token, out JArray array))
+            {
+                float[] values = ReadFloatTuple(array, propertyPath, 4, new[] { 0f, 0f, 0f, 0f });
+                return new Quaternion(values[0], values[1], values[2], values[3]);
+            }
+
             JObject obj = ReadObject(token, propertyPath);
             return new Quaternion(
                 ReadFloatMember(obj, "x", propertyPath),
@@ -876,6 +1052,12 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static Vector2Int ReadVector2Int(JToken token, string propertyPath)
         {
+            if (TryReadTupleArray(token, out JArray array))
+            {
+                int[] values = ReadIntTuple(array, propertyPath, 2);
+                return new Vector2Int(values[0], values[1]);
+            }
+
             JObject obj = ReadObject(token, propertyPath);
             return new Vector2Int(
                 ReadIntMember(obj, "x", propertyPath),
@@ -884,6 +1066,12 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static Vector3Int ReadVector3Int(JToken token, string propertyPath)
         {
+            if (TryReadTupleArray(token, out JArray array))
+            {
+                int[] values = ReadIntTuple(array, propertyPath, 3);
+                return new Vector3Int(values[0], values[1], values[2]);
+            }
+
             JObject obj = ReadObject(token, propertyPath);
             return new Vector3Int(
                 ReadIntMember(obj, "x", propertyPath),
@@ -893,6 +1081,12 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static RectInt ReadRectInt(JToken token, string propertyPath)
         {
+            if (TryReadTupleArray(token, out JArray array))
+            {
+                int[] values = ReadIntTuple(array, propertyPath, 4);
+                return new RectInt(values[0], values[1], values[2], values[3]);
+            }
+
             JObject obj = ReadObject(token, propertyPath);
             return new RectInt(
                 ReadIntMember(obj, "x", propertyPath),
