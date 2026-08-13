@@ -161,6 +161,8 @@ unity-cli does not have dedicated script create/delete commands. Use this combin
 
 **Friendly key mapping:** Rigidbody, Collider, Renderer, Light, and Camera values accept common keys like `mass`, `damping`, `isTrigger`, `materials[0]`, `shadowStrength`, and `fieldOfView`, which resolve to Unity `SerializedProperty.propertyPath` values. If a key is not found, use `list-components` then `inspect --with-values`.
 
+**Value 형식:** Vector2/3/4, Vector2Int/Vector3Int, Quaternion, Rect, RectInt, Color는 member object(`{"x":1,"y":2,"z":3}`)와 배열 축약(`[1,2,3]`) 둘 다 받는다. Color 배열은 alpha를 생략하면 1이다. 값이 문자열로 감싸여 들어와도(`"[1,2,3]"`, `"{\"x\":1}"`) 브릿지가 다시 파싱하지만, **정상 JSON 값으로 보내는 것이 원칙**이다 — 문자열 감싸기는 asset path나 enum 이름 같은 진짜 문자열 필드에서는 풀리지 않는다.
+
 ## Convenience Commands — 편의 명령 우선 사용 원칙
 
 아래 작업에는 `scene patch --spec-json` 대신 전용 편의 명령을 우선 사용한다. 호출 횟수와 토큰을 절약할 수 있다.
