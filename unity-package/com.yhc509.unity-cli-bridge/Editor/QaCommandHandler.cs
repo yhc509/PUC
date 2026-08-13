@@ -929,7 +929,7 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 if (completion.Task.IsCompleted)
                 {
-                    EditorApplication.update -= Poll;
+                    EditorTickPump.Remove(Poll);
                     return;
                 }
 
@@ -952,7 +952,7 @@ namespace UnityCliBridge.Bridge.Editor
 
                     if (elapsedMs >= timeoutMs)
                     {
-                        EditorApplication.update -= Poll;
+                        EditorTickPump.Remove(Poll);
                         stopwatch.Stop();
                         completion.TrySetResult(ResponseEnvelope.Failure(
                             requestId,
@@ -974,19 +974,19 @@ namespace UnityCliBridge.Bridge.Editor
 
             void CompleteSuccess(QaWaitUntilPayload payload)
             {
-                EditorApplication.update -= Poll;
+                EditorTickPump.Remove(Poll);
                 stopwatch.Stop();
                 completion.TrySetResult(CreateSuccessResponse(requestId, projectHash, payload, stopwatch.ElapsedMilliseconds));
             }
 
             void CompleteFailure(Exception exception)
             {
-                EditorApplication.update -= Poll;
+                EditorTickPump.Remove(Poll);
                 stopwatch.Stop();
                 completion.TrySetResult(CreateFailureResponse(requestId, projectHash, exception, stopwatch.ElapsedMilliseconds));
             }
 
-            EditorApplication.update += Poll;
+            EditorTickPump.Add(Poll);
             Poll();
         }
 
@@ -1010,7 +1010,7 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 if (completion.Task.IsCompleted)
                 {
-                    EditorApplication.update -= Poll;
+                    EditorTickPump.Remove(Poll);
                     swipe.Abort();
                     return;
                 }
@@ -1021,7 +1021,7 @@ namespace UnityCliBridge.Bridge.Editor
 
                     if (swipe.Advance())
                     {
-                        EditorApplication.update -= Poll;
+                        EditorTickPump.Remove(Poll);
                         stopwatch.Stop();
                         completion.TrySetResult(CreateSuccessResponse(
                             requestId,
@@ -1035,14 +1035,14 @@ namespace UnityCliBridge.Bridge.Editor
                 }
                 catch (Exception exception)
                 {
-                    EditorApplication.update -= Poll;
+                    EditorTickPump.Remove(Poll);
                     swipe.Abort();
                     stopwatch.Stop();
                     completion.TrySetResult(CreateFailureResponse(requestId, projectHash, exception, stopwatch.ElapsedMilliseconds));
                 }
             }
 
-            EditorApplication.update += Poll;
+            EditorTickPump.Add(Poll);
             Poll();
         }
 #endif

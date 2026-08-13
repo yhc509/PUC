@@ -337,7 +337,7 @@ namespace UnityCliBridge.Bridge.Editor
 
             _playModeWatchdog = Poll;
             _playModePendingStartResponder = completion == null ? null : (Action)RespondToPendingStart;
-            EditorApplication.update += _playModeWatchdog;
+            EditorTickPump.Add(_playModeWatchdog);
             Poll();
         }
 
@@ -421,7 +421,7 @@ namespace UnityCliBridge.Bridge.Editor
                 return;
             }
 
-            EditorApplication.update -= _playModeWatchdog;
+            EditorTickPump.Remove(_playModeWatchdog);
             _playModeWatchdog = null;
         }
 
