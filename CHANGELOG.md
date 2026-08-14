@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Long-running commands now finish faster. Test runs, package operations, profiler sampling, recording and `qa run-sequence` all advance one step per Editor update tick, and an idle Editor runs that loop slowly — measured at roughly six ticks per second, whether or not its window is in front. While one of those commands is in flight the bridge now keeps the Editor ticking at full rate and lets it settle back the moment the work finishes, which measured about 1.5× faster end to end (60 ticks: 9.4–10.4 s → 6.0–6.1 s on Unity 6000.3 / macOS). Nothing to turn on, and on an Editor version that does not expose the internal API this relies on, commands simply run at the old speed.
+- Component values may now be written as JSON arrays: `"m_Center": [1, 2, 3]` alongside the existing `{"x": 1, "y": 2, "z": 3}`. Vector2/3/4, Vector2Int/Vector3Int, Quaternion, Rect, RectInt and Color all accept the short form, and a Color array may leave off alpha.
+- Structured values that arrive quoted — `"[1,2,3]"` or `"{\"x\":1,\"y\":2,\"z\":3}"` instead of the JSON value itself — are now parsed instead of rejected. AI agents produce this shape often, and the previous error read as though the value were wrong rather than the quoting. Only strings that open a JSON object or array are re-read, so asset paths, object-reference handles, enum names and plain text are untouched, and a string that fails to parse still produces the original validation error.
+
+### Fixed
+- An Editor whose IPC listener died is no longer advertised as reachable. The listener could stop accepting connections for good — an unexpected socket failure, or a first bind that never succeeded — while the instance kept publishing itself, so the CLI would route to it and fail to connect over and over. The bridge now watches its own listener and re-binds it in place within a few seconds; if it cannot be revived, the instance removes itself from the registry with an Editor console message telling you to restart, instead of staying on the list as a target that never answers.
+- The IPC auth token is now compared in fixed time, so the check cannot leak the expected token through timing to other processes on the same machine. Authentication behavior is otherwise unchanged.
+
 ## [0.5.2] - 2026-08-13
 
 ### Added

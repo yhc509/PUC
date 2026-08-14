@@ -218,7 +218,7 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 if (_phase != CapturePhase.Capturing)
                 {
-                    EditorApplication.update -= Poll;
+                    EditorTickPump.Remove(Poll);
                     return;
                 }
 
@@ -230,7 +230,7 @@ namespace UnityCliBridge.Bridge.Editor
                 bool playExited = !EditorApplication.isPlaying;
                 if (framesHit || durationHit || safetyHit || playExited)
                 {
-                    EditorApplication.update -= Poll;
+                    EditorTickPump.Remove(Poll);
                     try
                     {
                         BeginProcessing();
@@ -243,7 +243,7 @@ namespace UnityCliBridge.Bridge.Editor
                 }
             }
 
-            EditorApplication.update += Poll;
+            EditorTickPump.Add(Poll);
         }
 
         private static void BeginProcessing()
@@ -274,7 +274,7 @@ namespace UnityCliBridge.Bridge.Editor
             _walkMarkers = new Dictionary<string, MarkerAggregate>(512, StringComparer.Ordinal);
             _walkGpuMs = new List<double>();
 
-            EditorApplication.update += WalkStep;
+            EditorTickPump.Add(WalkStep);
         }
 
         private static void WalkStep()
@@ -291,13 +291,13 @@ namespace UnityCliBridge.Bridge.Editor
 
                 if (_walkFrame > _walkLastFrame)
                 {
-                    EditorApplication.update -= WalkStep;
+                    EditorTickPump.Remove(WalkStep);
                     FinishProcessing("Completed");
                 }
             }
             catch (Exception ex)
             {
-                EditorApplication.update -= WalkStep;
+                EditorTickPump.Remove(WalkStep);
                 Debug.LogError("[UCB] profile walk failed: " + ex);
                 try
                 {

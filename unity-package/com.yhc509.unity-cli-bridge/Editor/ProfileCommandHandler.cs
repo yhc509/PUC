@@ -206,7 +206,7 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 if (completion.Task.IsCompleted)
                 {
-                    EditorApplication.update -= Poll;
+                    EditorTickPump.Remove(Poll);
                     DisposeAll();
                     return;
                 }
@@ -216,7 +216,7 @@ namespace UnityCliBridge.Bridge.Editor
                     ticks++;
                     if (stopwatch.Elapsed.TotalSeconds >= ProtocolConstants.ProfileStatsTimeoutSeconds)
                     {
-                        EditorApplication.update -= Poll;
+                        EditorTickPump.Remove(Poll);
                         DisposeAll();
                         completion.TrySetResult(ResponseEnvelope.Failure(
                             requestId,
@@ -234,7 +234,7 @@ namespace UnityCliBridge.Bridge.Editor
                         return;
                     }
 
-                    EditorApplication.update -= Poll;
+                    EditorTickPump.Remove(Poll);
                     var counters = new List<ProfileCounterStat>();
                     var samples = new List<ProfilerRecorderSample>(frames);
                     foreach ((ProfileCounterSpec spec, ProfilerRecorder recorder) in recorders)
@@ -287,13 +287,13 @@ namespace UnityCliBridge.Bridge.Editor
                 }
                 catch (Exception exception)
                 {
-                    EditorApplication.update -= Poll;
+                    EditorTickPump.Remove(Poll);
                     DisposeAll();
                     completion.TrySetResult(CreateFailureResponse(requestId, projectHash, exception, stopwatch.ElapsedMilliseconds));
                 }
             }
 
-            EditorApplication.update += Poll;
+            EditorTickPump.Add(Poll);
         }
 
         private static string GetRequestId(TaskCompletionSource<ResponseEnvelope> completion)

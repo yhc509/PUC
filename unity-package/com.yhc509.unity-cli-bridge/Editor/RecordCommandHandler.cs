@@ -416,7 +416,7 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 if (!HasActiveRecording())
                 {
-                    EditorApplication.update -= Poll;
+                    EditorTickPump.Remove(Poll);
                     return;
                 }
 
@@ -426,7 +426,7 @@ namespace UnityCliBridge.Bridge.Editor
                 bool playExited = !EditorApplication.isPlaying;
                 if (durationHit || safetyHit || playExited)
                 {
-                    EditorApplication.update -= Poll;
+                    EditorTickPump.Remove(Poll);
                     try
                     {
                         FinalizeAndBuildResult("Completed");
@@ -438,7 +438,7 @@ namespace UnityCliBridge.Bridge.Editor
                 }
             }
 
-            EditorApplication.update += Poll;
+            EditorTickPump.Add(Poll);
         }
 
         private static string SidecarPath(string recordingId)

@@ -253,7 +253,7 @@ namespace UnityCliBridge.Bridge.Editor
                 }
 
                 isFinished = true;
-                EditorApplication.update -= Poll;
+                EditorTickPump.Remove(Poll);
                 stopwatch.Stop();
             }
 
@@ -327,7 +327,7 @@ namespace UnityCliBridge.Bridge.Editor
                 }
             }
 
-            EditorApplication.update += Poll;
+            EditorTickPump.Add(Poll);
             Poll();
         }
 
@@ -342,10 +342,10 @@ namespace UnityCliBridge.Bridge.Editor
 
             tracker = new ActiveRequestCompletionTracker(
                 () => request.IsCompleted,
-                () => EditorApplication.update -= BackgroundPoll,
+                () => EditorTickPump.Remove(BackgroundPoll),
                 EndActiveRequest);
 
-            EditorApplication.update += BackgroundPoll;
+            EditorTickPump.Add(BackgroundPoll);
             BackgroundPoll();
         }
 
