@@ -28,10 +28,26 @@ namespace UnityCliBridge.Bridge.Editor
     [InitializeOnLoad]
     internal static class BridgeBootstrap
     {
-        private static readonly BridgeHost _host;
+        private static readonly BridgeHost? _host;
 
         static BridgeBootstrap()
         {
+            if (BridgeDisableSwitch.IsDisabled(
+                    Environment.GetEnvironmentVariable(BridgeDisableSwitch.EnvironmentVariable),
+                    Environment.GetCommandLineArgs()))
+            {
+                // Construct nothing: a disabled bridge must not take the session locks, publish a
+                // registry entry or a token sidecar, or join the editor update loop. One line so a
+                // CI job that set the switch by accident can see why the CLI cannot reach it.
+                UnityEngine.Debug.Log(
+                    "[unity-cli-bridge] Bridge disabled via "
+                    + BridgeDisableSwitch.EnvironmentVariable
+                    + " / "
+                    + BridgeDisableSwitch.CommandLineFlag
+                    + " — CLI commands will not reach this editor.");
+                return;
+            }
+
             _host = new BridgeHost();
             _host.Start();
         }

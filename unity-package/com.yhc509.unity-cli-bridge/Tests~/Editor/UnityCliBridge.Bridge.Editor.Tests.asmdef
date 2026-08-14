@@ -3,6 +3,7 @@
   "rootNamespace": "UnityCliBridge.Bridge.Editor.Tests",
   "references": [
     "UnityCliBridge.Bridge.Editor",
+    "UnityCliBridge.Bridge.Protocol",
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner"
   ],
