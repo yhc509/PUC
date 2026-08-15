@@ -3,19 +3,29 @@ using System;
 using System.IO;
 using UnityCli.Protocol;
 using UnityEditor;
+#if UNITY_CLI_BRIDGE_RECORDER
 using UnityEditor.Recorder;
 using UnityEditor.Recorder.Input;
+#endif
 using UnityEngine;
 
 namespace UnityCliBridge.Bridge.Editor
 {
+    /// <summary>
+    /// Unity Recorder is an optional dependency: the package does not force it on projects that
+    /// never record, so every Recorder API touch sits behind <c>UNITY_CLI_BRIDGE_RECORDER</c>
+    /// (a versionDefine on com.unity.recorder). Without it, `record start` fails with an install
+    /// hint while `record stop`/`record status` keep working against existing sidecars.
+    /// </summary>
     internal sealed class RecordCommandHandler
     {
         private static readonly object _activeLock = new object();
         private static bool _hasActiveRecording;
+#if UNITY_CLI_BRIDGE_RECORDER
         private static RecorderController? _controller;
         private static RecorderControllerSettings? _controllerSettings;
         private static MovieRecorderSettings? _movieSettings;
+#endif
         private static string? _recordingId;
         private static string? _targetPath;
         private static string? _outputBasePath;
@@ -76,7 +86,7 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static string HandleStop()
         {
-            if (!HasActiveRecording() || _controller == null || string.IsNullOrWhiteSpace(_recordingId))
+            if (!HasActiveRecording() || !IsRecorderEngaged || string.IsNullOrWhiteSpace(_recordingId))
             {
                 throw new CommandFailureException(
                     ProtocolConstants.ErrorRecordNotActive,
@@ -134,6 +144,11 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static string StartRecording(RecordStartArgs args)
         {
+#if !UNITY_CLI_BRIDGE_RECORDER
+            throw new CommandFailureException(
+                ProtocolConstants.ErrorRecordFailed,
+                "Unity Recorder 패키지가 설치되어 있지 않습니다. `unity-cli package add --name com.unity.recorder`로 설치한 뒤 다시 실행하세요.");
+#else
             if (!EditorApplication.isPlaying)
             {
                 throw new CommandFailureException(
@@ -223,6 +238,35 @@ namespace UnityCliBridge.Bridge.Editor
                 ClearState();
                 throw;
             }
+#endif
+        }
+
+        /// <summary>True only while a Recorder controller is actually driving a capture.</summary>
+        private static bool IsRecorderEngaged
+        {
+            get
+            {
+#if UNITY_CLI_BRIDGE_RECORDER
+                return _controller != null;
+#else
+                return false;
+#endif
+            }
+        }
+
+        private static void StopActiveRecorder()
+        {
+#if UNITY_CLI_BRIDGE_RECORDER
+            _controller?.StopRecording();
+#endif
+        }
+
+        private static void ReleaseRecorder()
+        {
+#if UNITY_CLI_BRIDGE_RECORDER
+            _controller = null;
+            DestroyRecorderSettings();
+#endif
         }
 
         private static string FinalizeAndBuildResult(string status)
@@ -234,7 +278,7 @@ namespace UnityCliBridge.Bridge.Editor
 
             try
             {
-                _controller?.StopRecording();
+                StopActiveRecorder();
                 finalPath = MoveProducedFileToTargetIfNeeded(producedPath, _targetPath);
 
                 var result = BuildResultPayload(recordingId, status, finalPath);
@@ -375,8 +419,7 @@ namespace UnityCliBridge.Bridge.Editor
                 _hasActiveRecording = false;
             }
 
-            _controller = null;
-            DestroyRecorderSettings();
+            ReleaseRecorder();
             _recordingId = null;
             _targetPath = null;
             _outputBasePath = null;
@@ -475,6 +518,7 @@ namespace UnityCliBridge.Bridge.Editor
             }
         }
 
+#if UNITY_CLI_BRIDGE_RECORDER
         private static void DestroyRecorderSettings()
         {
             if (_movieSettings != null)
@@ -509,5 +553,6 @@ namespace UnityCliBridge.Bridge.Editor
                 }
             }
         }
+#endif
     }
 }

@@ -8,6 +8,6 @@
     "name": "yhc509"
   },
   "dependencies": {
-    "com.unity.recorder": "5.1.6"
+    "com.unity.test-framework": "1.4.5"
   }
 }

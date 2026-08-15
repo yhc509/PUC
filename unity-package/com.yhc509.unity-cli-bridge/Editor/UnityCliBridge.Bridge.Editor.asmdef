@@ -2,6 +2,7 @@
   "name": "UnityCliBridge.Bridge.Editor",
   "rootNamespace": "UnityCliBridge.Bridge.Editor",
   "references": [
+    "UnityCliBridge.Bridge.Protocol",
     "UnityCliBridge.Bridge.Runtime",
     "UnityEditor.TestRunner",
     "Unity.InputSystem",
@@ -23,6 +24,11 @@
       "name": "com.unity.inputsystem",
       "expression": "",
       "define": "ENABLE_INPUT_SYSTEM"
+    },
+    {
+      "name": "com.unity.recorder",
+      "expression": "",
+      "define": "UNITY_CLI_BRIDGE_RECORDER"
     }
   ],
   "noEngineReferences": false

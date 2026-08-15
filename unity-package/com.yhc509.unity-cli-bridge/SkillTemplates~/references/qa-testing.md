@@ -186,7 +186,7 @@ ucli qa run-sequence --spec-json @seq-ok.json --timeout 60000 --project "$P" --j
 ucli qa run-sequence --spec-json @seq-ok.json --record --record-path /tmp/qa-seq.mp4 --timeout 60000 --project "$P" --json
 ```
 
-`--record`를 붙이면 sequence가 실행되는 구간만 Unity Recorder로 mp4 캡처하고, 완료 또는 타임아웃 응답의 `recordingPath`에 최종 경로를 담는다. `--record-path`를 생략하면 `Library/com.yhc509.unity-cli-bridge/recordings/` 아래에 저장된다.
+`--record`를 붙이면 sequence가 실행되는 구간만 Unity Recorder로 mp4 캡처하고(`com.unity.recorder` 필요), 완료 또는 타임아웃 응답의 `recordingPath`에 최종 경로를 담는다. `--record-path`를 생략하면 `Library/com.yhc509.unity-cli-bridge/recordings/` 아래에 저장된다.
 
 `seq-ok.json`:
 
