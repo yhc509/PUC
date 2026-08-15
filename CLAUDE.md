@@ -103,7 +103,9 @@ Tests live in `tests/UnityCli.Cli.Tests/` (xUnit, `.NET`-testable surface only).
   1. `dotnet run --project cli/UnityCli.DocGen -- --write` — auto-updates `docs/cli-reference.md`
   2. `README.md` — update examples for new/changed commands in both Scene and Prefab sections
   3. `CLAUDE.md` — update Architecture tree if new files are added, update Key Conventions if behavior changes
-  4. `tools/skills/unity-cli-operator/SKILL.md` — update command workflows and examples for AI agent usage
+  4. **The AI-agent skill ships in two copies — update both.** `tools/skills/unity-cli-operator/` is the maintainer copy; `unity-package/com.yhc509.unity-cli-bridge/SkillTemplates~/` is what `SkillInstaller` actually installs into a user's project, and nothing in CI compares them.
+     - `references/*.md` must stay **byte-identical** between the two (`diff -rq` on the two `references/` folders reports nothing).
+     - `SKILL.md` is a deliberate fork: the shipped copy drops maintainer-only content (`## 진입 규칙`). Sync it *where the content applies to end users* — do not make the two identical.
   5. `dotnet run --project cli/UnityCli.DocGen -- --check` — verify cli-reference is up to date
 - **Release checklist:** Cutting a new version:
   1. `CHANGELOG.md` — move `[Unreleased]` entries to new version section with date, then mirror the file to `unity-package/com.yhc509.unity-cli-bridge/CHANGELOG.md` (the UPM package ships its own copy; keep the two identical so Package Manager shows the current changelog)

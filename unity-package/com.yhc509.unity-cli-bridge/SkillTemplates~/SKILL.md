@@ -89,6 +89,10 @@ unity-cli does not have dedicated script create/delete commands. Use this combin
 - `unity-cli asset delete --path Assets/Scripts/MyScript.cs --force`
   (handles .meta cleanup and refresh automatically)
 
+### Test Runner Workflow
+
+코드 수정 뒤 테스트 러너 기본 호출, `--failures-only`/`--wait`/`--no-domain-reload` 사용 기준, `refresh` 후 재실행 루프는 [references/command-flows.md](references/command-flows.md)의 `테스트 러너` 절을 따른다.
+
 ### Profile Workflow
 
 성능 진단은 다음 루프를 따른다:
