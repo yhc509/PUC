@@ -51,7 +51,7 @@ Add the following to your `Packages/manifest.json`:
 
 The bridge starts automatically when the Editor opens. No configuration needed.
 
-`#main` always tracks the latest release. For a build you need to reproduce later, pin a release tag instead — `...#v0.5.2` — and commit `Packages/packages-lock.json`.
+`#main` always tracks the latest release. For a build you need to reproduce later, pin a release tag instead — `...#v0.5.3` — and commit `Packages/packages-lock.json`.
 
 Unity Recorder is optional and is not installed for you. Add `com.unity.recorder` if you want the `record` commands or `qa run-sequence --record`; without it those commands fail with an install hint and everything else works normally.
 
