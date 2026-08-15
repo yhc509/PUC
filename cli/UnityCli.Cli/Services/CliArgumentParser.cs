@@ -613,7 +613,9 @@ public static partial class CliArgumentParser
                     parsed.ScreenshotQuality = RequireScreenshotQuality(RequireValue(tokens, "--quality"));
                     break;
                 case CommandKind.Screenshot when token == "--max-width":
-                    parsed.ScreenshotMaxWidth = RequireInt(RequireValue(tokens, "--max-width"), "--max-width");
+                    // 0 is allowed and means "no cap" — the way to opt out of the default downscale
+                    // without having to state an explicit --width/--height.
+                    parsed.ScreenshotMaxWidth = RequireInt(RequireValue(tokens, "--max-width"), "--max-width", minimumValue: 0);
                     break;
                 case CommandKind.ExecuteCode when token == "--code":
                     parsed.ExecuteCodeSnippet = RequireValue(tokens, "--code");

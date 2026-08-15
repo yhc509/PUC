@@ -156,8 +156,9 @@ unity-cli play / pause / stop              # Play Mode control
 unity-cli compile                          # Trigger recompile
 unity-cli compile --wait                   # Wait until compile/import finishes and bridge is reachable
 unity-cli refresh --wait                   # Refresh assets and wait for Editor readiness
-unity-cli screenshot --path /tmp/shot.png  # Game View capture (default), or --view scene
-unity-cli screenshot --format jpg --quality 70 --max-width 1024 --path /tmp/shot.jpg
+unity-cli screenshot --path /tmp/shot.jpg  # Game View capture (default), or --view scene
+                                           # Defaults: JPEG q75, downscaled to 1024px wide
+unity-cli screenshot --format png --max-width 0 --path /tmp/shot.png   # Lossless, full resolution
 unity-cli record start --duration 5 --wait --path /tmp/play.mp4
 unity-cli record start                     # Manual recording; stop with record stop
 unity-cli record status
@@ -289,8 +290,8 @@ A typical AI repair loop is: make a focused code change, `unity-cli refresh`, ru
 
 ```bash
 unity-cli qa click --qa-id StartButton
-unity-cli screenshot --view game --path /tmp/qa-reference.png
-unity-cli screenshot --view game --format jpg --quality 70 --max-width 1024 --path /tmp/qa-reference.jpg
+unity-cli screenshot --view game --path /tmp/qa-reference.jpg
+unity-cli screenshot --view game --format png --max-width 0 --path /tmp/qa-reference.png
 unity-cli qa ui-dump --json
 unity-cli qa ui-dump --text Start --interactable-only --limit 20 --omit-rect --json
 unity-cli qa world-dump --json

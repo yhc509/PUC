@@ -383,7 +383,7 @@ public sealed class ParsedCommand
                 height = ScreenshotHeight ?? 0,
                 format = ScreenshotFormat,
                 quality = ScreenshotQuality ?? 0,
-                maxWidth = ScreenshotMaxWidth ?? 0,
+                maxWidth = ResolveScreenshotMaxWidth(),
             },
             CommandKind.PackageList => new PackageListArgs
             {
@@ -747,6 +747,23 @@ public sealed class ParsedCommand
         return string.IsNullOrWhiteSpace(ScreenshotView)
             ? DefaultScreenshotView
             : ScreenshotView;
+    }
+
+    /// <summary>
+    /// Maps <c>--max-width</c> onto the wire, where 0 means "unspecified, apply the default cap".
+    /// A caller who passed <c>--max-width 0</c> is asking for the opposite — no cap at all — so it
+    /// travels as the uncapped sentinel rather than as a value the bridge would read as silence.
+    /// </summary>
+    private int ResolveScreenshotMaxWidth()
+    {
+        if (ScreenshotMaxWidth is null)
+        {
+            return 0;
+        }
+
+        return ScreenshotMaxWidth.Value > 0
+            ? ScreenshotMaxWidth.Value
+            : ScreenshotDefaults.MaxWidthUncapped;
     }
 
     private string? BuildAssetCreateOptionsJson()
