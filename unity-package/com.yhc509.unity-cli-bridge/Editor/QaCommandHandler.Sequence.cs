@@ -65,7 +65,7 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 if (completion.Task.IsCompleted)
                 {
-                    EditorApplication.update -= Poll;
+                    EditorTickPump.Remove(Poll);
                     AbortActiveSwipe();
                     StopSequenceRecordingIfNeeded();
                     StopSequenceProfileIfNeeded();
@@ -152,7 +152,7 @@ namespace UnityCliBridge.Bridge.Editor
 
             void CompleteSuccess()
             {
-                EditorApplication.update -= Poll;
+                EditorTickPump.Remove(Poll);
                 AbortActiveSwipe();
                 stopwatch.Stop();
                 string finalRecordingPath = StopSequenceRecordingIfNeeded();
@@ -175,7 +175,7 @@ namespace UnityCliBridge.Bridge.Editor
                 List<QaSequenceUnmet> unmet,
                 List<QaSequenceSnapshotEntry> snapshot)
             {
-                EditorApplication.update -= Poll;
+                EditorTickPump.Remove(Poll);
                 AbortActiveSwipe();
                 stopwatch.Stop();
                 string finalRecordingPath = StopSequenceRecordingIfNeeded();
@@ -201,7 +201,7 @@ namespace UnityCliBridge.Bridge.Editor
 
             void CompleteFailure(Exception exception)
             {
-                EditorApplication.update -= Poll;
+                EditorTickPump.Remove(Poll);
                 AbortActiveSwipe();
                 stopwatch.Stop();
                 StopSequenceRecordingIfNeeded();
@@ -274,7 +274,7 @@ namespace UnityCliBridge.Bridge.Editor
                 }
             }
 
-            EditorApplication.update += Poll;
+            EditorTickPump.Add(Poll);
             Poll();
         }
 

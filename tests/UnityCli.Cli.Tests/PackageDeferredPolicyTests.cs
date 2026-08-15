@@ -77,7 +77,7 @@ public sealed class PackageDeferredPolicyTests
 
         Assert.DoesNotContain("Thread.Sleep", packageHandler);
         Assert.DoesNotContain("WaitForRequest", packageHandler);
-        Assert.Contains("EditorApplication.update += Poll;", packageHandler);
+        Assert.Contains("EditorTickPump.Add(Poll);", packageHandler);
         Assert.Contains("ProtocolConstants.ErrorPackageTimeout", packageHandler);
     }
 
@@ -124,7 +124,7 @@ public sealed class PackageDeferredPolicyTests
         Assert.Contains("private static void StartBackgroundActiveRequestTracker(Request request)", packageHandler);
         Assert.Contains("new ActiveRequestCompletionTracker(", packageHandler);
         Assert.Contains("() => request.IsCompleted", packageHandler);
-        Assert.Contains("() => EditorApplication.update -= BackgroundPoll", packageHandler);
+        Assert.Contains("() => EditorTickPump.Remove(BackgroundPoll)", packageHandler);
     }
 
     private static string ReadPackageHandler()

@@ -78,7 +78,7 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 if (completion.Task.IsCompleted)
                 {
-                    EditorApplication.update -= Poll;
+                    EditorTickPump.Remove(Poll);
                     DisposeAll();
                     return;
                 }
@@ -88,7 +88,7 @@ namespace UnityCliBridge.Bridge.Editor
                     ticks++;
                     if (stopwatch.Elapsed.TotalSeconds >= ProtocolConstants.ProfileStatsTimeoutSeconds)
                     {
-                        EditorApplication.update -= Poll;
+                        EditorTickPump.Remove(Poll);
                         DisposeAll();
                         completion.TrySetResult(ResponseEnvelope.Failure(
                             requestId,
@@ -106,7 +106,7 @@ namespace UnityCliBridge.Bridge.Editor
                         return;
                     }
 
-                    EditorApplication.update -= Poll;
+                    EditorTickPump.Remove(Poll);
                     var counters = new List<ProfileCounterStat>();
                     var samples = new List<ProfilerRecorderSample>(frames);
                     foreach ((ProfileCounterSpec spec, ProfilerRecorder recorder) in recorders)
@@ -156,13 +156,13 @@ namespace UnityCliBridge.Bridge.Editor
                 }
                 catch (Exception exception)
                 {
-                    EditorApplication.update -= Poll;
+                    EditorTickPump.Remove(Poll);
                     DisposeAll();
                     completion.TrySetResult(CreateFailureResponse(requestId, projectHash, exception, stopwatch.ElapsedMilliseconds));
                 }
             }
 
-            EditorApplication.update += Poll;
+            EditorTickPump.Add(Poll);
         }
 
         private static void WriteMemorySidecar(ProfileMemoryPayload report)
@@ -262,7 +262,7 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 if (finished)
                 {
-                    EditorApplication.update -= Watchdog;
+                    EditorTickPump.Remove(Watchdog);
                     return;
                 }
 
@@ -271,7 +271,7 @@ namespace UnityCliBridge.Bridge.Editor
                     return;
                 }
 
-                EditorApplication.update -= Watchdog;
+                EditorTickPump.Remove(Watchdog);
                 Finish(() => ResponseEnvelope.Failure(
                     requestId,
                     projectHash,
@@ -282,7 +282,7 @@ namespace UnityCliBridge.Bridge.Editor
                     ProtocolConstants.TransportLive));
             }
 
-            EditorApplication.update += Watchdog;
+            EditorTickPump.Add(Watchdog);
 
             try
             {
@@ -291,7 +291,7 @@ namespace UnityCliBridge.Bridge.Editor
                     snapshotPath,
                     (resultPath, success) =>
                     {
-                        EditorApplication.update -= Watchdog;
+                        EditorTickPump.Remove(Watchdog);
                         if (!success)
                         {
                             Finish(() => ResponseEnvelope.Failure(
@@ -330,7 +330,7 @@ namespace UnityCliBridge.Bridge.Editor
             }
             catch (Exception exception)
             {
-                EditorApplication.update -= Watchdog;
+                EditorTickPump.Remove(Watchdog);
                 Finish(() => CreateFailureResponse(requestId, projectHash, exception, stopwatch.ElapsedMilliseconds));
             }
         }

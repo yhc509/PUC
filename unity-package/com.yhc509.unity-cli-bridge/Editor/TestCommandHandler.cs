@@ -169,7 +169,7 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 if (pollRegistered)
                 {
-                    EditorApplication.update -= Poll;
+                    EditorTickPump.Remove(Poll);
                     pollRegistered = false;
                 }
 
@@ -279,7 +279,7 @@ namespace UnityCliBridge.Bridge.Editor
 
             try
             {
-                EditorApplication.update += Poll;
+                EditorTickPump.Add(Poll);
                 pollRegistered = true;
 
                 if (includeEditMode)
@@ -365,7 +365,7 @@ namespace UnityCliBridge.Bridge.Editor
             {
                 if (pollRegistered)
                 {
-                    EditorApplication.update -= Poll;
+                    EditorTickPump.Remove(Poll);
                     pollRegistered = false;
                 }
 
@@ -418,7 +418,7 @@ namespace UnityCliBridge.Bridge.Editor
             try
             {
                 api.RetrieveTestList(mode, adaptor => root = adaptor);
-                EditorApplication.update += Poll;
+                EditorTickPump.Add(Poll);
                 pollRegistered = true;
                 Poll();
             }
@@ -1020,7 +1020,7 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             _editModeRestoreWatchdog = Poll;
-            EditorApplication.update += _editModeRestoreWatchdog;
+            EditorTickPump.Add(_editModeRestoreWatchdog);
             Poll();
         }
 
@@ -1031,7 +1031,7 @@ namespace UnityCliBridge.Bridge.Editor
                 return;
             }
 
-            EditorApplication.update -= _editModeRestoreWatchdog;
+            EditorTickPump.Remove(_editModeRestoreWatchdog);
             _editModeRestoreWatchdog = null;
         }
 

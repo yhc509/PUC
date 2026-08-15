@@ -192,8 +192,8 @@ namespace UnityCli.Protocol
                 notes: new[] { "Use --list to inspect registered menu item paths before executing one." }),
             new CliCommandDescriptor(
                 "screenshot",
-                "screenshot [--view game|scene (default: game) | --camera <name>] [--path <output.png|output.jpg>] [--width N] [--height N] [--format png|jpg|jpeg] [--quality 1-100] [--max-width N]",
-                "Captures a screenshot from the Game View, Scene View, or a named camera. Defaults to Game View; encoding defaults to PNG. Use --format jpg with --quality to reduce file size, and --max-width to downscale proportionally when --width/--height are not specified. The response includes image size, actual saved format, and screen-space metadata (`screenWidth`, `screenHeight`, `imageOrigin`, `coordinateOrigin`) for QA coordinate alignment. In Play Mode, --view game can downscale the native Game View capture but does not upscale it.",
+                "screenshot [--view game|scene (default: game) | --camera <name>] [--path <output.jpg|output.png>] [--width N] [--height N] [--format png|jpg|jpeg] [--quality 1-100] [--max-width N|0]",
+                "Captures a screenshot from the Game View, Scene View, or a named camera. Defaults to Game View, JPEG at quality 75, and a 1024px width cap — agent-friendly defaults that cut image tokens by roughly 72% at 1080p. Override with --format png for lossless, --quality for the JPEG setting, --max-width N for a different cap, or --max-width 0 for no cap. The cap only applies when neither --width nor --height is given, and --path with a .png extension selects PNG when --format is omitted. The response includes image size, actual saved format, and screen-space metadata (`screenWidth`, `screenHeight`, `imageOrigin`, `coordinateOrigin`) for QA coordinate alignment; qa tap/ui-dump scale from the last captured size, so downscaled shots keep their coordinates usable. In Play Mode, --view game can downscale the native Game View capture but does not upscale it.",
                 CliCommandGroup.EditorControl,
                 ProtocolConstants.CommandScreenshot,
                 canUseLocal: false,

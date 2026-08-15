@@ -66,8 +66,8 @@ unity-cli editor stop --project <path>          # graceful 종료 (미저장 변
 - scene path는 `/Root[0]/Child[0]` 형식으로 쓰고 `/`는 virtual scene root로 본다.
 - root prefab 이름은 Unity 저장 규칙 때문에 파일 이름으로 정규화된다고 가정한다.
 - `screenshot`은 `--view` 생략 시 game이 기본이다. Scene View가 필요하면 `--view scene`을 명시한다.
-- **에이전트가 읽을 스크린샷은 `--format jpg --quality 75 --max-width 1024`를 기본으로 붙인다.** 기본 PNG full-resolution은 이미지 토큰을 크게 소비한다(1080p 기준 ~72% 절약). lossless가 필요할 때만 `--format png`.
-- Play Mode 영상을 남겨야 하면 `record start --duration N --wait --path /tmp/out.mp4`를 쓴다. 수동 녹화는 `record start` 후 `record status`, `record stop` 순서로 종료한다. `record start`는 Play Mode 전용이며 Unity Recorder dependency가 필요하다.
+- **스크린샷은 옵션 없이 그대로 찍으면 된다.** 기본값이 이미 JPEG quality 75 + 1024px 가로 축소라 에이전트가 읽기 좋은 크기로 나온다(1080p PNG 대비 이미지 토큰 ~72% 절약). lossless 원본이 필요할 때만 `--format png --max-width 0`을 붙인다. `--path`가 `.png`로 끝나면 `--format` 없이도 PNG로 저장된다.
+- Play Mode 영상을 남겨야 하면 `record start --duration N --wait --path /tmp/out.mp4`를 쓴다. 수동 녹화는 `record start` 후 `record status`, `record stop` 순서로 종료한다. `record start`는 Play Mode 전용이고 `com.unity.recorder`가 설치된 프로젝트에서만 동작한다 — 미설치면 `RECORD_FAILED`와 함께 `unity-cli package add --name com.unity.recorder` 안내가 돌아오므로 그대로 설치한 뒤 재시도한다.
 - `qa tap --x --y`에는 `screenshot`에서 확인한 이미지 좌표를 그대로 넣는다. 응답의 `imageOrigin`은 `top-left`, `coordinateOrigin`은 `bottom-left`다.
 - 별도 Y-flip이나 해상도 스케일 변환은 하지 않는다. Bridge가 마지막 `screenshot` 크기 또는 명시한 `--screenshot-width`/`--screenshot-height`를 기준으로 내부 처리한다.
 - 좌표를 추측하지 말고 탭 대상을 먼저 열거한다: uGUI 버튼은 `qa ui-dump --limit 30 --interactable-only --omit-rect --output compact`, 비-UI 월드 오브젝트(전투 그리드 유닛 등)는 `qa world-dump --limit 30 --output compact`. 찾을 텍스트/라벨을 알면 `--text <substring>`으로 서버사이드 필터링한다. 둘 다 `centerX`/`centerY` 이미지 좌표를 그대로 반환하며, 대형 화면 dump에서는 envelope 제거 효과가 특히 크다.
@@ -88,6 +88,10 @@ unity-cli does not have dedicated script create/delete commands. Use this combin
 **Delete script:**
 - `unity-cli asset delete --path Assets/Scripts/MyScript.cs --force`
   (handles .meta cleanup and refresh automatically)
+
+### Test Runner Workflow
+
+코드 수정 뒤 테스트 러너 기본 호출, `--failures-only`/`--wait`/`--no-domain-reload` 사용 기준, `refresh` 후 재실행 루프는 [references/command-flows.md](references/command-flows.md)의 `테스트 러너` 절을 따른다.
 
 ### Profile Workflow
 
@@ -137,6 +141,8 @@ unity-cli does not have dedicated script create/delete commands. Use this combin
 - `unity-cli prefab remove-component --path Assets/Prefabs/P.prefab --node "/Root[0]" --type BoxCollider --force`
 
 **Friendly key mapping:** Rigidbody, Collider, Renderer, Light, and Camera values accept common keys like `mass`, `damping`, `isTrigger`, `materials[0]`, `shadowStrength`, and `fieldOfView`, which resolve to Unity `SerializedProperty.propertyPath` values. If a key is not found, use `list-components` then `inspect --with-values`.
+
+**Value 형식:** Vector2/3/4, Vector2Int/Vector3Int, Quaternion, Rect, RectInt, Color는 member object(`{"x":1,"y":2,"z":3}`)와 배열 축약(`[1,2,3]`) 둘 다 받는다. Color 배열은 alpha를 생략하면 1이다. 값이 문자열로 감싸여 들어와도(`"[1,2,3]"`, `"{\"x\":1}"`) 브릿지가 다시 파싱하지만, **정상 JSON 값으로 보내는 것이 원칙**이다 — 문자열 감싸기는 asset path나 enum 이름 같은 진짜 문자열 필드에서는 풀리지 않는다.
 
 ## Convenience Commands — 편의 명령 우선 사용 원칙
 

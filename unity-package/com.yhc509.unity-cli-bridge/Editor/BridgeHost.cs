@@ -28,10 +28,26 @@ namespace UnityCliBridge.Bridge.Editor
     [InitializeOnLoad]
     internal static class BridgeBootstrap
     {
-        private static readonly BridgeHost _host;
+        private static readonly BridgeHost? _host;
 
         static BridgeBootstrap()
         {
+            if (BridgeDisableSwitch.IsDisabled(
+                    Environment.GetEnvironmentVariable(BridgeDisableSwitch.EnvironmentVariable),
+                    Environment.GetCommandLineArgs()))
+            {
+                // Construct nothing: a disabled bridge must not take the session locks, publish a
+                // registry entry or a token sidecar, or join the editor update loop. One line so a
+                // CI job that set the switch by accident can see why the CLI cannot reach it.
+                UnityEngine.Debug.Log(
+                    "[unity-cli-bridge] Bridge disabled via "
+                    + BridgeDisableSwitch.EnvironmentVariable
+                    + " / "
+                    + BridgeDisableSwitch.CommandLineFlag
+                    + " — CLI commands will not reach this editor.");
+                return;
+            }
+
             _host = new BridgeHost();
             _host.Start();
         }
@@ -71,11 +87,17 @@ namespace UnityCliBridge.Bridge.Editor
         private bool _isDisposed;
         private bool _isInstanceRegistered;
         private volatile bool _isListenerReady;
+        private volatile bool _isListenerStarting;
+        private bool _isListenerAbandoned;
+        private ListenerWatchdogPolicy? _listenerWatchdog;
+        private string _projectHashBeforeRestart = string.Empty;
         private string _projectHash = string.Empty;
         private string _pipeName = string.Empty;
         private const string AuthTokenSessionStateKey = "UnityCliBridge.AuthToken";
         private const int AuthTokenByteLength = 32;
         private const int ListenerAcquireMaxAttempts = 16;
+        private const double ListenerWatchdogIntervalSeconds = 5.0;
+        private const int ListenerWatchdogMaxRecoveryAttempts = 5;
         private const int NamedPipeMaxServerInstances = 2;
         private const int NamedPipeProbeTimeoutMilliseconds = 50;
 
@@ -115,6 +137,10 @@ namespace UnityCliBridge.Bridge.Editor
             _isStarted = true;
             ConsoleLogBuffer.Start();
             _lastHeartbeatTime = EditorApplication.timeSinceStartup;
+            _listenerWatchdog = new ListenerWatchdogPolicy(
+                ListenerWatchdogIntervalSeconds,
+                ListenerWatchdogMaxRecoveryAttempts,
+                EditorApplication.timeSinceStartup);
             StartListener();
 
             EditorApplication.update += OnEditorUpdate;
@@ -191,6 +217,8 @@ namespace UnityCliBridge.Bridge.Editor
 
         private void StartListener()
         {
+            // Read by the watchdog: a bind in flight must never be mistaken for a dead listener.
+            _isListenerStarting = true;
 #if !UNITY_5_3_OR_NEWER || UNITY_6000_0_OR_NEWER
             // Unity 6+ / non-Unity: use raw Unix domain sockets for non-Windows.
             if (Path.DirectorySeparatorChar != '\\')
@@ -405,14 +433,18 @@ namespace UnityCliBridge.Bridge.Editor
             }
             catch (OperationCanceledException)
             {
+                _isListenerStarting = false;
                 return;
             }
             catch (Exception exception)
             {
+                // Leaves the listener visibly dead; the watchdog retries the acquire.
+                _isListenerStarting = false;
                 ReportBackgroundException("named pipe listener", exception);
                 return;
             }
 
+            _isListenerStarting = false;
             NamedPipeServerStream? server = initialServer;
             try
             {
@@ -445,6 +477,7 @@ namespace UnityCliBridge.Bridge.Editor
             }
             finally
             {
+                _isListenerReady = false;
                 server?.Dispose();
                 DisposeNamedPipeOwnershipLock();
             }
@@ -538,16 +571,20 @@ namespace UnityCliBridge.Bridge.Editor
             }
             catch (OperationCanceledException)
             {
+                _isListenerStarting = false;
                 return;
             }
             catch (Exception exception)
             {
+                // Leaves the listener visibly dead; the watchdog retries the acquire.
+                _isListenerStarting = false;
                 ReportBackgroundException("unix socket listener", exception);
                 return;
             }
 
             _unixListener = listener;
             _isListenerReady = true;
+            _isListenerStarting = false;
 
             try
             {
@@ -566,6 +603,10 @@ namespace UnityCliBridge.Bridge.Editor
             }
             finally
             {
+                // The accept loop is gone: an unexpected AcceptAsync failure ends it for good, so
+                // the listener must stop reading as ready or the registry heartbeat would keep
+                // advertising an instance nothing can connect to. The watchdog rebinds from here.
+                _isListenerReady = false;
                 if (ReferenceEquals(_unixListener, listener))
                 {
                     _unixListener = null;
@@ -729,8 +770,9 @@ namespace UnityCliBridge.Bridge.Editor
                     return;
                 }
 
-                if (string.IsNullOrEmpty(command.token)
-                    || !string.Equals(command.token, _authToken, StringComparison.Ordinal))
+                // Fixed-time compare: this is the bridge's only authentication gate, and an
+                // early-exit comparison is observable to other local processes.
+                if (!AuthTokenComparison.FixedTimeEquals(_authToken, command.token))
                 {
                     var error = ResponseEnvelope.Failure(
                         command.requestId,
@@ -838,7 +880,13 @@ namespace UnityCliBridge.Bridge.Editor
                 return;
             }
 
-            if (!_isInstanceRegistered && _isListenerReady)
+            RunListenerWatchdog();
+
+            if (_isListenerAbandoned)
+            {
+                // Nothing can connect any more; heartbeating would only re-advertise a zombie.
+            }
+            else if (!_isInstanceRegistered && _isListenerReady)
             {
                 WriteTokenSidecarSafely();
                 RegisterInstance();
@@ -886,6 +934,85 @@ namespace UnityCliBridge.Bridge.Editor
 
                 ResponseEnvelope response = HandleCommand(pending.Command);
                 pending.Completion.TrySetResult(response);
+            }
+        }
+
+        // The accept loops have no retry of their own: the Unix loop ends permanently on any
+        // unexpected AcceptAsync failure, and both loops give up if the very first listener
+        // acquire fails. Without this the registry would keep advertising a live instance the
+        // CLI cannot connect to.
+        private void RunListenerWatchdog()
+        {
+            ListenerWatchdogPolicy? watchdog = _listenerWatchdog;
+            if (watchdog == null)
+            {
+                return;
+            }
+
+            ListenerWatchdogDecision decision = watchdog.Evaluate(
+                _isListenerReady,
+                _isListenerStarting,
+                EditorApplication.isCompiling || EditorApplication.isUpdating,
+                EditorApplication.timeSinceStartup);
+
+            switch (decision)
+            {
+                case ListenerWatchdogDecision.Restart:
+                    _projectHashBeforeRestart = _projectHash;
+                    UnityEngine.Debug.LogWarning(string.Format(
+                        "Unity CLI bridge listener가 죽어 재바인딩을 시도합니다 ({0}/{1}).",
+                        watchdog.RecoveryAttempts,
+                        ListenerWatchdogMaxRecoveryAttempts));
+                    StartListener();
+                    break;
+                case ListenerWatchdogDecision.Recovered:
+                    OnListenerRecovered();
+                    break;
+                case ListenerWatchdogDecision.Abandon:
+                    AbandonListener();
+                    break;
+            }
+        }
+
+        private void OnListenerRecovered()
+        {
+            // A rebind can settle on a different hash if the old socket name is still taken; the
+            // sidecar is keyed by hash, so the old one would linger with a live token in it.
+            if (!string.IsNullOrEmpty(_projectHashBeforeRestart)
+                && !string.Equals(_projectHashBeforeRestart, _projectHash, StringComparison.Ordinal))
+            {
+                try
+                {
+                    InstanceRegistryFile.DeleteTokenSidecar(_registryFilePath, _projectHashBeforeRestart);
+                }
+                catch (Exception exception)
+                {
+                    UnityEngine.Debug.LogWarning(string.Format(
+                        "Unity CLI bridge 이전 auth token 정리 실패: {0}",
+                        exception.Message));
+                }
+            }
+
+            _projectHashBeforeRestart = string.Empty;
+            WriteTokenSidecarSafely();
+            RegisterInstance();
+            _isInstanceRegistered = true;
+            _lastHeartbeatTime = EditorApplication.timeSinceStartup;
+            UnityEngine.Debug.Log("Unity CLI bridge listener 재바인딩 완료: " + _pipeName);
+        }
+
+        private void AbandonListener()
+        {
+            _isListenerAbandoned = true;
+            UnityEngine.Debug.LogError(string.Format(
+                "Unity CLI bridge listener를 {0}회 재바인딩했지만 복구하지 못했습니다. " +
+                "연결되지 않는 인스턴스를 광고하지 않도록 레지스트리에서 제거합니다. Unity Editor를 재시작하세요.",
+                ListenerWatchdogMaxRecoveryAttempts));
+
+            if (_isInstanceRegistered)
+            {
+                UnregisterInstance();
+                _isInstanceRegistered = false;
             }
         }
 

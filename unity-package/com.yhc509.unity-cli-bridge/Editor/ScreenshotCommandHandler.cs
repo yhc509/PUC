@@ -10,9 +10,7 @@ namespace UnityCliBridge.Bridge.Editor
 {
     internal sealed class ScreenshotCommandHandler
     {
-        private const string FormatPng = "png";
-        private const string FormatJpg = "jpg";
-        private const int DefaultJpegQuality = 75;
+        private const string FormatJpg = ScreenshotDefaults.FormatJpg;
 
         internal static int LastCapturedWidth { get; private set; }
         internal static int LastCapturedHeight { get; private set; }
@@ -57,12 +55,16 @@ namespace UnityCliBridge.Bridge.Editor
             string outputPath;
             int capturedWidth;
             int capturedHeight;
-            string format = NormalizeScreenshotFormat(args.format);
+            string format = NormalizeScreenshotFormat(args.format, args.outputPath);
             int jpegQuality = NormalizeJpegQuality(args.quality);
+
+            // Resolved once here so every capture path shares one answer; the explicit-size gate
+            // that used to live at each call site is folded into ResolveMaxWidth.
+            int maxWidth = ScreenshotDefaults.ResolveMaxWidth(args.maxWidth, args.width, args.height);
 
             if (!string.IsNullOrWhiteSpace(args.camera))
             {
-                var result = CaptureFromCamera(args.camera!, args.width, args.height, args.maxWidth, format, jpegQuality);
+                var result = CaptureFromCamera(args.camera!, args.width, args.height, maxWidth, format, jpegQuality);
                 outputPath = result.path;
                 capturedWidth = result.width;
                 capturedHeight = result.height;
@@ -70,7 +72,7 @@ namespace UnityCliBridge.Bridge.Editor
             else
             {
                 string view = string.IsNullOrWhiteSpace(args.view) ? "game" : args.view!;
-                var result = CaptureView(view, args.width, args.height, args.maxWidth, format, jpegQuality);
+                var result = CaptureView(view, args.width, args.height, maxWidth, format, jpegQuality);
                 outputPath = result.path;
                 capturedWidth = result.width;
                 capturedHeight = result.height;
@@ -145,8 +147,7 @@ namespace UnityCliBridge.Bridge.Editor
                     throw new CommandFailureException("SCREENSHOT_FAILED", "Scene View 캡처를 위한 카메라가 없습니다.", false, null);
                 }
 
-                int effectiveMaxWidth = ShouldApplyMaxWidth(requestedWidth, requestedHeight) ? maxWidth : 0;
-                var result = CaptureCameraToPath(camera, width, height, effectiveMaxWidth, format, jpegQuality, tempPath);
+                var result = CaptureCameraToPath(camera, width, height, maxWidth, format, jpegQuality, tempPath);
                 return (tempPath, result.width, result.height);
             }
 
@@ -181,8 +182,7 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             string tempPath = CreateTempScreenshotPath(format);
-            int effectiveMaxWidth = ShouldApplyMaxWidth(requestedWidth, requestedHeight) ? maxWidth : 0;
-            var result = CaptureCameraToPath(camera, width, height, effectiveMaxWidth, format, jpegQuality, tempPath);
+            var result = CaptureCameraToPath(camera, width, height, maxWidth, format, jpegQuality, tempPath);
             return (tempPath, result.width, result.height);
         }
 
@@ -265,7 +265,7 @@ namespace UnityCliBridge.Bridge.Editor
                 return (capturedTexture.width, capturedTexture.height, false);
             }
 
-            if (ShouldApplyMaxWidth(requestedWidth, requestedHeight) && maxWidth > 0 && capturedTexture.width > maxWidth)
+            if (maxWidth > 0 && capturedTexture.width > maxWidth)
             {
                 return (maxWidth, CalculateAspectFitHeight(capturedTexture.width, capturedTexture.height, maxWidth), true);
             }
@@ -398,8 +398,7 @@ namespace UnityCliBridge.Bridge.Editor
                 height = gameView.height;
             }
 
-            int effectiveMaxWidth = ShouldApplyMaxWidth(requestedWidth, requestedHeight) ? maxWidth : 0;
-            var result = CaptureCameraToPath(camera, width, height, effectiveMaxWidth, format, jpegQuality, path);
+            var result = CaptureCameraToPath(camera, width, height, maxWidth, format, jpegQuality, path);
             return (path, result.width, result.height);
         }
 
@@ -500,36 +499,25 @@ namespace UnityCliBridge.Bridge.Editor
             return Mathf.Max(1, Mathf.RoundToInt(height * maxWidth / (float)width));
         }
 
-        private static bool ShouldApplyMaxWidth(int requestedWidth, int requestedHeight)
+        private static string NormalizeScreenshotFormat(string? format, string? outputPath)
         {
-            return requestedWidth <= 0 && requestedHeight <= 0;
-        }
-
-        private static string NormalizeScreenshotFormat(string? format)
-        {
-            if (string.IsNullOrWhiteSpace(format))
+            if (ScreenshotDefaults.TryResolveFormat(format, outputPath, out string resolved))
             {
-                return FormatPng;
+                return resolved;
             }
 
-            return format!.Trim().ToLowerInvariant() switch
-            {
-                FormatPng => FormatPng,
-                FormatJpg => FormatJpg,
-                "jpeg" => FormatJpg,
-                _ => throw new CommandFailureException(
-                    "SCREENSHOT_INVALID_FORMAT",
-                    "screenshot format은 png, jpg, jpeg 중 하나여야 합니다.",
-                    false,
-                    null),
-            };
+            throw new CommandFailureException(
+                "SCREENSHOT_INVALID_FORMAT",
+                "screenshot format은 png, jpg, jpeg 중 하나여야 합니다.",
+                false,
+                null);
         }
 
         private static int NormalizeJpegQuality(int quality)
         {
             if (quality == 0)
             {
-                return DefaultJpegQuality;
+                return ScreenshotDefaults.DefaultJpegQuality;
             }
 
             if (quality >= 1 && quality <= 100)
@@ -546,8 +534,9 @@ namespace UnityCliBridge.Bridge.Editor
 
         private static string CreateTempScreenshotPath(string format)
         {
-            string extension = string.Equals(format, FormatJpg, StringComparison.Ordinal) ? ".jpg" : ".png";
-            return Path.Combine(Path.GetTempPath(), $"puc-screenshot-{Guid.NewGuid():N}{extension}");
+            return Path.Combine(
+                Path.GetTempPath(),
+                $"puc-screenshot-{Guid.NewGuid():N}{ScreenshotDefaults.FileExtension(format)}");
         }
 
         private static void WriteTextureToPath(Texture2D texture, string path, string format, int jpegQuality)

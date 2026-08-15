@@ -51,6 +51,10 @@ Add the following to your `Packages/manifest.json`:
 
 The bridge starts automatically when the Editor opens. No configuration needed.
 
+`#main` always tracks the latest release. For a build you need to reproduce later, pin a release tag instead — `...#v0.5.3` — and commit `Packages/packages-lock.json`.
+
+Unity Recorder is optional and is not installed for you. Add `com.unity.recorder` if you want the `record` commands or `qa run-sequence --record`; without it those commands fail with an install hint and everything else works normally.
+
 > **Upgrading from 0.3.x?** `0.4.0` bumps the wire protocol to `5`, so a `0.3.x` CLI cannot talk to a `0.4.0` package. From `0.4.1` on you no longer have to choose: install the CLI from each project's **Window > Unity CLI Manager**, and the `unity-cli` on your PATH hands off to the version that matches whichever project you are pointing at.
 
 ### 2. Install the CLI
@@ -152,8 +156,9 @@ unity-cli play / pause / stop              # Play Mode control
 unity-cli compile                          # Trigger recompile
 unity-cli compile --wait                   # Wait until compile/import finishes and bridge is reachable
 unity-cli refresh --wait                   # Refresh assets and wait for Editor readiness
-unity-cli screenshot --path /tmp/shot.png  # Game View capture (default), or --view scene
-unity-cli screenshot --format jpg --quality 70 --max-width 1024 --path /tmp/shot.jpg
+unity-cli screenshot --path /tmp/shot.jpg  # Game View capture (default), or --view scene
+                                           # Defaults: JPEG q75, downscaled to 1024px wide
+unity-cli screenshot --format png --max-width 0 --path /tmp/shot.png   # Lossless, full resolution
 unity-cli record start --duration 5 --wait --path /tmp/play.mp4
 unity-cli record start                     # Manual recording; stop with record stop
 unity-cli record status
@@ -285,8 +290,8 @@ A typical AI repair loop is: make a focused code change, `unity-cli refresh`, ru
 
 ```bash
 unity-cli qa click --qa-id StartButton
-unity-cli screenshot --view game --path /tmp/qa-reference.png
-unity-cli screenshot --view game --format jpg --quality 70 --max-width 1024 --path /tmp/qa-reference.jpg
+unity-cli screenshot --view game --path /tmp/qa-reference.jpg
+unity-cli screenshot --view game --format png --max-width 0 --path /tmp/qa-reference.png
 unity-cli qa ui-dump --json
 unity-cli qa ui-dump --text Start --interactable-only --limit 20 --omit-rect --json
 unity-cli qa world-dump --json
@@ -406,7 +411,24 @@ docs/                          Generated CLI reference, specs
 - **Scene paths:** `/Root[0]/Child[0]` format with sibling indices. `/` is the virtual scene root.
 - **Inspect before patch:** Always `scene inspect --with-values` or `prefab inspect --with-values` before writing patch specs.
 - **Friendly component keys:** Common Rigidbody, Collider, Renderer, Light, and Camera patch keys are resolved to Unity `SerializedProperty.propertyPath` values.
+- **Component value shapes:** Vector2/3/4, Vector2Int/Vector3Int, Quaternion, Rect, RectInt, and Color accept both the member object (`{"x":1,"y":2,"z":3}`) and the array shorthand (`[1,2,3]`); a Color array may omit alpha. A structured value that arrives quoted (`"[1,2,3]"`) is re-parsed, but send real JSON values — the fallback never applies to genuine string fields such as asset paths or enum names.
 - **set-node warnings:** Unrecognized keys now return warnings instead of silent success.
+
+## Release Builds & CI
+
+The bridge is editor-only. The single assembly that reaches a shipped player is `UnityCliBridge.Bridge.Runtime`, which holds nothing but the QA marker types you reference on purpose (`[QaTarget]`, `IQaTappable`, `IQaQueryable`, `QaTappable`). No listener is bound, no registry entry is written, and no bridge code runs in a build.
+
+The bridge *does* start in any main editor process, including the headless editor a build job launches. That is usually harmless but pointless on a build machine — it binds a socket, publishes a registry entry, and contends for the registry lock when several builds share a host. Turn it off for those jobs:
+
+```bash
+# Environment variable — anything but 0/false/empty counts as "disable"
+UNITY_CLI_BRIDGE_DISABLE=1 Unity -batchmode -quit -projectPath . -executeMethod Build.Run
+
+# Or the editor command-line flag, for jobs that cannot set an environment variable
+Unity -batchmode -quit -projectPath . -noUnityCliBridge -executeMethod Build.Run
+```
+
+A disabled bridge constructs nothing and logs one line saying so.
 
 ## Documentation
 

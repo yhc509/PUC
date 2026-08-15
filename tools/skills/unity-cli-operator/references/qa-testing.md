@@ -12,7 +12,7 @@ status → play → (입력 시뮬레이션) → 검증 (로그 + 스크린샷) 
 2. `play`로 Play Mode 진입 (자동으로 `runInBackground = true` 설정됨)
 3. QA 커맨드로 입력 시뮬레이션
 4. **로그 검증**: `read-console --type error --limit N --no-stacktrace` + `read-console --type log --limit N --no-stacktrace`
-5. **시각 검증**: `screenshot --view game --format jpg --quality 75 --max-width 1024 --path /tmp/qa-check.jpg` 후 이미지 확인 (lossless가 필요할 때만 `--format png`)
+5. **시각 검증**: `screenshot --view game --path /tmp/qa-check.jpg` 후 이미지 확인 (기본이 jpg q75 + 1024px 축소, lossless 원본은 `--format png --max-width 0`)
 6. `stop`으로 Play Mode 종료 (`runInBackground` 원래값 복원됨)
 
 ## 입력 방식 선택
@@ -135,10 +135,10 @@ ucli read-console --type error --limit 5 --no-stacktrace --project "$P" --json
 `screenshot --view game`으로 Game View를 캡처해서 시각적 변화를 확인한다.
 
 ```bash
-# 토큰 절약: 에이전트가 읽을 스크린샷은 jpg + max-width를 기본으로 한다
-ucli screenshot --view game --format jpg --quality 75 --max-width 1024 --path /tmp/qa-check.jpg --project "$P" --json
-# lossless가 필요할 때만 PNG
-ucli screenshot --view game --path /tmp/qa-check.png --project "$P" --json
+# 기본값이 이미 jpg q75 + 1024px 축소라 옵션 없이 그대로 찍으면 된다
+ucli screenshot --view game --path /tmp/qa-check.jpg --project "$P" --json
+# lossless 원본이 필요할 때만
+ucli screenshot --view game --format png --max-width 0 --path /tmp/qa-check.png --project "$P" --json
 # 이후 이미지를 Read 도구로 확인
 ```
 
@@ -186,7 +186,7 @@ ucli qa run-sequence --spec-json @seq-ok.json --timeout 60000 --project "$P" --j
 ucli qa run-sequence --spec-json @seq-ok.json --record --record-path /tmp/qa-seq.mp4 --timeout 60000 --project "$P" --json
 ```
 
-`--record`를 붙이면 sequence가 실행되는 구간만 Unity Recorder로 mp4 캡처하고, 완료 또는 타임아웃 응답의 `recordingPath`에 최종 경로를 담는다. `--record-path`를 생략하면 `Library/com.yhc509.unity-cli-bridge/recordings/` 아래에 저장된다.
+`--record`를 붙이면 sequence가 실행되는 구간만 Unity Recorder로 mp4 캡처하고(`com.unity.recorder` 필요), 완료 또는 타임아웃 응답의 `recordingPath`에 최종 경로를 담는다. `--record-path`를 생략하면 `Library/com.yhc509.unity-cli-bridge/recordings/` 아래에 저장된다.
 
 `seq-ok.json`:
 
