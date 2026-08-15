@@ -200,14 +200,14 @@ ucli material info --project "$PROJECT" --path Assets/Materials/MyMat.mat --omit
 ## 스크린샷
 
 ```bash
-# Game View 캡처 — 에이전트가 읽을 캡처는 jpg + max-width로 토큰 절약 (--view 생략 시 game이 기본)
-ucli screenshot --project "$PROJECT" --path /tmp/capture.jpg --format jpg --quality 75 --max-width 1024 --output compact
+# Game View 캡처 — 기본값이 이미 jpg q75 + 1024px 축소다 (--view 생략 시 game이 기본)
+ucli screenshot --project "$PROJECT" --path /tmp/capture.jpg --output compact
 
-# lossless가 필요할 때만 PNG
-ucli screenshot --project "$PROJECT" --path /tmp/capture.png --output compact
+# lossless 원본이 필요할 때만
+ucli screenshot --project "$PROJECT" --path /tmp/capture.png --format png --max-width 0 --output compact
 
 # Scene View 캡처
-ucli screenshot --project "$PROJECT" --path /tmp/scene.png --view scene --output compact
+ucli screenshot --project "$PROJECT" --path /tmp/scene.jpg --view scene --output compact
 ```
 
 ## 테스트 러너

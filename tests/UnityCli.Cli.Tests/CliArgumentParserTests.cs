@@ -1488,6 +1488,39 @@ public sealed class CliArgumentParserTests
     }
 
     [Fact]
+    public void ToEnvelope_Screenshot_WithoutMaxWidth_LeavesTheDefaultToTheBridge()
+    {
+        var parsed = CliArgumentParser.Parse(["screenshot"]);
+
+        using var document = JsonDocument.Parse(parsed.ToEnvelope().argumentsJson);
+
+        Assert.Equal(0, document.RootElement.GetProperty("maxWidth").GetInt32());
+    }
+
+    [Fact]
+    public void ToEnvelope_Screenshot_WithZeroMaxWidth_SendsTheUncappedSentinel()
+    {
+        // 0 on the wire already means "unspecified", so an explicit opt-out has to travel as
+        // something the bridge cannot read as silence.
+        var parsed = CliArgumentParser.Parse(["screenshot", "--max-width", "0"]);
+
+        using var document = JsonDocument.Parse(parsed.ToEnvelope().argumentsJson);
+
+        Assert.Equal(0, parsed.ScreenshotMaxWidth);
+        Assert.Equal(
+            ScreenshotDefaults.MaxWidthUncapped,
+            document.RootElement.GetProperty("maxWidth").GetInt32());
+    }
+
+    [Fact]
+    public void Parse_Screenshot_RejectsNegativeMaxWidth()
+    {
+        Assert.Throws<CliUsageException>(() => CliArgumentParser.Parse([
+            "screenshot", "--max-width", "-1"
+        ]));
+    }
+
+    [Fact]
     public void Parse_Screenshot_AcceptsCameraName()
     {
         var parsed = CliArgumentParser.Parse([
