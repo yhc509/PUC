@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-08-18
+
 ### Added
 - **Window > Unity CLI Manager** can now install the AI Agent Skill for Grok Build, next to Claude Code and Codex. Project scope writes to `<project-root>/.grok/skills/`; global scope writes to `~/.grok/skills/`.
 
