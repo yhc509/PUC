@@ -51,7 +51,7 @@ Add the following to your `Packages/manifest.json`:
 
 The bridge starts automatically when the Editor opens. No configuration needed.
 
-`#main` always tracks the latest release. For a build you need to reproduce later, pin a release tag instead — `...#v0.5.3` — and commit `Packages/packages-lock.json`.
+`#main` always tracks the latest release. For a build you need to reproduce later, pin a release tag instead — `...#v0.5.4` — and commit `Packages/packages-lock.json`.
 
 Unity Recorder is optional and is not installed for you. Add `com.unity.recorder` if you want the `record` commands or `qa run-sequence --record`; without it those commands fail with an install hint and everything else works normally.
 
@@ -99,11 +99,11 @@ Extract and add the binary to your PATH. A manually placed binary carries no ver
 
 ### 3. Install AI Agent Skill
 
-In the Unity Editor, open `Window > Unity CLI Manager`. Select your AI tool (Claude Code or Codex), keep **Scope** set to **Project** unless you need a global install, and click **Install Skill**.
+In the Unity Editor, open `Window > Unity CLI Manager`. Select your AI tool (Claude Code, Codex, or Grok Build), keep **Scope** set to **Project** unless you need a global install, and click **Install Skill**.
 
 Once installed, the same section offers **Remove Skill** for the selected tool and scope.
 
-Project-scoped installs go under `<project-root>/.claude/skills/` or `<project-root>/.codex/skills/`. Commit that folder if you want the team to share the same skill version as the Unity package.
+Project-scoped installs go under `<project-root>/.claude/skills/`, `<project-root>/.codex/skills/`, or `<project-root>/.grok/skills/`. Commit that folder if you want the team to share the same skill version as the Unity package.
 
 The skill teaches AI agents how to pick the right commands, run them safely, and verify results with `read-console`. The installed `SKILL.md` records the package version it came from, so the CLI Manager can tell you when the skill needs an update.
 
@@ -181,7 +181,7 @@ Assign a value to `__pucResult` when the caller needs a structured return value.
 
 `record start` captures the Play Mode Game View as mp4 via Unity Recorder. It returns `STARTED` plus a `recordingId` immediately; add `--duration N --wait` to auto-stop and poll until the mp4 is finalized. Without `--duration`, stop manually with `record stop`. Outputs default to `Library/com.yhc509.unity-cli-bridge/recordings/`; pass `--path` to move the finalized mp4.
 
-Recording depends on Unity Recorder. The package requires Unity `2023.1` or newer and pins `com.unity.recorder` `5.1.6`, which includes the compatibility fixes older Recorder releases need for Unity `6000.4` and newer.
+Recording depends on Unity Recorder, which this package does not install. Add `com.unity.recorder` if you want `record` or `qa run-sequence --record`. On Unity `6000.4` and newer, use Recorder `5.1.6` or later — older Recorder releases fail to compile there.
 
 ### Assets
 
@@ -443,7 +443,7 @@ A disabled bridge constructs nothing and logs one line saying so.
 
 The `unity-cli-bridge` skill teaches AI agents how to use the CLI safely: pick the right command, verify with `read-console`, follow inspect-before-patch patterns.
 
-Install from **Window > Unity CLI Manager** in the Unity Editor — select your AI tool and scope, then click **Install Skill**. Once installed, use **Remove Skill** from the same section to remove that scoped copy. Project scope is the default and writes to `<project-root>/.claude/skills/` or `<project-root>/.codex/skills/`; global scope writes to the user's agent skills directory. Supports Claude Code and Codex.
+Install from **Window > Unity CLI Manager** in the Unity Editor — select your AI tool and scope, then click **Install Skill**. Once installed, use **Remove Skill** from the same section to remove that scoped copy. Project scope is the default and writes to `<project-root>/.claude/skills/`, `<project-root>/.codex/skills/`, or `<project-root>/.grok/skills/`; global scope writes to the user's agent skills directory. Supports Claude Code, Codex, and Grok Build.
 
 ## Development
 
