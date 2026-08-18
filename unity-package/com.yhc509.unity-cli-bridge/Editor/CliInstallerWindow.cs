@@ -450,7 +450,7 @@ namespace UnityCliBridge.Bridge.Editor
                 {
                     bool shouldOverwrite = EditorUtility.DisplayDialog(
                         "Overwrite Skill?",
-                        "기존 스킬이 이미 설치되어 있습니다: " + _skillDestinationPath + "\n덮어쓰시겠습니까?",
+                        "A skill is already installed at:\n" + _skillDestinationPath + "\nOverwrite it?",
                         "Overwrite",
                         "Cancel");
                     if (!shouldOverwrite)

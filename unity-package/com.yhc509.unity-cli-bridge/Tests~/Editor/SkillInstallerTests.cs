@@ -10,8 +10,10 @@ namespace UnityCliBridge.Bridge.Editor.Tests
     {
         [TestCase(SkillTarget.ClaudeCode, SkillScope.Project, ".claude")]
         [TestCase(SkillTarget.Codex, SkillScope.Project, ".codex")]
+        [TestCase(SkillTarget.GrokBuild, SkillScope.Project, ".grok")]
         [TestCase(SkillTarget.ClaudeCode, SkillScope.Global, ".claude")]
         [TestCase(SkillTarget.Codex, SkillScope.Global, ".codex")]
+        [TestCase(SkillTarget.GrokBuild, SkillScope.Global, ".grok")]
         public void GetDestination_UsesExpectedTargetAndScopePath(SkillTarget target, SkillScope scope, string toolDirectoryName)
         {
             string root = scope == SkillScope.Project
@@ -22,6 +24,16 @@ namespace UnityCliBridge.Bridge.Editor.Tests
             string actual = SkillInstaller.GetDestination(target, scope);
 
             Assert.AreEqual(expected, actual);
+        }
+
+        [Test]
+        public void GetDestination_SupportsEverySkillTarget()
+        {
+            foreach (SkillTarget target in Enum.GetValues(typeof(SkillTarget)))
+            {
+                Assert.DoesNotThrow(() => SkillInstaller.GetDestination(target, SkillScope.Project));
+                Assert.DoesNotThrow(() => SkillInstaller.GetDestination(target, SkillScope.Global));
+            }
         }
 
         [Test]

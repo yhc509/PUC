@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Window > Unity CLI Manager** can now install the AI Agent Skill for Grok Build, next to Claude Code and Codex. Project scope writes to `<project-root>/.grok/skills/`; global scope writes to `~/.grok/skills/`.
+
+### Changed
+- The installed AI-agent skill now carries the same execute timeout, force-gate, backup, dirty-scene, and `qa --button right` rules as the maintainer copy. Reinstall the skill from **Window > Unity CLI Manager** to pick them up. QA examples in the skill now use `--output compact` and the default JPEG screenshot instead of a full-resolution PNG.
+
+### Fixed
+- The README still said this package pins Unity Recorder `5.1.6`. Recorder is optional and is not installed with the package — add it yourself if you record. On Unity `6000.4` and newer, use Recorder `5.1.6` or later.
+- The **Overwrite Skill?** confirmation in **Window > Unity CLI Manager** is now in English, matching the rest of the window.
+
 ## [0.5.3] - 2026-08-15
 
 ### Added
