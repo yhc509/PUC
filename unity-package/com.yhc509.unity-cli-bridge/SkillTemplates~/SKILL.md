@@ -49,13 +49,29 @@ unity-cli editor stop --project <path>          # graceful 종료 (미저장 변
 ## Operating Rules
 
 - 모든 asset 경로는 `Assets/...` 형식으로 다룬다. 조회 전용(`asset find`, `asset info`)은 `Packages/...`도 허용된다.
-- 파괴 연산과 덮어쓰기는 `--force`가 있을 때만 허용된다고 가정한다.
+- 파괴 연산과 덮어쓰기는 `--force`가 있을 때만 허용된다고 가정한다. 다음은 항상 force-gated: `asset delete`, `execute`, `package remove`, `scene remove-component`, `prefab remove-component`. 다음은 조건부 force-gated: 기존 경로를 덮어쓰는 `asset move`/`asset rename`/`asset create`/`prefab create`; `scene patch` 안의 `delete-gameobject`/`remove-component`; `prefab patch` 안의 `remove-node`/`remove-component`.
+- scene/prefab patch와 asset overwrite는 `Library/com.yhc509.unity-cli-bridge/backups/` 디렉터리에 본체와 `.meta`를 백업한 뒤 실행된다. `BACKUP_RESTORE_FAILED`가 나오면 즉시 중단하고 응답의 백업 경로로 수동 복구를 안내한다.
+- `scene patch`는 대상 scene이 이미 dirty이면 `--force`와 무관하게 거부된다. 먼저 저장하거나 변경을 폐기한 뒤 다시 실행한다.
+- `execute`/`execute-code`는 임의 C# 실행이므로 항상 `--force`가 필요하다.
 - `execute --code 'Debug.Log(__pucArgsJson);' --args '{"k":"v"}' --force`로 넘긴 JSON은 사용자 코드에서 `__pucArgsJson` 문자열 변수로 읽는다.
-- `execute --args` 사용자 코드에서는 wrapper 예약 prefix인 `__puc_internal_*` 변수를 선언하지 않는다.
+- 값을 회수해야 하면 사용자 코드에서 `__pucResult = <값>;`에 담는다. 응답의 `hasResult`가 `true`가 되고 `result`에는 타입 보존 JSON이 들어온다(float는 G9, double은 G17 round-trip 포맷).
+- Editor 어셈블리의 `[PucCommand]` custom 명령은 `ExecuteValueSerializer.Serialize(obj)`를 반환할 수 있지만, runtime 어셈블리 명령은 정밀 JSON을 직접 직렬화해야 한다.
+- 오래 돌 수 있는 `execute`에는 `--timeout <초>`를 붙인다. 기본 30초, 상한 600초이며 협력적 cancel이라 사용자 코드가 `__pucToken`을 체크해야 멈춘다.
+- 반복문/대기 코드 생성 시 다음 패턴을 우선 사용한다:
+
+```csharp
+for (int i = 0; i < workItems.Count; i++)
+{
+    __pucToken.ThrowIfCancellationRequested();
+    // work
+}
+```
+
+- `execute --args` 사용자 코드에서는 wrapper 예약 prefix인 `__puc_internal_*` 변수와 `__pucToken`, `__pucResult` 변수를 선언하지 않는다.
 - `execute --args` 값에는 secret/credential을 넣지 않는다. CodeDOM 컴파일 중 OS temp에 `.cs` 파일이 잠시 생성될 수 있다.
 - **LLM이 소비하는 명령에는 `--output compact`를 기본으로 붙인다.** 이유와 예외는 [references/command-flows.md](references/command-flows.md)의 `상태 확인` 절 설명을 따른다.
 - `scene patch` 전에는 가능하면 `scene inspect --with-values`를 먼저 실행해서 GameObject path와 field 이름을 확인한다.
-- `prefab patch` 전에는 가능하면 `prefab inspect --with-values`를 먼저 실행해서 path와 field 이름을 확인한다.
+- `prefab patch` 전에는 가능하면 `prefab inspect --with-values`를 먼저 실행해서 path와 field 이름을 확인한다. `remove-node`나 `remove-component` 같은 destructive op가 있으면 `--force`를 붙인다.
 - inspect 응답이 클 때는 `--max-depth N`으로 깊이를 제한하고 `--omit-defaults`로 기본값을 생략한다. **`--with-values`에는 항상 `--omit-defaults`를 함께 붙여** 0/null/false/빈 값 기본값을 잘라낸다(컴포넌트당 30~55% 절약).
 - `material info`도 `--omit-defaults`를 지원한다. URP/Lit 기준 48개 속성 → 변경된 것만 반환하여 토큰을 71% 절약한다.
 - `--omit-defaults` 결과는 read-only이다. patch input으로 그대로 쓰면 생략된 필드가 복원되지 않는다.
@@ -69,6 +85,7 @@ unity-cli editor stop --project <path>          # graceful 종료 (미저장 변
 - **스크린샷은 옵션 없이 그대로 찍으면 된다.** 기본값이 이미 JPEG quality 75 + 1024px 가로 축소라 에이전트가 읽기 좋은 크기로 나온다(1080p PNG 대비 이미지 토큰 ~72% 절약). lossless 원본이 필요할 때만 `--format png --max-width 0`을 붙인다. `--path`가 `.png`로 끝나면 `--format` 없이도 PNG로 저장된다.
 - Play Mode 영상을 남겨야 하면 `record start --duration N --wait --path /tmp/out.mp4`를 쓴다. 수동 녹화는 `record start` 후 `record status`, `record stop` 순서로 종료한다. `record start`는 Play Mode 전용이고 `com.unity.recorder`가 설치된 프로젝트에서만 동작한다 — 미설치면 `RECORD_FAILED`와 함께 `unity-cli package add --name com.unity.recorder` 안내가 돌아오므로 그대로 설치한 뒤 재시도한다.
 - `qa tap --x --y`에는 `screenshot`에서 확인한 이미지 좌표를 그대로 넣는다. 응답의 `imageOrigin`은 `top-left`, `coordinateOrigin`은 `bottom-left`다.
+- `qa click`, `qa tap`, `qa swipe`는 기본 좌클릭/좌드래그이며, 우클릭 입력 경로를 검증할 때는 `--button right`를 붙인다.
 - 별도 Y-flip이나 해상도 스케일 변환은 하지 않는다. Bridge가 마지막 `screenshot` 크기 또는 명시한 `--screenshot-width`/`--screenshot-height`를 기준으로 내부 처리한다.
 - 좌표를 추측하지 말고 탭 대상을 먼저 열거한다: uGUI 버튼은 `qa ui-dump --limit 30 --interactable-only --omit-rect --output compact`, 비-UI 월드 오브젝트(전투 그리드 유닛 등)는 `qa world-dump --limit 30 --output compact`. 찾을 텍스트/라벨을 알면 `--text <substring>`으로 서버사이드 필터링한다. 둘 다 `centerX`/`centerY` 이미지 좌표를 그대로 반환하며, 대형 화면 dump에서는 envelope 제거 효과가 특히 크다.
 - `qa world-dump`는 게임이 opt-in한 오브젝트만 본다: 게임 컴포넌트가 `UnityCliBridge.Bridge.IQaTappable`을 구현하거나 `QaTappable` 마커를 부착해야 한다. 화면 밖은 `--include-offscreen`을 줄 때만 포함된다.

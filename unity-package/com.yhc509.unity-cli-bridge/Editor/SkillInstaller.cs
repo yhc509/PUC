@@ -14,6 +14,8 @@ namespace UnityCliBridge.Bridge.Editor
         ClaudeCode = 0,
         [InspectorName("Codex")]
         Codex = 1,
+        [InspectorName("Grok Build")]
+        GrokBuild = 2,
     }
 
     internal enum SkillScope
@@ -36,8 +38,8 @@ namespace UnityCliBridge.Bridge.Editor
         internal static void Install(SkillTarget target, SkillScope scope)
         {
             SkillTemplateInfo templateInfo = GetSkillTemplateInfo();
+            SkillTargetLayout layout = GetLayout(target);
             string destination = GetDestination(target, scope);
-            bool includeAgents = target == SkillTarget.Codex;
 
             if (Directory.Exists(destination))
             {
@@ -45,7 +47,7 @@ namespace UnityCliBridge.Bridge.Editor
             }
 
             Directory.CreateDirectory(destination);
-            CopyDirectory(templateInfo.TemplateRoot, destination, includeAgents, templateInfo.PackageVersion);
+            CopyDirectory(templateInfo.TemplateRoot, destination, layout.IncludeAgents, templateInfo.PackageVersion);
 
             Debug.Log($"[SkillInstaller] Installed {target} skill ({scope}) to: {destination}");
         }
@@ -146,15 +148,7 @@ namespace UnityCliBridge.Bridge.Editor
                 throw new InvalidOperationException("Failed to resolve user home directory.");
             }
 
-            switch (target)
-            {
-                case SkillTarget.ClaudeCode:
-                    return Path.Combine(home, ".claude", "skills", SkillName);
-                case SkillTarget.Codex:
-                    return Path.Combine(home, ".codex", "skills", SkillName);
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(target), target, "Unsupported skill target.");
-            }
+            return Path.Combine(home, GetLayout(target).ToolDirectoryName, "skills", SkillName);
         }
 
         private static string GetProjectDestination(SkillTarget target)
@@ -165,12 +159,19 @@ namespace UnityCliBridge.Bridge.Editor
                 throw new InvalidOperationException("Failed to resolve Unity project root from Application.dataPath: " + Application.dataPath);
             }
 
+            return Path.Combine(projectRoot.FullName, GetLayout(target).ToolDirectoryName, "skills", SkillName);
+        }
+
+        private static SkillTargetLayout GetLayout(SkillTarget target)
+        {
             switch (target)
             {
                 case SkillTarget.ClaudeCode:
-                    return Path.Combine(projectRoot.FullName, ".claude", "skills", SkillName);
+                    return new SkillTargetLayout(".claude", includeAgents: false);
                 case SkillTarget.Codex:
-                    return Path.Combine(projectRoot.FullName, ".codex", "skills", SkillName);
+                    return new SkillTargetLayout(".codex", includeAgents: true);
+                case SkillTarget.GrokBuild:
+                    return new SkillTargetLayout(".grok", includeAgents: false);
                 default:
                     throw new ArgumentOutOfRangeException(nameof(target), target, "Unsupported skill target.");
             }
@@ -237,6 +238,18 @@ namespace UnityCliBridge.Bridge.Editor
 
                 CopyDirectory(directory, Path.Combine(destination, directoryName), includeAgents, packageVersion);
             }
+        }
+
+        private readonly struct SkillTargetLayout
+        {
+            internal SkillTargetLayout(string toolDirectoryName, bool includeAgents)
+            {
+                ToolDirectoryName = toolDirectoryName;
+                IncludeAgents = includeAgents;
+            }
+
+            internal string ToolDirectoryName { get; }
+            internal bool IncludeAgents { get; }
         }
 
         private readonly struct SkillTemplateInfo

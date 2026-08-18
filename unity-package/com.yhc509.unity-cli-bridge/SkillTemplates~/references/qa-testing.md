@@ -157,7 +157,7 @@ ucli screenshot --view game --format png --max-width 0 --path /tmp/qa-check.png 
 
 ### qa ui-dump Workflow
 1. Enter Play Mode and, if you already captured a reference image, keep its `width`/`height` available
-2. Dump candidates: `qa ui-dump --limit 30 --interactable-only --omit-rect` -> inspect each element's `path`, `text`, `interactable`, `centerX`, `centerY`
+2. Dump candidates: `qa ui-dump --limit 30 --interactable-only --omit-rect --output compact` -> inspect each element's `path`, `text`, `interactable`, `centerX`, `centerY`
 3. Prefer path click: `qa click --target <path>`
 4. If a coordinate tap is better, use `qa tap --x <centerX> --y <centerY>`
 
@@ -172,7 +172,7 @@ If the visible label is known, add `--text <substring>` so filtering happens in 
 UI elements come from `qa ui-dump`. For non-UI world objects (units on a battle grid, world-space interactables), the game opts them in:
 
 - Implement `UnityCliBridge.Bridge.IQaTappable` on your own component, or attach the `QaTappable` marker component (set `label`, optional `anchor`, optional `onQaTap`).
-- `qa world-dump --limit 30` then lists them with `label`, `path`, image-space `centerX`/`centerY`, `onScreen`, `hasAction`; add `--text <substring>` when the label is known.
+- `qa world-dump --limit 30 --output compact` then lists them with `label`, `path`, image-space `centerX`/`centerY`, `onScreen`, `hasAction`; add `--text <substring>` when the label is known.
 - Tap with `qa tap --target <path>`. If the object's `TryQaTap()` handles it (e.g. `onQaTap` is wired), the bridge invokes it directly; otherwise the bridge simulates an Input System tap at the anchor, which reaches games that poll the Input System directly (where `qa tap --x --y`'s EventSystem path does not).
 - Off-screen objects are hidden unless you pass `--include-offscreen`.
 - Same-named sibling world objects share a path and resolve to the first match; give tappable objects unique names/labels to target them individually.
@@ -335,18 +335,18 @@ The bridge converts automatically when screenshot dimensions are known.
 ```bash
 P="$(pwd -P)"
 
-ucli play --project "$P" --json
+ucli play --project "$P" --output compact
 sleep 1
 
-ucli qa click --target "/Canvas/Button" --project "$P" --json
+ucli qa click --target "/Canvas/Button" --project "$P" --output compact
 
 # 로그 검증
-ucli read-console --type log --limit 5 --no-stacktrace --project "$P" --json
+ucli read-console --type log --limit 5 --no-stacktrace --project "$P" --output compact
 
-# 시각 검증
-ucli screenshot --view game --path /tmp/qa-click.png --project "$P" --json
+# 시각 검증 — 기본값이 이미 jpg q75 + 1024px 축소
+ucli screenshot --view game --path /tmp/qa-click.jpg --project "$P" --output compact
 
-ucli stop --project "$P" --json
+ucli stop --project "$P" --output compact
 ```
 
 ## 예시: 조건 대기 후 검증
